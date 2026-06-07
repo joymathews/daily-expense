@@ -1,11 +1,9 @@
-import { ResourcesConfig } from 'aws-amplify';
-
-export const authConfig: ResourcesConfig = {
+export const authConfig = {
   Auth: {
     Cognito: {
       userPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID || '',
       userPoolClientId: import.meta.env.VITE_COGNITO_CLIENT_ID || '',
-      signUpVerificationMethod: 'code',
+      signUpVerificationMethod: 'code' as const,
       loginWith: {
         email: true,
       },
