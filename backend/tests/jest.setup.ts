@@ -1,6 +1,7 @@
 /**
  * Global Jest Mocks for Backend Tests
  */
+/// <reference types="jest" />
 
 // Mock the authentication middleware globally to avoid ESM parsing issues with 'jose' and 'jwks-rsa'
 jest.mock('../src/middleware/auth-middleware', () => ({

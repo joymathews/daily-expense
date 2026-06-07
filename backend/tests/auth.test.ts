@@ -4,7 +4,8 @@ import { app } from '../src/app';
 describe('Authentication Middleware', () => {
   /**
    * [FUNC-AUTH-2] The system must remain inaccessible to unauthenticated users.
-   * [NFR-ARCH-4] API Security: Validate AWS Cognito JWT.
+   * [NFR-SEC-2] API Protection: All non-public API endpoints must require a verified security token.
+   * [NFR-SEC-3] Token Validation: Security tokens must be validated against a trusted public key set (JWKS).
    */
   it('should return 401 Unauthorized for /api/private without a token', async () => {
     const response = await request(app).get('/api/private');
