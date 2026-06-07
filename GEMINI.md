@@ -7,43 +7,35 @@
 For ALL future changes, feature implementations, and code modifications, you must strictly adhere to this sequential workflow:
 
 1. **Plan Mode First:** Formulate a comprehensive implementation plan in Plan Mode before making any modifications.
-2. **Functional Requirements:** Explicitly define functional requirements and update `FUNCTIONAL_DOCUMENTATION.md` FIRST. *CRITICAL: Strictly protect and preserve all existing requirements not explicitly targeted by the change request.*
-3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with new technical constraints. *CRITICAL: Existing NFRs must remain untouched unless directly impacted by the new functional scope.*
-
-4. **Requirements Hygiene:** NEVER include technical noise, shell command outputs, tool-specific prompts, or implementation logs in `FUNCTIONAL_DOCUMENTATION.md` or `NON_FUNCTIONAL_REQUIREMENTS.md`. Functional requirements must strictly describe system behavior from a user or stakeholder perspective.
-
-5. **Test-Driven Development (TDD):** Update or create test cases based *only* on the newly updated documentation. Every test MUST use the Test Justification Framework mapping to a `[FUNC-*]` or `[NFR-*]` ID. *Rule: No Justification ID = No Test.*
+2. **Functional Requirements:** Explicitly define functional requirements and update `FUNCTIONAL_DOCUMENTATION.md` FIRST.
+3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with system-level qualities (Security, Performance, Availability).
+4. **Requirements Hygiene:** NEVER include technical noise, shell command outputs, or implementation logs in documentation.
+5. **Test-Driven Development (TDD):** Update or create test cases based *only* on the newly updated documentation. Every test MUST use the Test Justification Framework mapping to a `[FUNC-*]` or `[NFR-*]` ID.
 6. **Implementation:** Write or modify code specifically to make the new and existing tests pass.
-7. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) using shell commands and verify that all tests pass before considering a change complete.
+7. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
 
-## 3. Project Tech Stack & Structure
-* **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Located in `/frontend`.
-* **Backend:** Node.js (TypeScript), Express, Jest. Located in `/backend`.
-* **Testing:** All features must have corresponding tests. Backend tests in `backend/tests`, frontend tests in `frontend/src/*.test.tsx`.
-* **Style:** Vanilla CSS is avoided; Tailwind utility classes are preferred for styling.
+## 3. Tech Stack & Engineering Standards
+* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`.
+* **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Auth Library: AWS Amplify.
+* **Architecture:** Strictly adhere to SOLID principles and Clean Code rules.
+* **Testing:** Backend tests in `backend/tests`, frontend tests in `frontend/src/*.test.tsx`.
+* **Style:** Tailwind utility classes are the primary styling method; avoid Vanilla CSS.
 
 ## 4. Coding & Naming Conventions
-* **Files:** Use `kebab-case` for all file names (e.g., `health-check.test.ts`, `dashboard-component.tsx`).
+* **Files:** Use `kebab-case` for all file names.
 * **Variables/Functions:** Use `camelCase`.
 * **Components:** Use `PascalCase` for React components.
-* **Types/Interfaces:** Use `PascalCase`, prefixed with `I` for interfaces if preferred (e.g., `IUser`), or just `User` for types.
+* **Types/Interfaces:** Use `PascalCase`.
 
 ## 5. Environment Management
-* Never commit `.env` files.
-* Use `.env.example` as a template for required environment variables.
-* The backend defaults to port `3001` and the frontend to `5173`.
+* Never commit `.env` files. Use `.env.example` as a template.
+* Default Ports: Backend `3001`, Frontend `5173`.
 
 ## 6. Running the Application & Tests
+* **Backend:** `npm run dev` / `npm test` (inside `/backend`)
+* **Frontend:** `npm run dev` / `npm test` (inside `/frontend`)
 
-### Backend
-* **Start Development Server:** `cd backend && npm run dev`
-* **Run Tests:** `cd backend && npm test`
-
-### Frontend
-* **Start Development Server:** `cd frontend && npm run dev`
-* **Run Tests:** `cd frontend && npm test`
-
-## Architectural and Design Guidelines (SOLID & Clean Code Reference)
+## 7. Architectural and Design Guidelines (SOLID & Clean Code Reference)
 
 You must design and implement all solutions using the **SOLID Design Principles** as the primary architectural reference, backed by strict **Clean Code** rules. Every code modification, new component, or refactoring plan must be validated against these criteria to enforce high cohesion, loose coupling, and maximum readability.
 
