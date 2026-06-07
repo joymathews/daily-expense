@@ -8,7 +8,7 @@ For ALL future changes, feature implementations, and code modifications, you mus
 
 1. **Plan Mode First:** Formulate a comprehensive implementation plan in Plan Mode before making any modifications.
 2. **Functional Requirements:** Explicitly define functional requirements and update `FUNCTIONAL_DOCUMENTATION.md` FIRST.
-3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with system-level qualities (Security, Performance, Availability).
+3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with system qualities (Sec, Perf, Availability, Scalability, Usability, etc.).
 4. **Tech Stack & Standards:** Document all technical stack choices, library additions, and engineering standards in Section 3 of this `GEMINI.md` file. NEVER add these to requirement documents.
 5. **Requirements Hygiene:** NEVER include technical noise, shell command outputs, or implementation logs in documentation.
 5. **Test-Driven Development (TDD):** Update or create test cases based *only* on the newly updated documentation. Every test MUST use the Test Justification Framework mapping to a `[FUNC-*]` or `[NFR-*]` ID.
