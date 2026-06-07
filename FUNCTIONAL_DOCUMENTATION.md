@@ -9,3 +9,8 @@
 
 ### System Operational Status [FUNC-SKEL-SYS]
 - [FUNC-SKEL-SYS-1] An external monitoring system must be able to verify the health of the application backend to ensure uptime.
+
+## User Authentication [FUNC-AUTH]
+- [FUNC-AUTH-1] The user must be challenged for credentials (username/email and password) before being allowed to access the system dashboard.
+- [FUNC-AUTH-2] The system must remain inaccessible to unauthenticated users, redirecting them to a login interface.
+- [FUNC-AUTH-3] Authenticated users must have the ability to securely log out of the system.
