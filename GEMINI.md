@@ -16,8 +16,8 @@ For ALL future changes, feature implementations, and code modifications, you mus
 7. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
 
 ## 3. Tech Stack & Engineering Standards
-* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`.
-* **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Auth Library: AWS Amplify.
+* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail).
+* **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Auth: AWS Amplify (for Cognito), `@react-oauth/google` (for Gmail). Navigation: `react-router-dom`.
 * **Architecture:** Strictly adhere to SOLID principles and Clean Code rules.
 * **Testing:** Backend tests in `backend/tests`, frontend tests in `frontend/src/*.test.tsx`.
 * **Style:** Tailwind utility classes are the primary styling method; avoid Vanilla CSS.

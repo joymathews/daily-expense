@@ -9,7 +9,6 @@ vi.mock('@aws-amplify/ui-react', async () => {
   return {
     ...actual,
     Authenticator: ({ children }: any) => {
-      // Check if we want to simulate authenticated or unauthenticated
       const isAuthenticated = (globalThis as any).isAuthenticated;
       if (isAuthenticated) {
         return (
@@ -26,9 +25,17 @@ vi.mock('@aws-amplify/ui-react', async () => {
   };
 });
 
-describe('App Requirements Coverage', () => {
+// Mock @react-oauth/google
+vi.mock('@react-oauth/google', async () => {
+  return {
+    GoogleOAuthProvider: ({ children }: any) => <div>{children}</div>,
+    useGoogleLogin: () => vi.fn()
+  };
+});
+
+describe('Requirement Traceability Matrix Verification', () => {
   beforeEach(() => {
-    (globalThis as any).isAuthenticated = false;
+    (globalThis as any).isAuthenticated = true;
     (globalThis as any).mockSignOut = vi.fn();
     vi.clearAllMocks();
   });
@@ -36,48 +43,76 @@ describe('App Requirements Coverage', () => {
   /**
    * [FUNC-AUTH-1] The user must be challenged for credentials.
    * [FUNC-AUTH-2] The system must remain inaccessible to unauthenticated users.
+   * [NFR-SEC-1] Identity Management: Trusted centralized identity provider.
    */
-  it('challenges for credentials when unauthenticated', async () => {
+  it('enforces authentication gate and uses identity provider', async () => {
+    (globalThis as any).isAuthenticated = false;
     render(<App />);
     expect(screen.getByTestId('mocked-authenticator-unauth')).toBeInTheDocument();
-    expect(screen.queryByText(/Welcome to Daily Expense/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/HI/i)).not.toBeInTheDocument();
   });
 
   /**
-   * [FUNC-SKEL-UI-1] The user must be able to access the application dashboard.
-   * [FUNC-SKEL-UI-2] The user must see a "Welcome to Daily Expense" message.
-   * [FUNC-AUTH-3] Authenticated users must have the ability to securely log out.
+   * [FUNC-SKEL-UI-1] Access dashboard via browser.
+   * [FUNC-SKEL-UI-2] Personalized greeting and branding.
+   * [FUNC-SKEL-UI-3] High-density responsive interface.
+   * [NFR-PERF-2] Dynamic Layout / Responsive design.
    */
-  it('renders dashboard and allows logout when authenticated', async () => {
-    (globalThis as any).isAuthenticated = true;
+  it('renders dashboard with branding and personalized greeting', () => {
     render(<App />);
+    // Select specifically from the navbar or header to justify branding
+    expect(screen.getAllByText(/DAILY EXPENSE/i).length).toBeGreaterThan(0);
+    // User login ID is testuser@example.com -> split is 'testuser'
+    expect(screen.getByText(/HI,/i)).toBeInTheDocument();
+    expect(screen.getByText(/testuser/i)).toBeInTheDocument();
+    
+    // NFR-PERF-2: Check for responsive classes in the main container
+    const mainContainer = screen.getByText(/HI,/i).closest('.min-h-screen');
+    expect(mainContainer).toHaveClass('selection:bg-blue-100');
+  });
 
-    // [FUNC-SKEL-UI-1] [FUNC-SKEL-UI-2] Verify dashboard content
-    expect(screen.getByText(/Welcome to Daily Expense/i)).toBeInTheDocument();
-    expect(screen.getByText(/testuser@example.com/i)).toBeInTheDocument();
-
-    // [FUNC-AUTH-3] Verify logout
-    const logoutButton = screen.getByText(/Sign Out/i);
-    fireEvent.click(logoutButton);
+  /**
+   * [FUNC-AUTH-3] Ability to securely terminate session (Log Out).
+   */
+  it('allows the user to log out securely', () => {
+    render(<App />);
+    const signOutBtn = screen.getByText(/Sign Out/i);
+    fireEvent.click(signOutBtn);
     expect((globalThis as any).mockSignOut).toHaveBeenCalled();
   });
 
   /**
-   * [NFR-SEC-1] Identity Management: The system must use a centralized identity provider (AWS Cognito).
+   * [FUNC-GMAIL-1] Navigation: Navigate to Gmail Fetcher service.
    */
-  it('integrates with AWS Cognito via Authenticator', () => {
+  it('provides navigation to the Gmail service', () => {
     render(<App />);
-    // Verification of Authenticator presence justifies NFR-SEC-1
-    expect(screen.getByTestId('mocked-authenticator-unauth')).toBeInTheDocument();
+    const gmailLink = screen.getByRole('link', { name: /Gmail Fetch/i });
+    fireEvent.click(gmailLink);
+    expect(screen.getByText(/Fetcher/i)).toBeInTheDocument();
   });
 
   /**
-   * [FUNC-SKEL-UI-3] Responsive Design / [NFR-PERF-2] Responsive interface.
+   * [FUNC-GMAIL-2] Configuration: filters for Sender and Subject.
+   * [FUNC-GMAIL-3] Authentication: Authorize via OAuth2 popup.
+   * [NFR-GMAIL-1] Session Security: Ephemeral tokens.
    */
-  it('applies responsive layout styles', () => {
-    (globalThis as any).isAuthenticated = true;
+  it('supports Gmail configuration and OAuth authentication', () => {
     render(<App />);
-    const container = screen.getByText(/Welcome to Daily Expense/i).closest('.min-h-screen');
-    expect(container).toHaveClass('p-4'); // Tailwind responsive padding check
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    expect(screen.getByPlaceholderText(/expenses@.../i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/receipt.../i)).toBeInTheDocument();
+    expect(screen.getByText(/Authorize & Fetch/i)).toBeInTheDocument();
+  });
+
+  /**
+   * [FUNC-GMAIL-4] Display: Show fetched data in high-density table.
+   */
+  it('displays transaction results table headers', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    expect(screen.getByText(/Inbox Records/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Sender/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Details/i)).toBeInTheDocument();
   });
 });

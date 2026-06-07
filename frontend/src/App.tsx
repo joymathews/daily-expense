@@ -1,38 +1,42 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Amplify } from 'aws-amplify';
 import { Authenticator } from '@aws-amplify/ui-react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import '@aws-amplify/ui-react/styles.css';
+
 import { authConfig } from './auth-config';
+import Navbar from './components/Navbar';
+import Dashboard from './pages/Dashboard';
+import GmailIntegration from './pages/GmailIntegration';
 
 Amplify.configure(authConfig);
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+
 function App() {
   return (
-    <Authenticator>
-      {({ signOut, user }) => (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h1 className="text-3xl font-bold text-blue-600">
-                Welcome to Daily Expense
-              </h1>
-              <button
-                onClick={signOut}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm transition-colors"
-              >
-                Sign Out
-              </button>
+    <BrowserRouter>
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <Authenticator>
+          {({ signOut, user }) => (
+            <div className="min-h-screen bg-[#FDFDFF] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
+              <Navbar onSignOut={signOut!} />
+              <main className="flex-grow flex items-start justify-center px-4 sm:px-6 lg:px-8 py-10">
+                <Routes>
+                  <Route path="/" element={<Dashboard userEmail={user?.signInDetails?.loginId || 'User'} />} />
+                  <Route path="/gmail" element={<GmailIntegration />} />
+                </Routes>
+              </main>
+              
+              <footer className="py-8 text-center text-gray-400 text-xs border-t border-gray-50 bg-white">
+                <p>&copy; 2026 Daily Expense. Built with SOLID principles and Clean Code.</p>
+              </footer>
             </div>
-            <p className="text-gray-600 mb-2">
-              Hello, <span className="font-semibold text-gray-800">{user?.signInDetails?.loginId || 'User'}</span>!
-            </p>
-            <p className="text-gray-600">
-              Your skeleton is ready. Start building your financial future!
-            </p>
-          </div>
-        </div>
-      )}
-    </Authenticator>
+          )}
+        </Authenticator>
+      </GoogleOAuthProvider>
+    </BrowserRouter>
   );
 }
 
