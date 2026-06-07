@@ -33,3 +33,9 @@ frontend/coverage/
 
 # OS metadata
 Thumbs.db
+
+# RTM Report
+rtm_report.html
+backend/.env.example
+.gitignore
+frontend/.env.example

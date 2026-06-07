@@ -36,6 +36,9 @@ For ALL future changes, feature implementations, and code modifications, you mus
 * **Backend:** `npm run dev` / `npm test` (inside `/backend`)
 * **Frontend:** `npm run dev` / `npm test` (inside `/frontend`)
 
+### Requirement Traceability Matrix (RTM)
+* **Generate RTM Report:** `npm run rtm` (Generates `rtm_report.html` in the root)
+
 ## 7. Architectural and Design Guidelines (SOLID & Clean Code Reference)
 
 You must design and implement all solutions using the **SOLID Design Principles** as the primary architectural reference, backed by strict **Clean Code** rules. Every code modification, new component, or refactoring plan must be validated against these criteria to enforce high cohesion, loose coupling, and maximum readability.
