@@ -1,5 +1,8 @@
 # Project Instructions
 
+## 1. Project Overview
+"Daily Expense" is a full-stack web application designed to help users track their daily spending. It focuses on a clean, responsive UI and a robust, tested backend.
+
 ## 2. Mandatory Development Workflow
 For ALL future changes, feature implementations, and code modifications, you must strictly adhere to this sequential workflow:
 
@@ -12,6 +15,12 @@ For ALL future changes, feature implementations, and code modifications, you mus
 5. **Test-Driven Development (TDD):** Update or create test cases based *only* on the newly updated documentation. Every test MUST use the Test Justification Framework mapping to a `[FUNC-*]` or `[NFR-*]` ID. *Rule: No Justification ID = No Test.*
 5. **Implementation:** Write or modify code specifically to make the new and existing tests pass.
 6. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) using shell commands and verify that all tests pass before considering a change complete.
+
+## Project Tech Stack & Structure
+* **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Located in `/frontend`.
+* **Backend:** Node.js (TypeScript), Express, Jest. Located in `/backend`.
+* **Testing:** All features must have corresponding tests. Backend tests in `backend/tests`, frontend tests in `frontend/src/*.test.tsx`.
+* **Style:** Vanilla CSS is avoided; Tailwind utility classes are preferred for styling.
 
 ## Architectural and Design Guidelines (SOLID & Clean Code Reference)
 
@@ -49,5 +58,8 @@ When writing or refactoring code, enforce the following standards for readabilit
 * **Scout Rule:** Always leave the code cleaner than you found it. If you modify a file, take a moment to fix minor clean-code violations within that scope.
 
 ### 3. Architectural Metrics for Success
+* **High Cohesion:** Code that changes together must live together. Functions and classes must be highly focused on their singular domain task.
+* **Loose Coupling:** Components must be isolated. Changing a database schema, an external API client, or a UI style framework must not trigger a cascade of breaking modifications in the core business logic layers.
+l Metrics for Success
 * **High Cohesion:** Code that changes together must live together. Functions and classes must be highly focused on their singular domain task.
 * **Loose Coupling:** Components must be isolated. Changing a database schema, an external API client, or a UI style framework must not trigger a cascade of breaking modifications in the core business logic layers.
