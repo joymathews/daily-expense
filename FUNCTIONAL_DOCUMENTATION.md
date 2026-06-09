@@ -17,6 +17,7 @@
 
 ## Gmail Integration [FUNC-GMAIL]
 - [FUNC-GMAIL-1] Navigation: The user must be able to navigate to the Gmail Fetcher service through the primary navigation menu.
-- [FUNC-GMAIL-2] Configuration: The user must be able to define granular filters for 'Sender Email' and 'Subject' to target specific expenses.
+- [FUNC-GMAIL-2] Configuration: The user must be able to define granular filters to target specific expenses. At least one Sender Email and a Date Range (start and end date) are mandatory. The Subject filter is optional.
 - [FUNC-GMAIL-3] Authentication: The user must be prompted to authorize the system to access their Google account via a secure OAuth2 popup.
 - [FUNC-GMAIL-4] Display: The system must display fetched transaction data in a high-density table showing Date, Sender, and Transaction Details.
+- [FUNC-GMAIL-5] Pagination: The system must retrieve all matching emails for the specified filters by automatically paginating through the Gmail API results.

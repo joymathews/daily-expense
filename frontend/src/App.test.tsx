@@ -92,7 +92,7 @@ describe('Requirement Traceability Matrix Verification', () => {
   });
 
   /**
-   * [FUNC-GMAIL-2] Configuration: filters for Sender and Subject.
+   * [FUNC-GMAIL-2] Configuration: filters for Sender (multi), Start Date, and End Date.
    * [FUNC-GMAIL-3] Authentication: Authorize via OAuth2 popup.
    * [NFR-GMAIL-1] Session Security: Ephemeral tokens.
    */
@@ -100,8 +100,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
 
-    expect(screen.getByPlaceholderText(/expenses@.../i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Add sender email.../i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/receipt.../i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Start Date/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/End Date/i)).toBeInTheDocument();
     expect(screen.getByText(/Authorize & Fetch/i)).toBeInTheDocument();
   });
 

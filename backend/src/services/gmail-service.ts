@@ -1,7 +1,9 @@
 import { google } from 'googleapis';
 
 export interface GmailFetchFilters {
-  sender?: string;
+  sender: string[];
+  startDate: string;
+  endDate: string;
   subject?: string;
 }
 
@@ -24,21 +26,53 @@ export class GmailService {
     const gmail = google.gmail({ version: 'v1', auth });
     
     // Construct search query
+    // Date format for Gmail: YYYY/MM/DD
+    const formatDate = (dateStr: string) => dateStr.replace(/-/g, '/');
+    
     let query = '';
-    if (filters.sender) query += `from:${filters.sender} `;
-    if (filters.subject) query += `subject:${filters.subject} `;
+    
+    if (filters.sender && filters.sender.length > 0) {
+      const senderQuery = filters.sender.map(s => `from:${s}`).join(' OR ');
+      query += `(${senderQuery}) `;
+    }
+    
+    if (filters.startDate) {
+      query += `after:${formatDate(filters.startDate)} `;
+    }
+    
+    if (filters.endDate) {
+      query += `before:${formatDate(filters.endDate)} `;
+    }
+
+    if (filters.subject) {
+      query += `subject:${filters.subject} `;
+    }
     
     try {
-      const listResponse = await gmail.users.messages.list({
-        userId: 'me',
-        q: query.trim(),
-        maxResults: 10,
-      });
+      let allMessages: any[] = [];
+      let pageToken: string | undefined = undefined;
 
-      const messages = listResponse.data.messages || [];
+      // [FUNC-GMAIL-5] Loop through all pages of results
+      do {
+        const response: any = await gmail.users.messages.list({
+          userId: 'me',
+          q: query.trim(),
+          maxResults: 100, // Increase per-page limit for efficiency [NFR-PERF-3]
+          pageToken: pageToken,
+        });
+
+        if (response.data.messages) {
+          allMessages = allMessages.concat(response.data.messages);
+        }
+        pageToken = response.data.nextPageToken || undefined;
+      } while (pageToken);
+
       const formattedEmails: FormattedEmail[] = [];
 
-      for (const message of messages) {
+      // [NFR-PERF-3] Process messages. In a real production app with massive volumes, 
+      // we might batch this further, but for a daily expense tracker, sequential 
+      // or Promise.all on the accumulated list is acceptable for now.
+      for (const message of allMessages) {
         const msg = await gmail.users.messages.get({
           userId: 'me',
           id: message.id!,

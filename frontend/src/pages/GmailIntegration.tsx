@@ -10,15 +10,41 @@ interface GmailMessage {
 }
 
 const GmailIntegration: React.FC = () => {
-  const [sender, setSender] = useState('');
+  const [senders, setSenders] = useState<string[]>([]);
+  const [currentSender, setCurrentSender] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [subject, setSubject] = useState('');
   const [emails, setEmails] = useState<GmailMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const addSender = () => {
+    if (currentSender && !senders.includes(currentSender)) {
+      setSenders([...senders, currentSender]);
+      setCurrentSender('');
+    }
+  };
+
+  const removeSender = (email: string) => {
+    setSenders(senders.filter(s => s !== email));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSender();
+    }
+  };
+
   // [HOOKS] Must be called at the top level, no try-catch
   const login = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
+      if (senders.length === 0 || !startDate || !endDate) {
+        setError("Please provide at least one sender and a date range.");
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
       try {
@@ -27,10 +53,13 @@ const GmailIntegration: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             accessToken: tokenResponse.access_token,
-            filters: { sender, subject }
+            filters: { sender: senders, startDate, endDate, subject }
           }),
         });
-        if (!response.ok) throw new Error('Failed to fetch emails');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch emails');
+        }
         const data = await response.json();
         setEmails(data.emails || []);
       } catch (err: any) {
@@ -43,6 +72,14 @@ const GmailIntegration: React.FC = () => {
     scope: 'https://www.googleapis.com/auth/gmail.readonly',
   });
 
+  const handleFetchClick = () => {
+    if (senders.length === 0 || !startDate || !endDate) {
+      setError("Sender and Date Range are mandatory.");
+      return;
+    }
+    login();
+  };
+
   return (
     <div className="w-full max-w-5xl space-y-4">
       <div className="flex items-center justify-between border-b border-gray-100 pb-4">
@@ -52,7 +89,7 @@ const GmailIntegration: React.FC = () => {
         </div>
         
         <button 
-          onClick={() => login()}
+          onClick={handleFetchClick}
           disabled={isLoading}
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-[10px] font-black px-6 py-2 rounded shadow transition-all uppercase tracking-widest"
         >
@@ -65,17 +102,48 @@ const GmailIntegration: React.FC = () => {
           <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest border-b pb-2 mb-2">Filters</div>
           <div className="space-y-3">
             <div>
-              <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">Sender Email</label>
+              <label htmlFor="sender-input" className="block text-[8px] font-black text-gray-400 uppercase mb-1">Sender Emails</label>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {senders.map(email => (
+                  <span key={email} className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                    {email}
+                    <button onClick={() => removeSender(email)} className="ml-1 text-blue-400 hover:text-blue-600">×</button>
+                  </span>
+                ))}
+              </div>
               <input 
+                id="sender-input"
                 type="text" 
-                placeholder="expenses@..."
+                placeholder="Add sender email..."
                 className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded outline-none text-[11px] text-gray-700"
-                value={sender}
-                onChange={(e) => setSender(e.target.value)}
+                value={currentSender}
+                onChange={(e) => setCurrentSender(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+              <p className="text-[8px] text-gray-400 mt-1">Press Enter to add multiple senders</p>
+            </div>
+            <div>
+              <label htmlFor="start-date" className="block text-[8px] font-black text-gray-400 uppercase mb-1">Start Date</label>
+              <input 
+                id="start-date"
+                type="date" 
+                className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded outline-none text-[11px] text-gray-700"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">Email Subject</label>
+              <label htmlFor="end-date" className="block text-[8px] font-black text-gray-400 uppercase mb-1">End Date</label>
+              <input 
+                id="end-date"
+                type="date" 
+                className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded outline-none text-[11px] text-gray-700"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">Email Subject (Optional)</label>
               <input 
                 type="text" 
                 placeholder="receipt..."
