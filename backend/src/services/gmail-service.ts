@@ -1,4 +1,6 @@
-import { google } from 'googleapis';
+import { google, gmail_v1 } from 'googleapis';
+import { EmailSanitizer } from './email-sanitizer';
+import { EmailClassifier } from './email-classifier';
 
 export interface GmailFetchFilters {
   sender: string[];
@@ -18,76 +20,45 @@ export interface FormattedEmail {
 }
 
 export class GmailService {
-  /**
-   * [FUNC-GMAIL-6] [NFR-GMAIL-2] Categorizes email as transactional or not based on subject.
-   */
-  isTransaction(subject: string, snippet: string): boolean {
-    if (subject.toLowerCase().includes('otp')) {
-      return false;
-    }
-    return true;
+  private gmailClient?: gmail_v1.Gmail;
+
+  constructor(gmailClient?: gmail_v1.Gmail) {
+    this.gmailClient = gmailClient;
   }
 
   /**
-   * Recursively extracts and decodes the plain text body from the Gmail message payload,
-   * stripping HTML tag noise if it is an HTML-only part.
+   * Helper to retrieve either the injected client or instantiate a new one.
+   */
+  private getGmailClient(accessToken: string): gmail_v1.Gmail {
+    if (this.gmailClient) {
+      return this.gmailClient;
+    }
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    return google.gmail({ version: 'v1', auth });
+  }
+
+  /**
+   * [FUNC-GMAIL-6] [NFR-GMAIL-2] Categorizes email as transactional or not based on subject.
+   * Exposes dependency delegation for backward compatibility.
+   */
+  isTransaction(subject: string, snippet: string): boolean {
+    return EmailClassifier.isTransaction(subject);
+  }
+
+  /**
+   * Recursively extracts and decodes the plain text body from the Gmail message payload.
+   * Exposes dependency delegation for backward compatibility.
    */
   extractBody(part: any): string {
-    if (!part) return '';
-    
-    // If the part contains the body data directly
-    if (part.body && part.body.data) {
-      try {
-        const base64Data = part.body.data;
-        const decoded = Buffer.from(base64Data, 'base64').toString('utf-8');
-        
-        if (part.mimeType === 'text/html') {
-          // Strip styles, scripts, and HTML tags to obtain safe, clean text
-          return decoded
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        }
-        return decoded;
-      } catch (err) {
-        console.error('Failed to decode body part:', err);
-        return '';
-      }
-    }
-    
-    // If the part has subparts, recursively process them
-    if (part.parts) {
-      let plainText = '';
-      let htmlText = '';
-      
-      for (const subPart of part.parts) {
-        const text = this.extractBody(subPart);
-        if (text) {
-          if (subPart.mimeType === 'text/plain') {
-            plainText = text;
-          } else if (subPart.mimeType === 'text/html') {
-            htmlText = text;
-          } else {
-            plainText = plainText || text;
-          }
-        }
-      }
-      return plainText || htmlText;
-    }
-    
-    return '';
+    return EmailSanitizer.extractBody(part);
   }
 
   /**
    * [FUNC-GMAIL-4] Fetches emails based on filters using the provided ephemeral access token.
    */
   async fetchEmails(accessToken: string, filters: GmailFetchFilters): Promise<FormattedEmail[]> {
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: accessToken });
-    
-    const gmail = google.gmail({ version: 'v1', auth });
+    const gmail = this.getGmailClient(accessToken);
     
     // Construct search query
     // Date format for Gmail: YYYY/MM/DD
