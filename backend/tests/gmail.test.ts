@@ -200,5 +200,51 @@ describe('Gmail API Integration', () => {
     expect(service.isTransaction('OTP for transaction', 'You spent $10.00')).toBe(false);
     expect(service.isTransaction('Your otp code', 'Payment of rs. 500 is pending')).toBe(false);
   });
+
+  /**
+   * [FUNC-GMAIL-9] Email Detail View: Decodes base64 body content and strips HTML tags.
+   */
+  it('correctly decodes and sanitizes full email body', () => {
+    const { GmailService } = require('../src/services/gmail-service');
+    const service = new GmailService();
+    
+    // Test plain text part decoding
+    const plainPayload = {
+      mimeType: 'text/plain',
+      body: {
+        data: Buffer.from('Hello plain text world').toString('base64')
+      }
+    };
+    expect(service.extractBody(plainPayload)).toBe('Hello plain text world');
+
+    // Test HTML text part decoding and tag stripping
+    const htmlPayload = {
+      mimeType: 'text/html',
+      body: {
+        data: Buffer.from('<div>Hello <style>body{}</style><script>alert()</script>HTML <b>world</b></div>').toString('base64')
+      }
+    };
+    expect(service.extractBody(htmlPayload)).toBe('Hello HTML world');
+
+    // Test nested parts recursion
+    const nestedPayload = {
+      parts: [
+        {
+          mimeType: 'text/html',
+          body: {
+            data: Buffer.from('<p>Alternative HTML</p>').toString('base64')
+          }
+        },
+        {
+          mimeType: 'text/plain',
+          body: {
+            data: Buffer.from('Alternative plain text').toString('base64')
+          }
+        }
+      ]
+    };
+    // Should prefer plain text part
+    expect(service.extractBody(nestedPayload)).toBe('Alternative plain text');
+  });
 });
 

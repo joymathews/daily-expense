@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import App from './App';
 import React from 'react';
 
@@ -132,8 +132,8 @@ describe('Requirement Traceability Matrix Verification', () => {
   it('allows the user to manually review and move emails to transaction section', async () => {
     // Mock the fetch call
     const mockEmails = [
-      { id: '1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid amount rs. 100', hasTransaction: true },
-      { id: '2', sender: 'newsletter@test.com', subject: 'Weekly Update', date: '2023-01-02', snippet: 'Hello there', hasTransaction: false }
+      { id: '1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid amount rs. 100', body: 'Full billing content for Inv 123', hasTransaction: true },
+      { id: '2', sender: 'newsletter@test.com', subject: 'Weekly Update', date: '2023-01-02', snippet: 'Hello there', body: 'Full newsletter body content', hasTransaction: false }
     ];
     
     const mockFetch = vi.fn().mockResolvedValue({
@@ -206,6 +206,79 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Click to Non-Transactional tab and verify it's there
     fireEvent.click(screen.getByText('Non-Transactional (For Review)'));
     expect(screen.getByText('Inv 123')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-9] Email Detail View: Displays modal with full email content when clicked.
+   * [FUNC-GMAIL-10] Modal Action Override: Clicking override buttons inside the modal updates classifications.
+   */
+  it('opens a modal displaying full content when clicking an email, and allows overrides', async () => {
+    // Mock the fetch call
+    const mockEmails = [
+      { id: '1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid amount rs. 100', body: 'Full billing content for Inv 123', hasTransaction: true }
+    ];
+    
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ emails: mockEmails }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Input filters to pass check
+    fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/End Date/i), { target: { value: '2023-01-31' } });
+    
+    // Add a sender
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    fireEvent.change(senderInput, { target: { value: 'sender@test.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Click Authorize & Fetch
+    fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Wait for email to appear
+    const subjectCell = await screen.findByText('Inv 123');
+    expect(subjectCell).toBeInTheDocument();
+
+    // Verify modal is not open initially
+    expect(screen.queryByTestId('email-detail-modal')).not.toBeInTheDocument();
+
+    // Click on the email subject to open the modal
+    fireEvent.click(subjectCell);
+
+    // Modal should now be open
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText('Full billing content for Inv 123')).toBeInTheDocument();
+
+    // The email is currently transactional. Verify it has the status badge and the demotion button
+    expect(within(modal).getByText('Status:')).toBeInTheDocument();
+    expect(within(modal).getByText('Transactional')).toBeInTheDocument();
+    const unmarkBtn = within(modal).getByRole('button', { name: 'Unmark Tx' });
+    expect(unmarkBtn).toBeInTheDocument();
+
+    // Click 'Unmark Tx' inside the modal
+    fireEvent.click(unmarkBtn);
+
+    // The modal's status badge should update to 'Non-Transactional' and button should update to 'Mark Tx'
+    expect(within(modal).queryByText('Transactional')).not.toBeInTheDocument();
+    expect(within(modal).getByText('Non-Transactional')).toBeInTheDocument();
+    expect(within(modal).getByRole('button', { name: 'Mark Tx' })).toBeInTheDocument();
+
+    // Verify badges in the parent layout reflect the demotion (Transactions=0, Non-Transactional=1)
+    expect(screen.getByText('Transactions').querySelector('span')?.textContent).toBe('0');
+    expect(screen.getByText('Non-Transactional (For Review)').querySelector('span')?.textContent).toBe('1');
+
+    // Click 'Close' to dismiss modal
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('email-detail-modal')).not.toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });

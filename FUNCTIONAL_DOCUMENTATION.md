@@ -24,3 +24,5 @@
 - [FUNC-GMAIL-6] Email Segregation: The system must automatically analyze fetched emails and categorize them into two lists: "with transaction" and "without transaction" based on transactional keywords in the subject or body snippet.
 - [FUNC-GMAIL-7] Separate Presentation: The system must display the two lists of emails (transactional and non-transactional) in separate sections or tabs to the user.
 - [FUNC-GMAIL-8] Manual Review: The system must provide options for the user to manually review and move emails between the "with transaction" and "without transaction" sections.
+- [FUNC-GMAIL-9] Email Detail View: The user must be able to click on any fetched email to view its details (subject, sender, date, and full decoded plain-text body content) in a secure modal popup.
+- [FUNC-GMAIL-10] Modal Action Override: Inside the detail modal view, the user must have the option to mark the email as transactional or non-transactional, which updates the local email state and count badge immediately.
