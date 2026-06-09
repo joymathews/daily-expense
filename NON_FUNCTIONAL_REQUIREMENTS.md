@@ -16,3 +16,5 @@
 
 ## Gmail Integration Constraints [NFR-GMAIL]
 - [NFR-GMAIL-1] Session Security: Third-party authentication tokens must be handled ephemerally and never persisted to non-volatile storage.
+- [NFR-GMAIL-2] Classification Performance: The email categorization must run locally on the server in O(N) complexity using a predefined set of case-insensitive transactional keywords to avoid external service calls.
+

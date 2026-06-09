@@ -7,6 +7,7 @@ interface GmailMessage {
   subject: string;
   date: string;
   snippet: string;
+  hasTransaction: boolean;
 }
 
 const GmailIntegration: React.FC = () => {
@@ -18,7 +19,23 @@ const GmailIntegration: React.FC = () => {
   const [emails, setEmails] = useState<GmailMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'transaction' | 'non-transaction'>('transaction');
 
+  const markAsTransaction = (id: string) => {
+    setEmails(prevEmails =>
+      prevEmails.map(email =>
+        email.id === id ? { ...email, hasTransaction: true } : email
+      )
+    );
+  };
+
+  const markAsNonTransaction = (id: string) => {
+    setEmails(prevEmails =>
+      prevEmails.map(email =>
+        email.id === id ? { ...email, hasTransaction: false } : email
+      )
+    );
+  };
   const addSender = () => {
     if (currentSender && !senders.includes(currentSender)) {
       setSenders([...senders, currentSender]);
@@ -157,9 +174,42 @@ const GmailIntegration: React.FC = () => {
         </div>
 
         <div className="lg:col-span-3 bg-white border border-gray-100 rounded overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
-            <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Inbox Records</h3>
-            <span className="text-[9px] font-black text-gray-300 uppercase">{emails.length} Found</span>
+          <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-center px-4">
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab('transaction')}
+                className={`py-2 px-1 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                  activeTab === 'transaction'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Transactions
+                <span className={`ml-1.5 px-1.5 py-0.5 text-[8px] rounded-full font-bold ${
+                  activeTab === 'transaction' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {emails.filter(e => e.hasTransaction).length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('non-transaction')}
+                className={`py-2 px-1 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                  activeTab === 'non-transaction'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Non-Transactional (For Review)
+                <span className={`ml-1.5 px-1.5 py-0.5 text-[8px] rounded-full font-bold ${
+                  activeTab === 'non-transaction' ? 'bg-amber-100 text-amber-800' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {emails.filter(e => !e.hasTransaction).length}
+                </span>
+              </button>
+            </div>
+            <span className="text-[9px] font-black text-gray-300 uppercase">{emails.length} Total</span>
           </div>
           
           <div className="overflow-x-auto">
@@ -169,37 +219,60 @@ const GmailIntegration: React.FC = () => {
                   <th className="px-4 py-2 text-left">Sender</th>
                   <th className="px-4 py-2 text-left">Details</th>
                   <th className="px-4 py-2 text-right">Date</th>
+                  <th className="px-4 py-2 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {emails.length === 0 ? (
+                {emails.filter(email => activeTab === 'transaction' ? email.hasTransaction : !email.hasTransaction).length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-4 py-10 text-center">
+                    <td colSpan={4} className="px-4 py-10 text-center">
                       <p className="text-[10px] text-gray-300 font-bold uppercase tracking-widest">
                         {isLoading ? 'Scanning...' : 'No Data Fetch required'}
                       </p>
                     </td>
                   </tr>
                 ) : (
-                  emails.map((email) => (
-                    <tr key={email.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        <div className="text-[10px] font-bold text-gray-700">{email.sender.split('<')[0].trim()}</div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="text-[10px] font-bold text-gray-900 leading-tight">{email.subject}</div>
-                        <div className="text-[9px] text-gray-400 line-clamp-1 italic">{email.snippet}</div>
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-right text-[9px] font-bold text-gray-400 uppercase">
-                        {new Date(email.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </td>
-                    </tr>
-                  ))
+                  emails
+                    .filter(email => activeTab === 'transaction' ? email.hasTransaction : !email.hasTransaction)
+                    .map((email) => (
+                      <tr key={email.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-2 whitespace-nowrap">
+                          <div className="text-[10px] font-bold text-gray-700">{email.sender.split('<')[0].trim()}</div>
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="text-[10px] font-bold text-gray-900 leading-tight">{email.subject}</div>
+                          <div className="text-[9px] text-gray-400 line-clamp-1 italic">{email.snippet}</div>
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap text-right text-[9px] font-bold text-gray-400 uppercase">
+                          {new Date(email.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap text-center">
+                          {activeTab === 'non-transaction' ? (
+                            <button
+                              type="button"
+                              onClick={() => markAsTransaction(email.id)}
+                              className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-[8px] font-bold px-1.5 py-0.5 rounded transition-colors border border-blue-200 uppercase tracking-wider"
+                            >
+                              Mark Tx
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => markAsNonTransaction(email.id)}
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 text-[8px] font-bold px-1.5 py-0.5 rounded transition-colors border border-amber-200 uppercase tracking-wider"
+                            >
+                              Unmark Tx
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
                 )}
               </tbody>
             </table>
           </div>
         </div>
+
       </div>
     </div>
   );

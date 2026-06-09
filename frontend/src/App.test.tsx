@@ -29,7 +29,13 @@ vi.mock('@aws-amplify/ui-react', async () => {
 vi.mock('@react-oauth/google', async () => {
   return {
     GoogleOAuthProvider: ({ children }: any) => <div>{children}</div>,
-    useGoogleLogin: () => vi.fn()
+    useGoogleLogin: (options: any) => {
+      return () => {
+        if (options && options.onSuccess) {
+          options.onSuccess({ access_token: 'mock-token' });
+        }
+      };
+    }
   };
 });
 
@@ -109,12 +115,99 @@ describe('Requirement Traceability Matrix Verification', () => {
 
   /**
    * [FUNC-GMAIL-4] Display: Show fetched data in high-density table.
+   * [FUNC-GMAIL-7] Separate Presentation: The system must display the two lists of emails in separate tabs.
    */
-  it('displays transaction results table headers', () => {
+  it('displays transaction results table headers and tabs', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
-    expect(screen.getByText(/Inbox Records/i)).toBeInTheDocument();
+    expect(screen.getByText(/Transactions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Non-Transactional \(For Review\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Sender/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Details/i)).toBeInTheDocument();
   });
+
+  /**
+   * [FUNC-GMAIL-8] Manual Review: The system must allow user to move emails from non-transaction to transaction section.
+   */
+  it('allows the user to manually review and move emails to transaction section', async () => {
+    // Mock the fetch call
+    const mockEmails = [
+      { id: '1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid amount rs. 100', hasTransaction: true },
+      { id: '2', sender: 'newsletter@test.com', subject: 'Weekly Update', date: '2023-01-02', snippet: 'Hello there', hasTransaction: false }
+    ];
+    
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ emails: mockEmails }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Input filters to pass check
+    fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/End Date/i), { target: { value: '2023-01-31' } });
+    
+    // Add a sender
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    fireEvent.change(senderInput, { target: { value: 'sender@test.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Click Authorize & Fetch
+    fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Wait for the mock to resolve and check elements
+    // Transactions tab should be active by default. It should contain 'Inv 123'
+    expect(await screen.findByText('Inv 123')).toBeInTheDocument();
+    expect(screen.queryByText('Weekly Update')).not.toBeInTheDocument();
+
+    // Badges should show counts
+    expect(screen.getByText('Transactions').querySelector('span')?.textContent).toBe('1');
+    expect(screen.getByText('Non-Transactional (For Review)').querySelector('span')?.textContent).toBe('1');
+
+    // Click on the Non-Transactional tab
+    fireEvent.click(screen.getByText('Non-Transactional (For Review)'));
+
+    // It should display 'Weekly Update'
+    expect(screen.getByText('Weekly Update')).toBeInTheDocument();
+    expect(screen.queryByText('Inv 123')).not.toBeInTheDocument();
+
+    // Click on 'Mark Tx' for 'Weekly Update'
+    const markBtn = screen.getByText('Mark Tx');
+    fireEvent.click(markBtn);
+
+    // After clicking, the item should disappear from non-transaction tab
+    expect(screen.queryByText('Weekly Update')).not.toBeInTheDocument();
+
+    // Badges should update: Transactions=2, Non-Transactional=0
+    expect(screen.getByText('Transactions').querySelector('span')?.textContent).toBe('2');
+    expect(screen.getByText('Non-Transactional (For Review)').querySelector('span')?.textContent).toBe('0');
+
+    // Click back to Transactions tab
+    fireEvent.click(screen.getByText('Transactions'));
+    expect(screen.getByText('Inv 123')).toBeInTheDocument();
+    expect(screen.getByText('Weekly Update')).toBeInTheDocument();
+    
+    // Now verify moving it back to Non-Transactional
+    // Click 'Unmark Tx' for 'Inv 123'
+    const markNonBtn = screen.getAllByText('Unmark Tx')[0];
+    fireEvent.click(markNonBtn);
+
+    // It should disappear from Transactions tab
+    expect(screen.queryByText('Inv 123')).not.toBeInTheDocument();
+
+    // Badges should update: Transactions=1, Non-Transactional=1
+    expect(screen.getByText('Transactions').querySelector('span')?.textContent).toBe('1');
+    expect(screen.getByText('Non-Transactional (For Review)').querySelector('span')?.textContent).toBe('1');
+
+    // Click to Non-Transactional tab and verify it's there
+    fireEvent.click(screen.getByText('Non-Transactional (For Review)'));
+    expect(screen.getByText('Inv 123')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
+

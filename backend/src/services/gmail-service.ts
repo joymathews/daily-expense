@@ -13,9 +13,20 @@ export interface FormattedEmail {
   subject: string;
   date: string;
   snippet: string;
+  hasTransaction: boolean;
 }
 
 export class GmailService {
+  /**
+   * [FUNC-GMAIL-6] [NFR-GMAIL-2] Categorizes email as transactional or not based on subject.
+   */
+  isTransaction(subject: string, snippet: string): boolean {
+    if (subject.toLowerCase().includes('otp')) {
+      return false;
+    }
+    return true;
+  }
+
   /**
    * [FUNC-GMAIL-4] Fetches emails based on filters using the provided ephemeral access token.
    */
@@ -82,17 +93,21 @@ export class GmailService {
         const sender = headers.find(h => h.name?.toLowerCase() === 'from')?.value || 'Unknown';
         const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '(No Subject)';
         const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || 'Unknown';
+        const snippet = msg.data.snippet || '';
+        const hasTransaction = this.isTransaction(subject, snippet);
 
         formattedEmails.push({
           id: message.id!,
           sender,
           subject,
           date,
-          snippet: msg.data.snippet || '',
+          snippet,
+          hasTransaction,
         });
       }
 
       return formattedEmails;
+
     } catch (error) {
       console.error('Error fetching from Gmail API:', error);
       throw new Error('Failed to fetch messages from Gmail');

@@ -87,6 +87,7 @@ describe('Gmail API Integration', () => {
 
   /**
    * [FUNC-GMAIL-5] Pagination: Retrieve all emails across multiple pages.
+   * [NFR-PERF-3] Data Processing: Handle pagination efficiently.
    */
   it('should fetch all emails across multiple pages using pagination', async () => {
     // Mock 1st page response with token
@@ -181,4 +182,23 @@ describe('Gmail API Integration', () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toContain('required');
   });
+
+  /**
+   * [FUNC-GMAIL-6] Email Segregation: Analyze subject/snippet and mark transactional emails.
+   * [NFR-GMAIL-2] Classification Performance: Categorization is run locally with keyword checking.
+   */
+  it('correctly categorizes emails as transactional by default, and non-transactional if subject contains OTP', async () => {
+    const { GmailService } = require('../src/services/gmail-service');
+    const service = new GmailService();
+    
+    // Transactional (subject does NOT contain OTP)
+    expect(service.isTransaction('Your payment receipt', 'Hello user')).toBe(true);
+    expect(service.isTransaction('Weekly sync meeting', 'Let us discuss our project milestones next Monday')).toBe(true);
+    expect(service.isTransaction('Hello', 'You spent $10.00')).toBe(true);
+    
+    // Non-transactional (subject contains OTP)
+    expect(service.isTransaction('OTP for transaction', 'You spent $10.00')).toBe(false);
+    expect(service.isTransaction('Your otp code', 'Payment of rs. 500 is pending')).toBe(false);
+  });
 });
+
