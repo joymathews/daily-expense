@@ -37,3 +37,4 @@
 - [FUNC-GMAIL-19] Raw Email Deduplication: The system must verify that duplicate raw email imports are ignored at the database level using Gmail Message ID as a unique natural primary key.
 - [FUNC-GMAIL-20] Data Lineage Tracing: The system must display lineage linkages between Bronze, Silver, and Gold records, allowing the user to view original email content from staging or ledger items.
 - [FUNC-GMAIL-21] Processed Emails Visibility: The system must display a distinct visual status or indicator (such as a 'Processed' badge) for already extracted or approved emails in the Raw Emails (Bronze) list, and disable or update the action button for those emails to prevent duplicate extraction actions.
+- [FUNC-GMAIL-22] Silver Batch Approval: The user must be able to select multiple staging transactions in the Silver queue and approve them in a single batch operation, promoting them directly to the Gold ledger.

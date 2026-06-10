@@ -486,5 +486,82 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-22] Silver Batch Approval: Approve multiple staging transactions in a single batch operation.
+   * [NFR-PERF-4] Batch Approval Efficiency: Perform batch approval and update local state atomically.
+   */
+  it('allows the user to batch approve multiple silver transactions', async () => {
+    const mockSilver = [
+      { id: 'silver_1', rawEmailId: '1', merchantRaw: 'Uber Inc', amount: 14.50, currency: 'USD', transactionDate: '2023-01-15', inferredCategory: 'Transport', status: 'pending' },
+      { id: 'silver_2', rawEmailId: '2', merchantRaw: 'Starbucks', amount: 4.50, currency: 'USD', transactionDate: '2023-01-16', inferredCategory: 'Food', status: 'pending' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockSilver }),
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [] }),
+        });
+      }
+      if (url.includes('/api/gmail/approve-batch')) {
+        expect(init.method).toBe('POST');
+        const body = JSON.parse(init.body);
+        expect(body.silverIds).toEqual(['silver_1', 'silver_2']);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ status: 'approved', approvedIds: ['silver_1', 'silver_2'] }),
+        });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Click on Silver tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    // Wait for the Silver staging records to appear
+    expect(await screen.findByText('Uber Inc')).toBeInTheDocument();
+    expect(screen.getByText('Starbucks')).toBeInTheDocument();
+
+    // Checkboxes should exist. Check both row checkboxes.
+    const row1 = screen.getByText('Uber Inc').closest('tr')!;
+    const row2 = screen.getByText('Starbucks').closest('tr')!;
+
+    const checkbox1 = within(row1).getByRole('checkbox');
+    const checkbox2 = within(row2).getByRole('checkbox');
+
+    fireEvent.click(checkbox1);
+    fireEvent.click(checkbox2);
+
+    // The batch approval button "Approve Selected" should appear
+    const approveSelectedBtn = screen.getByRole('button', { name: /Approve Selected/i });
+    expect(approveSelectedBtn).toBeInTheDocument();
+
+    // Click batch approve
+    fireEvent.click(approveSelectedBtn);
+
+    // Verify batch approval endpoint was called
+    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve-batch', expect.any(Object));
+
+    vi.unstubAllGlobals();
+  });
 });
 

@@ -35,10 +35,14 @@ const GmailIntegration: React.FC = () => {
     updateGoldTransaction,
     handleFetchClick,
     approveTransaction,
+    approveTransactionsBatch,
   } = useGmailIntegration();
 
   // Multi-select state for Bronze batch extraction
   const [checkedEmailIds, setCheckedEmailIds] = useState<string[]>([]);
+
+  // Multi-select state for Silver batch approval
+  const [checkedSilverIds, setCheckedSilverIds] = useState<string[]>([]);
   
   // Local Gold transaction state for modal editing
   const [selectedGoldTransaction, setSelectedGoldTransaction] = useState<GoldTransaction | null>(null);
@@ -82,6 +86,26 @@ const GmailIntegration: React.FC = () => {
     if (checkedEmailIds.length === 0) return;
     await extractSelectedEmails(checkedEmailIds);
     setCheckedEmailIds([]);
+  };
+
+  const toggleSilverCheck = (id: string) => {
+    setCheckedSilverIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllSilver = () => {
+    if (checkedSilverIds.length === silverTransactions.length) {
+      setCheckedSilverIds([]);
+    } else {
+      setCheckedSilverIds(silverTransactions.map(t => t.id));
+    }
+  };
+
+  const handleBatchApprove = async () => {
+    if (checkedSilverIds.length === 0) return;
+    await approveTransactionsBatch(checkedSilverIds);
+    setCheckedSilverIds([]);
   };
 
   const handleReviewSilver = async (silverTx: any) => {
@@ -366,7 +390,17 @@ const GmailIntegration: React.FC = () => {
           {activeTab === 'silver' && (
             <div>
               <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-center px-4 py-2">
-                <span className="text-[9px] font-black text-blue-600 uppercase tracking-wider">Silver Staging Table (Pending Approvals)</span>
+                <div className="flex items-center space-x-4">
+                  <span className="text-[9px] font-black text-blue-600 uppercase tracking-wider">Silver Staging Table (Pending Approvals)</span>
+                  {checkedSilverIds.length > 0 && (
+                    <button
+                      onClick={handleBatchApprove}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black px-2.5 py-1 rounded transition-colors uppercase tracking-wider"
+                    >
+                      🚀 Approve Selected ({checkedSilverIds.length} Batch)
+                    </button>
+                  )}
+                </div>
                 <span className="text-[9px] font-black text-gray-300 uppercase">{silverTransactions.length} Pending Items</span>
               </div>
               
@@ -374,6 +408,13 @@ const GmailIntegration: React.FC = () => {
                 <table className="min-w-full">
                   <thead className="bg-gray-50 text-[8px] font-black text-gray-400 uppercase tracking-tighter">
                     <tr>
+                      <th className="px-4 py-2 text-center w-8">
+                        <input 
+                          type="checkbox" 
+                          checked={silverTransactions.length > 0 && checkedSilverIds.length === silverTransactions.length}
+                          onChange={toggleSelectAllSilver}
+                        />
+                      </th>
                       <th className="px-4 py-2 text-left">Extracted Merchant</th>
                       <th className="px-4 py-2 text-left">Date</th>
                       <th className="px-4 py-2 text-right">Amount</th>
@@ -385,13 +426,20 @@ const GmailIntegration: React.FC = () => {
                   <tbody className="divide-y divide-gray-50">
                     {silverTransactions.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center">
+                        <td colSpan={7} className="px-4 py-10 text-center">
                           <p className="text-[10px] text-gray-300 font-bold uppercase tracking-widest">No pending transactions in staging</p>
                         </td>
                       </tr>
                     ) : (
                       silverTransactions.map(tx => (
                         <tr key={tx.id} className="hover:bg-gray-50 transition-colors text-[10px]">
+                          <td className="px-4 py-2 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={checkedSilverIds.includes(tx.id)}
+                              onChange={() => toggleSilverCheck(tx.id)}
+                            />
+                          </td>
                           <td className="px-4 py-2 font-bold text-gray-900">
                             {tx.merchantNormalized || tx.merchantRaw}
                             <span className="block text-[8px] font-normal text-gray-400 truncate max-w-xs">{tx.emailSubject || 'Source Raw Email'}</span>

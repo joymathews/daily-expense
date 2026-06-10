@@ -58,5 +58,6 @@ export interface ITransactionRepository {
   updatePendingTransaction(id: string, updates: Partial<PendingTransaction>): Promise<void>;
   getRawEmailById(id: string): Promise<RawEmail | undefined>;
   getSilverTransactionByEmailId(emailId: string): Promise<PendingTransaction | undefined>;
+  getSilverTransactionById(id: string): Promise<PendingTransaction | undefined>;
   close(): Promise<void>;
 }

@@ -10,6 +10,7 @@
 - [NFR-PERF-1] Availability Monitoring: The system must provide a health validation service that responds within 100ms.
 - [NFR-PERF-2] Dynamic Layout: The system must utilize a responsive design engine to ensure usability across diverse hardware resolutions.
 - [NFR-PERF-3] Data Processing: The backend service must handle pagination efficiently to retrieve all requested records without causing memory exhaustion.
+- [NFR-PERF-4] Batch Approval Efficiency: The batch approval operation must complete within 200ms per transaction at the API layer, updating the local UI state atomically.
 
 ## Availability [NFR-AVAIL]
 - [NFR-AVAIL-1] The system should target 99.9% availability for the core platform and third-party integration pipelines.

@@ -253,6 +253,48 @@ router.post('/approve', async (req, res) => {
 });
 
 /**
+ * [FUNC-GMAIL-22] POST /api/gmail/approve-batch
+ * Confirms multiple pending transactions in staging and promotes them to the Gold ledger.
+ */
+router.post('/approve-batch', async (req, res) => {
+  const { silverIds } = req.body;
+
+  if (!silverIds || !Array.isArray(silverIds) || silverIds.length === 0) {
+    return res.status(400).json({ error: 'silverIds array is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    const approvedIds: string[] = [];
+
+    for (const silverId of silverIds) {
+      const tx = await repository.getSilverTransactionById(silverId);
+      if (tx && tx.status === 'pending') {
+        await repository.promoteToTransaction(silverId, {
+          id: crypto.randomUUID(),
+          pendingTxId: silverId,
+          userId: 'testuser',
+          merchant: tx.merchantNormalized || tx.merchantRaw,
+          amount: tx.amount,
+          currency: tx.currency,
+          transactionDate: tx.transactionDate,
+          category: tx.inferredCategory || 'Other',
+          notes: 'Batch approved',
+        });
+        approvedIds.push(silverId);
+      }
+    }
+
+    await repository.close();
+    res.status(200).json({ status: 'approved', approvedIds });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to approve transactions in batch' });
+  }
+});
+
+/**
  * [FUNC-GMAIL-12] Fetch pending staging transactions (legacy backup)
  */
 router.get('/pending', async (req, res) => {

@@ -313,6 +313,33 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     };
   }
 
+  async getSilverTransactionById(id: string): Promise<PendingTransaction | undefined> {
+    const row = await this.get<any>(
+      `SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+       FROM silver_extracted_transactions s
+       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id
+       WHERE s.id = ?`,
+      [id]
+    );
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      rawEmailId: row.bronze_email_id,
+      merchantRaw: row.merchant_raw,
+      merchantNormalized: row.merchant_normalized || undefined,
+      amount: row.amount_cents / 100,
+      currency: row.currency,
+      transactionDate: row.transaction_date,
+      inferredCategory: row.inferred_category || undefined,
+      confidenceScore: row.confidence_score ?? undefined,
+      status: row.status as 'pending' | 'approved' | 'rejected',
+      extractedAt: row.extracted_at,
+      emailSubject: row.email_subject || undefined,
+      emailSender: row.email_sender || undefined,
+      emailReceivedAt: row.email_received_at || undefined,
+    };
+  }
+
   async getGoldTransactions(filters?: { startDate?: string; endDate?: string }): Promise<Transaction[]> {
     let sql = `
       SELECT g.*, s.bronze_email_id, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at

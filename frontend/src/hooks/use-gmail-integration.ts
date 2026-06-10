@@ -368,6 +368,47 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const approveTransactionsBatch = async (silverIds: string[]) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/gmail/approve-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ silverIds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to approve transactions in batch');
+      }
+
+      const data = await response.json();
+      const approvedIds = data.approvedIds || silverIds;
+
+      const updateFn = (prevEmails: GmailMessage[]) =>
+        prevEmails.map(email =>
+          email.extracted && approvedIds.includes(email.extracted.id)
+            ? {
+                ...email,
+                hasTransaction: true,
+                extracted: { ...email.extracted, status: 'approved' as const },
+              }
+            : email
+        );
+
+      setEmails(updateFn);
+      setRawEmails(updateFn);
+
+      await loadSilverTransactions();
+      await loadGoldTransactions();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleFetchClick = () => {
     if (senders.length === 0 || !startDate || !endDate) {
       setError("Sender and Date Range are mandatory.");
@@ -407,6 +448,7 @@ export const useGmailIntegration = () => {
     updateGoldTransaction,
     handleFetchClick,
     approveTransaction,
+    approveTransactionsBatch,
     loadAllLayers,
   };
 };
