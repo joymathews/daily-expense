@@ -395,5 +395,96 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-21] Processed Emails Visibility: Distinct visual status or indicator for processed emails and disabled action button.
+   * [NFR-USAB-1] Ingestion Status Feedback: Status display for raw emails.
+   */
+  it('displays processed badge and disables extraction/checkbox for already processed emails', async () => {
+    // Mock the fetch calls
+    const mockEmails = [
+      { id: '1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content for Inv 123', hasTransaction: true },
+      { id: '2', sender: 'sender@test.com', subject: 'Inv 456', date: '2023-01-02', snippet: 'Paid Rs. 200', body: 'Full billing content for Inv 456', hasTransaction: true }
+    ];
+    // Inv 123 is processed (exists in silverTransactions)
+    const mockSilver = [
+      { id: 'silver_1', rawEmailId: '1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'pending' }
+    ];
+    
+    const mockFetch = vi.fn().mockImplementation((url, _init) => {
+      if (url.includes('/api/gmail/fetch')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: mockEmails }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: mockEmails }),
+        });
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockSilver }),
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Input filters to pass check
+    fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/End Date/i), { target: { value: '2023-01-31' } });
+    
+    // Add a sender
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    fireEvent.change(senderInput, { target: { value: 'sender@test.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Click Authorize & Fetch
+    fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Wait for the emails to appear
+    expect(await screen.findByText('Inv 123')).toBeInTheDocument();
+    expect(screen.getByText('Inv 456')).toBeInTheDocument();
+
+    // Check that Inv 123 has "Processed" badge or indicator
+    expect(screen.getAllByText(/Processed/i).length).toBeGreaterThan(0);
+
+    // Get the rows for both emails
+    const row1 = screen.getByText('Inv 123').closest('tr')!;
+    const row2 = screen.getByText('Inv 456').closest('tr')!;
+
+    // In row1, the extract action button should be labeled as "Processed" and disabled
+    expect(within(row1).getByRole('button', { name: 'Processed' })).toBeDisabled();
+    expect(within(row1).getByText('✓ Processed')).toBeInTheDocument();
+    expect(within(row1).queryByRole('button', { name: 'Extract' })).not.toBeInTheDocument();
+
+    // In row2, the extract action should still be available
+    expect(within(row2).getByRole('button', { name: 'Extract' })).toBeInTheDocument();
+
+    // The checkbox in row1 should be disabled
+    const checkbox1 = within(row1).getByRole('checkbox');
+    expect(checkbox1).toBeDisabled();
+
+    // The checkbox in row2 should not be disabled
+    const checkbox2 = within(row2).getByRole('checkbox');
+    expect(checkbox2).not.toBeDisabled();
+
+    vi.unstubAllGlobals();
+  });
 });
 

@@ -47,10 +47,20 @@ const GmailIntegration: React.FC = () => {
   const isBronzeActive = activeTab === 'bronze' || activeTab === 'transaction' || activeTab === 'non-transaction';
   const bronzeSubTab = (activeTab === 'non-transaction') ? 'non-transaction' : 'transaction';
 
+  // Helper to determine if an email has already been processed
+  const isEmailProcessed = (email: typeof rawEmails[0]) => {
+    if (email.extracted) return true;
+    const inSilver = silverTransactions.some(tx => tx.rawEmailId === email.id);
+    const inGold = goldTransactions.some(tx => tx.bronzeEmailId === email.id);
+    return inSilver || inGold;
+  };
+
   // Filter raw emails for Bronze view
   const visibleRawEmails = rawEmails.filter(email => 
     bronzeSubTab === 'transaction' ? email.hasTransaction : !email.hasTransaction
   );
+
+  const unprocessedEmails = visibleRawEmails.filter(e => !isEmailProcessed(e));
 
   const toggleEmailCheck = (id: string) => {
     setCheckedEmailIds(prev => 
@@ -59,10 +69,12 @@ const GmailIntegration: React.FC = () => {
   };
 
   const toggleSelectAll = () => {
-    if (checkedEmailIds.length === visibleRawEmails.length) {
-      setCheckedEmailIds([]);
+    const allUnprocessedChecked = unprocessedEmails.length > 0 && unprocessedEmails.every(e => checkedEmailIds.includes(e.id));
+    if (allUnprocessedChecked && unprocessedEmails.length > 0) {
+      setCheckedEmailIds(prev => prev.filter(id => !unprocessedEmails.some(e => e.id === id)));
     } else {
-      setCheckedEmailIds(visibleRawEmails.map(e => e.id));
+      const newIds = unprocessedEmails.map(e => e.id);
+      setCheckedEmailIds(prev => Array.from(new Set([...prev, ...newIds])));
     }
   };
 
@@ -243,8 +255,9 @@ const GmailIntegration: React.FC = () => {
                       <th className="px-4 py-2 text-center w-8">
                         <input 
                           type="checkbox" 
-                          checked={visibleRawEmails.length > 0 && checkedEmailIds.length === visibleRawEmails.length}
+                          checked={unprocessedEmails.length > 0 && unprocessedEmails.every(e => checkedEmailIds.includes(e.id))}
                           onChange={toggleSelectAll}
+                          disabled={unprocessedEmails.length === 0}
                         />
                       </th>
                       <th className="px-4 py-2 text-left">Sender</th>
@@ -270,13 +283,22 @@ const GmailIntegration: React.FC = () => {
                               type="checkbox" 
                               checked={checkedEmailIds.includes(email.id)}
                               onChange={() => toggleEmailCheck(email.id)}
+                              disabled={isEmailProcessed(email)}
+                              className={isEmailProcessed(email) ? "opacity-50 cursor-not-allowed" : ""}
                             />
                           </td>
                           <td onClick={() => setSelectedEmail(email)} className="px-4 py-2 whitespace-nowrap cursor-pointer">
                             <div className="text-[10px] font-bold text-gray-700">{email.sender.split('<')[0].trim()}</div>
                           </td>
                           <td onClick={() => setSelectedEmail(email)} className="px-4 py-2 cursor-pointer">
-                            <div className="text-[10px] font-bold text-gray-900 leading-tight">{email.subject}</div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold text-gray-900 leading-tight">{email.subject}</span>
+                              {isEmailProcessed(email) && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-green-50 text-green-700 border border-green-200">
+                                  ✓ Processed
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[9px] text-gray-400 line-clamp-1 italic">{email.snippet}</div>
                           </td>
                           <td onClick={() => setSelectedEmail(email)} className="px-4 py-2 whitespace-nowrap text-right text-[9px] font-bold text-gray-400 uppercase cursor-pointer">
@@ -293,20 +315,41 @@ const GmailIntegration: React.FC = () => {
                               </button>
                             ) : (
                               <>
-                                <button
-                                  type="button"
-                                  onClick={() => markAsNonTransaction(email.id)}
-                                  className="bg-amber-50 hover:bg-amber-100 text-amber-600 text-[8px] font-bold px-1.5 py-0.5 border border-amber-100 rounded uppercase"
-                                >
-                                  Unmark Tx
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => extractSelectedEmails([email.id])}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase"
-                                >
-                                  Extract
-                                </button>
+                                {isEmailProcessed(email) ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="bg-gray-50 text-gray-300 text-[8px] font-bold px-1.5 py-0.5 border border-gray-100 rounded uppercase cursor-not-allowed"
+                                    >
+                                      Unmark Tx
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="bg-gray-100 text-gray-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-gray-200 uppercase cursor-not-allowed"
+                                    >
+                                      Processed
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => markAsNonTransaction(email.id)}
+                                      className="bg-amber-50 hover:bg-amber-100 text-amber-600 text-[8px] font-bold px-1.5 py-0.5 border border-amber-100 rounded uppercase"
+                                    >
+                                      Unmark Tx
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => extractSelectedEmails([email.id])}
+                                      className="bg-blue-600 hover:bg-blue-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase"
+                                    >
+                                      Extract
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                           </td>

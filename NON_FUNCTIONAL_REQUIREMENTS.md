@@ -24,4 +24,5 @@
 - [NFR-LLM-1] Swap-Ready LLM Ingress: The application must support running a local model on the user's machine during development and switching to cloud-hosted intelligence APIs via configurations without code modifications.
 - [NFR-ARCH-2] Medallion Separation: The database architecture must strictly isolate Bronze, Silver, and Gold structures, ensuring clean transition actions on user verification.
 
-
+## Usability [NFR-USAB]
+- [NFR-USAB-1] Ingestion Status Feedback: The UI must clearly indicate the processing status of each raw email within 100ms of loading the Raw Emails list to prevent cognitive load and redundant user attempts.
