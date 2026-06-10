@@ -32,6 +32,9 @@ export interface SilverTransaction {
   confidenceScore?: number;
   status: 'pending' | 'approved' | 'rejected';
   extractedAt?: string;
+  emailSubject?: string;
+  emailSender?: string;
+  emailReceivedAt?: string;
 }
 
 export interface GoldTransaction {
@@ -46,6 +49,10 @@ export interface GoldTransaction {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  emailSubject?: string;
+  emailSender?: string;
+  emailReceivedAt?: string;
+  bronzeEmailId?: string;
 }
 
 export const useGmailIntegration = () => {
@@ -340,10 +347,21 @@ export const useGmailIntegration = () => {
       }
 
       // Promote status locally in emails state for test compatibility
-      const updateFn = (prevEmails: GmailMessage[]) =>
+      const updateFn = (prevEmails: GmailMessage[]): GmailMessage[] =>
         prevEmails.map(email =>
           email.extracted?.id === silverId 
-            ? { ...email, hasTransaction: true, extracted: { ...email.extracted, status: 'approved', merchant, amount, category, date } } 
+            ? {
+                ...email,
+                hasTransaction: true,
+                extracted: {
+                  ...email.extracted!,
+                  status: 'approved' as const,
+                  merchant,
+                  amount,
+                  category,
+                  date
+                }
+              } 
             : email
         );
       
@@ -355,7 +373,14 @@ export const useGmailIntegration = () => {
         setSelectedEmail({
           ...selectedEmail,
           hasTransaction: true,
-          extracted: { ...selectedEmail.extracted, status: 'approved', merchant, amount, category, date },
+          extracted: {
+            ...selectedEmail.extracted!,
+            status: 'approved' as const,
+            merchant,
+            amount,
+            category,
+            date
+          },
         });
       }
 

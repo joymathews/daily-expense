@@ -353,4 +353,121 @@ describe('Transaction Processing Pipeline Integration', () => {
     // Restore environment
     process.env.LLM_PROVIDER = originalProvider;
   });
+
+  /**
+   * [FUNC-GMAIL-19] Raw Email Deduplication
+   * Test verifies that duplicate raw email imports are ignored at the database level
+   * using Gmail Message ID as a unique natural primary key.
+   */
+  it('should ignore duplicate raw email imports at the database level using Gmail Message ID as unique primary key', async () => {
+    const emailId = 'dedup_test_id_111';
+    
+    // Insert raw email once
+    await repository.saveRawEmail({
+      id: emailId,
+      sender: 'test@sender.com',
+      subject: 'Subject 1',
+      snippet: 'Snippet 1',
+      rawBody: 'Body 1',
+      rawPayload: '{}',
+      receivedAt: '2023-01-15T10:00:00Z',
+    });
+
+    // Attempt to insert duplicate raw email with different details
+    await repository.saveRawEmail({
+      id: emailId,
+      sender: 'different@sender.com',
+      subject: 'Different Subject',
+      snippet: 'Different Snippet',
+      rawBody: 'Different Body',
+      rawPayload: '{}',
+      receivedAt: '2023-01-16T10:00:00Z',
+    });
+
+    // Retrieve the raw email and verify that the original record was kept (duplicate ignored)
+    const email = await repository.getRawEmailById(emailId);
+    expect(email).toBeDefined();
+    expect(email!.sender).toBe('test@sender.com');
+    expect(email!.subject).toBe('Subject 1');
+  });
+
+  /**
+   * [NFR-ARCH-2] Medallion Separation
+   * Test verifies that the database architecture strictly isolates Bronze (raw), Silver (staging),
+   * and Gold (ledger) structures, and promotion actions function cleanly without leaving orphaned records.
+   */
+  it('should strictly isolate Bronze, Silver, and Gold structures in the database', async () => {
+    const emailId = 'medallion_email_123';
+    const silverId = 'medallion_silver_456';
+    const goldId = 'medallion_gold_789';
+
+    // 1. Insert into Bronze (Raw Email)
+    await repository.saveRawEmail({
+      id: emailId,
+      sender: 'merchant@store.com',
+      subject: 'Order Confirmation',
+      snippet: 'Order details',
+      rawBody: 'Item amount: 15.00',
+      rawPayload: '{}',
+      receivedAt: '2023-01-17T12:00:00Z',
+    });
+
+    // Verify raw email exists in Bronze but not in Silver or Gold
+    const rawExists = await repository.getRawEmailById(emailId);
+    expect(rawExists).toBeDefined();
+    
+    const silverBefore = await repository.getSilverTransactions();
+    expect(silverBefore.some(tx => tx.rawEmailId === emailId)).toBe(false);
+
+    // 2. Extract and save to Silver (Staging)
+    await repository.savePendingTransaction({
+      id: silverId,
+      rawEmailId: emailId,
+      merchantRaw: 'Merchant Store',
+      amount: 15.00,
+      currency: 'USD',
+      transactionDate: '2023-01-17',
+      status: 'pending',
+    });
+
+    // Verify staging record exists in Silver and correctly references Bronze email ID
+    const silverList = await repository.getSilverTransactions();
+    const silverItem = silverList.find(s => s.id === silverId);
+    expect(silverItem).toBeDefined();
+    expect(silverItem!.rawEmailId).toBe(emailId);
+
+    // Verify Gold ledger does not yet contain this transaction
+    const goldListBefore = await repository.getGoldTransactions();
+    expect(goldListBefore.some(g => g.pendingTxId === silverId)).toBe(false);
+
+    // 3. Promote staging record to Gold (Ledger)
+    await repository.promoteToTransaction(silverId, {
+      id: goldId,
+      pendingTxId: silverId,
+      userId: 'testuser',
+      merchant: 'Merchant Store Inc',
+      amount: 15.00,
+      currency: 'USD',
+      transactionDate: '2023-01-17',
+      category: 'Utilities',
+    });
+
+    // Verify isolation and linkage:
+    // Raw email in Bronze still exists intact
+    const rawAfter = await repository.getRawEmailById(emailId);
+    expect(rawAfter).toBeDefined();
+
+    // Silver staging record status has transitioned to approved
+    const allSilver = await repository.getSilverTransactions();
+    const silverTx = allSilver.find(s => s.id === silverId);
+    expect(silverTx).toBeDefined();
+    expect(silverTx!.status).toBe('approved');
+
+    // Gold ledger contains the promoted transaction linked to Silver
+    const goldListAfter = await repository.getGoldTransactions();
+    const goldItem = goldListAfter.find(g => g.id === goldId);
+    expect(goldItem).toBeDefined();
+    expect(goldItem!.pendingTxId).toBe(silverId);
+    expect(goldItem!.bronzeEmailId).toBe(emailId);
+  });
 });
