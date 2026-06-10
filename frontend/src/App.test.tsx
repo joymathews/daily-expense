@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import App from './App';
-import React from 'react';
 
 // Mock Amplify and Authenticator
 vi.mock('@aws-amplify/ui-react', async () => {
@@ -277,6 +276,120 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('Non-Transactional (For Review)').querySelector('span')?.textContent).toBe('1');
 
     // Click 'Close' to dismiss modal
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('email-detail-modal')).not.toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-12] Staging Review Queue: Displays staging parameters.
+   * [FUNC-GMAIL-13] Review and Final Ledger Approval: Click "Approve & Save" to promote.
+   */
+  it('displays the staging review queue and allows the user to edit and approve transactions', async () => {
+    // Mock the fetch call to return an email with an extracted pending transaction
+    const mockEmails = [
+      {
+        id: 'email_staging_123',
+        sender: 'rides@uber.com',
+        subject: 'Your Ride Details',
+        date: '2023-01-15',
+        snippet: 'Paid USD 14.50',
+        body: 'Full Uber ride details',
+        hasTransaction: true,
+        extracted: {
+          id: 'silver_pending_555',
+          merchant: 'Uber Inc',
+          amount: 14.50,
+          currency: 'USD',
+          date: '2023-01-15',
+          category: 'Transport',
+          status: 'pending'
+        }
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url, _init) => {
+      if (url === '/api/gmail/fetch') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: mockEmails }),
+        });
+      }
+      if (url === '/api/gmail/approve') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ status: 'approved' }),
+        });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Input filters to pass check
+    fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/End Date/i), { target: { value: '2023-01-31' } });
+    
+    // Add a sender
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    fireEvent.change(senderInput, { target: { value: 'rides@uber.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Click Authorize & Fetch
+    fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Wait for email to appear and click it
+    const subjectCell = await screen.findByText('Your Ride Details');
+    expect(subjectCell).toBeInTheDocument();
+    fireEvent.click(subjectCell);
+
+    // Modal should open
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // Verify staging form renders with pre-filled inputs
+    expect(within(modal).getByText('Staging Area (LLM Extracted Details)')).toBeInTheDocument();
+    const merchantInput = within(modal).getByLabelText('Merchant');
+    const amountInput = within(modal).getByLabelText('Amount');
+    const categoryInput = within(modal).getByLabelText('Category');
+    const dateInput = within(modal).getByLabelText('Date');
+
+    expect(merchantInput).toHaveValue('Uber Inc');
+    expect(amountInput).toHaveValue(14.50);
+    expect(categoryInput).toHaveValue('Transport');
+    expect(dateInput).toHaveValue('2023-01-15');
+
+    // User edits the details
+    fireEvent.change(merchantInput, { target: { value: 'Uber Ride Co.' } });
+    fireEvent.change(amountInput, { target: { value: '14.99' } });
+    fireEvent.change(categoryInput, { target: { value: 'Travel' } });
+
+    // Click Approve & Save
+    const approveBtn = within(modal).getByRole('button', { name: 'Approve & Save' });
+    fireEvent.click(approveBtn);
+
+    // Verify the approve API was called with the modified parameters
+    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('"merchant":"Uber Ride Co."')
+    }));
+    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+      body: expect.stringContaining('"amount":14.99')
+    }));
+    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+      body: expect.stringContaining('"category":"Travel"')
+    }));
+
+    // Verify modal status badge updates to 'Approved Ledger' and displays read-only details
+    expect(await within(modal).findByText('Approved Ledger')).toBeInTheDocument();
+    expect(within(modal).getByText('Uber Ride Co.')).toBeInTheDocument();
+
+    // Click close to dismiss
     fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
     expect(screen.queryByTestId('email-detail-modal')).not.toBeInTheDocument();
 

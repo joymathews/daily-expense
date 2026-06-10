@@ -26,3 +26,14 @@
 - [FUNC-GMAIL-8] Manual Review: The system must provide options for the user to manually review and move emails between the "with transaction" and "without transaction" sections.
 - [FUNC-GMAIL-9] Email Detail View: The user must be able to click on any fetched email to view its details (subject, sender, date, and full decoded plain-text body content) in a secure modal popup.
 - [FUNC-GMAIL-10] Modal Action Override: Inside the detail modal view, the user must have the option to mark the email as transactional or non-transactional, which updates the local email state and count badge immediately.
+- [FUNC-GMAIL-11] Local Email Logging & Audit Trail: The system must automatically store a complete local copy of the fetched email history so that the application has a reliable, queryable log of raw messages for auditing and re-processing.
+- [FUNC-GMAIL-12] Staging Review Queue: The system must automatically scan raw emails and extract transaction-related fields (such as merchant, amount, currency, and date) into a staging review queue so the user can verify them before they affect reports.
+- [FUNC-GMAIL-13] Review and Final Ledger Approval: The user must be able to edit, correct, and approve transactions from the staging review queue, confirming their accuracy before they are finalized as core expense records.
+- [FUNC-GMAIL-14] Automatic Duplicate Ingestion Prevention: The system must detect and skip previously processed emails during successive fetches, ensuring the user is never prompted to review or log the same transaction multiple times.
+- [FUNC-GMAIL-15] Separate Data View Options: The user must be able to view separate lists of their data matching the Medallion layers: Raw Emails (Bronze), Extracted Staging (Silver), and Confirmed Ledger (Gold).
+- [FUNC-GMAIL-16] Date Range Filtering: The user must be able to filter the listed records in Bronze, Silver, and Gold tables by a selected date range.
+- [FUNC-GMAIL-17] On-Demand Ingestion & Batch Extraction: The user must be able to trigger the Ollama extraction logic manually for a single raw email or in batches for multiple selected raw emails.
+- [FUNC-GMAIL-18] Confirmed Ledger Corrections: The user must be able to edit and save corrections directly to confirmed transaction records in the Gold table.
+- [FUNC-GMAIL-19] Raw Email Deduplication: The system must verify that duplicate raw email imports are ignored at the database level using Gmail Message ID as a unique natural primary key.
+- [FUNC-GMAIL-20] Data Lineage Tracing: The system must display lineage linkages between Bronze, Silver, and Gold records, allowing the user to view original email content from staging or ledger items.
+

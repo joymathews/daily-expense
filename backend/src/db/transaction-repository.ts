@@ -1,0 +1,62 @@
+export interface RawEmail {
+  id: string; // Gmail message unique ID
+  sender: string;
+  subject: string;
+  snippet: string;
+  rawBody: string;
+  rawPayload: string; // JSON string payload
+  receivedAt: string; // ISO UTC string
+  ingestedAt?: string; // ISO UTC string
+}
+
+export interface PendingTransaction {
+  id: string; // UUID string
+  rawEmailId: string; // Foreign key referencing raw_emails.id
+  merchantRaw: string;
+  merchantNormalized?: string;
+  amount: number; // Stored float value (mapping is handled in repo implementation)
+  currency: string;
+  transactionDate: string; // ISO UTC string
+  inferredCategory?: string;
+  confidenceScore?: number;
+  status: 'pending' | 'approved' | 'rejected';
+  extractedAt?: string;
+  emailSubject?: string;
+  emailSender?: string;
+  emailReceivedAt?: string;
+}
+
+export interface Transaction {
+  id: string; // UUID string
+  pendingTxId?: string; // Foreign key referencing pending_transactions.id
+  userId: string;
+  merchant: string;
+  amount: number; // Stored float value
+  currency: string;
+  transactionDate: string; // ISO UTC string
+  category: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  emailSubject?: string;
+  emailSender?: string;
+  emailReceivedAt?: string;
+  bronzeEmailId?: string;
+}
+
+export interface ITransactionRepository {
+  initializeSchema(): Promise<void>;
+  emailExists(gmailId: string): Promise<boolean>;
+  saveRawEmail(email: RawEmail): Promise<void>;
+  savePendingTransaction(tx: PendingTransaction): Promise<void>;
+  getPendingTransactions(): Promise<PendingTransaction[]>;
+  promoteToTransaction(pendingId: string, tx: Transaction): Promise<void>;
+  getRawEmails(filters?: { startDate?: string; endDate?: string }): Promise<RawEmail[]>;
+  getSilverTransactions(filters?: { startDate?: string; endDate?: string }): Promise<PendingTransaction[]>;
+  getGoldTransactions(filters?: { startDate?: string; endDate?: string }): Promise<Transaction[]>;
+  updateGoldTransaction(id: string, updates: Partial<Transaction>): Promise<void>;
+  updatePendingTransaction(id: string, updates: Partial<PendingTransaction>): Promise<void>;
+  getRawEmailById(id: string): Promise<RawEmail | undefined>;
+  getSilverTransactionByEmailId(emailId: string): Promise<PendingTransaction | undefined>;
+  close(): Promise<void>;
+}

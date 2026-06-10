@@ -16,11 +16,12 @@ For ALL future changes, feature implementations, and code modifications, you mus
 7. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
 
 ## 3. Tech Stack & Engineering Standards
-* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail).
+* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail). Database: `sqlite3`. LLM Integration: Ollama (localhost API interface). Environment Configuration: `dotenv`.
 * **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Auth: AWS Amplify (for Cognito), `@react-oauth/google` (for Gmail). Navigation: `react-router-dom`.
 * **Architecture:** Strictly adhere to SOLID principles and Clean Code rules.
 * **Testing:** Backend tests in `backend/tests`, frontend tests in `frontend/src/*.test.tsx`.
 * **Style:** Tailwind utility classes are the primary styling method; avoid Vanilla CSS.
+
 
 ## 4. Coding & Naming Conventions
 * **Files:** Use `kebab-case` for all file names.
@@ -39,11 +40,11 @@ For ALL future changes, feature implementations, and code modifications, you mus
 ### Requirement Traceability Matrix (RTM)
 * **Generate RTM Report:** `npm run rtm` (Generates `rtm_report.html` in the root)
 
-## 7. Architectural and Design Guidelines (SOLID & Clean Code Reference)
+## 7. Architectural and Design Policies (SOLID & Clean Code Reference)
 
 You must design and implement all solutions using the **SOLID Design Principles** as the primary architectural reference, backed by strict **Clean Code** rules. Every code modification, new component, or refactoring plan must be validated against these criteria to enforce high cohesion, loose coupling, and maximum readability.
 
-### 1. Core SOLID Implementation Matrix
+### 1. Core SOLID Implementation Policies
 
 * **S - Single Responsibility Principle (SRP):**
     * *Rule:* A class, module, or function must have one, and only one, reason to change.

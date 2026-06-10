@@ -1,5 +1,5 @@
 import React from 'react';
-import { GmailMessage } from '../../hooks/use-gmail-integration';
+import type { GmailMessage } from '../../hooks/use-gmail-integration';
 
 interface EmailListProps {
   emails: GmailMessage[];

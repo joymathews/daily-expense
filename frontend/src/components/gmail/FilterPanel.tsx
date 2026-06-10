@@ -26,7 +26,6 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   setEndDate,
   subject,
   setSubject,
-  addSender,
   removeSender,
   handleKeyDown,
   error,
