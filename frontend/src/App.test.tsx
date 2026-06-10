@@ -563,5 +563,87 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-23] Bronze Ingestion Status Filter: Filter raw emails in Bronze view by processed or unprocessed status.
+   * [NFR-USAB-2] Ingestion Status Filtering Usability: Instant filter response in UI.
+   */
+  it('allows the user to filter bronze emails by processed and unprocessed status', async () => {
+    // Mock the fetch calls
+    const mockEmails = [
+      { id: '1', sender: 'sender@test.com', subject: 'Inv 123 (Processed)', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content for Inv 123', hasTransaction: true },
+      { id: '2', sender: 'sender@test.com', subject: 'Inv 456 (Unprocessed)', date: '2023-01-02', snippet: 'Paid Rs. 200', body: 'Full billing content for Inv 456', hasTransaction: true }
+    ];
+    // Inv 123 is processed (exists in silverTransactions)
+    const mockSilver = [
+      { id: 'silver_1', rawEmailId: '1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'pending' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url, _init) => {
+      if (url.includes('/api/gmail/fetch') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: mockEmails }),
+        });
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockSilver }),
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Input filters to pass check
+    fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/End Date/i), { target: { value: '2023-01-31' } });
+    
+    // Add a sender
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    fireEvent.change(senderInput, { target: { value: 'sender@test.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Click Authorize & Fetch
+    fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Wait for the emails to appear
+    expect(await screen.findByText('Inv 123 (Processed)')).toBeInTheDocument();
+    expect(screen.getByText('Inv 456 (Unprocessed)')).toBeInTheDocument();
+
+    // Verify filter dropdown exists with options
+    const selectFilter = screen.getByLabelText(/Filter:/i);
+    expect(selectFilter).toBeInTheDocument();
+    expect(selectFilter).toHaveValue('all');
+
+    // Filter by Unprocessed only
+    fireEvent.change(selectFilter, { target: { value: 'unprocessed' } });
+    expect(screen.queryByText('Inv 123 (Processed)')).not.toBeInTheDocument();
+    expect(screen.getByText('Inv 456 (Unprocessed)')).toBeInTheDocument();
+
+    // Filter by Processed only
+    fireEvent.change(selectFilter, { target: { value: 'processed' } });
+    expect(screen.getByText('Inv 123 (Processed)')).toBeInTheDocument();
+    expect(screen.queryByText('Inv 456 (Unprocessed)')).not.toBeInTheDocument();
+
+    // Filter back to All
+    fireEvent.change(selectFilter, { target: { value: 'all' } });
+    expect(screen.getByText('Inv 123 (Processed)')).toBeInTheDocument();
+    expect(screen.getByText('Inv 456 (Unprocessed)')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
 

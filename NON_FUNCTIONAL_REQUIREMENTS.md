@@ -27,3 +27,4 @@
 
 ## Usability [NFR-USAB]
 - [NFR-USAB-1] Ingestion Status Feedback: The UI must clearly indicate the processing status of each raw email within 100ms of loading the Raw Emails list to prevent cognitive load and redundant user attempts.
+- [NFR-USAB-2] Ingestion Status Filtering Usability: The status filter controls in the Bronze section must update the view instantly (within 50ms) to allow efficient navigation between processed and unprocessed emails.

@@ -17,6 +17,8 @@ interface BronzeEmailListProps {
   bronzeSubTab: 'transaction' | 'non-transaction';
   setActiveTab: (tab: 'bronze' | 'silver' | 'gold' | 'transaction' | 'non-transaction') => void;
   rawEmails: GmailMessage[];
+  bronzeFilter: 'all' | 'processed' | 'unprocessed';
+  setBronzeFilter: (filter: 'all' | 'processed' | 'unprocessed') => void;
 }
 
 export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
@@ -35,6 +37,8 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
   bronzeSubTab,
   setActiveTab,
   rawEmails,
+  bronzeFilter,
+  setBronzeFilter,
 }) => {
   return (
     <div>
@@ -82,7 +86,20 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
             🚀 Extract Selected ({checkedEmailIds.length} Batch)
           </button>
         )}
-        <span className="text-[9px] font-black text-gray-300 uppercase">{visibleRawEmails.length} Items</span>
+        <div className="flex items-center space-x-2 my-1">
+          <label htmlFor="bronze-status-filter" className="text-[8px] font-black text-gray-400 uppercase">Filter:</label>
+          <select
+            id="bronze-status-filter"
+            value={bronzeFilter}
+            onChange={(e) => setBronzeFilter(e.target.value as 'all' | 'processed' | 'unprocessed')}
+            className="bg-white border border-gray-200 text-[9px] font-bold text-gray-700 px-2 py-0.5 rounded outline-none cursor-pointer"
+          >
+            <option value="all">All</option>
+            <option value="processed">Processed</option>
+            <option value="unprocessed">Unprocessed</option>
+          </select>
+          <span className="text-[9px] font-black text-gray-300 uppercase whitespace-nowrap">{visibleRawEmails.length} Items</span>
+        </div>
       </div>
       
       <div className="overflow-x-auto">

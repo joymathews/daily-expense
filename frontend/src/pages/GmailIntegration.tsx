@@ -49,6 +49,9 @@ const GmailIntegration: React.FC = () => {
   // Local Gold transaction state for modal editing
   const [selectedGoldTransaction, setSelectedGoldTransaction] = useState<GoldTransaction | null>(null);
 
+  // Ingestion status filtering for Bronze section
+  const [bronzeFilter, setBronzeFilter] = useState<'all' | 'processed' | 'unprocessed'>('all');
+
   // Manage Bronze layer sub-tabs (compatibility with Vitest tests)
   const isBronzeActive = activeTab === 'bronze' || activeTab === 'transaction' || activeTab === 'non-transaction';
   const bronzeSubTab = (activeTab === 'non-transaction') ? 'non-transaction' : 'transaction';
@@ -62,9 +65,17 @@ const GmailIntegration: React.FC = () => {
   };
 
   // Filter raw emails for Bronze view
-  const visibleRawEmails = rawEmails.filter(email => 
-    bronzeSubTab === 'transaction' ? email.hasTransaction : !email.hasTransaction
-  );
+  const visibleRawEmails = rawEmails.filter(email => {
+    const tabMatch = bronzeSubTab === 'transaction' ? email.hasTransaction : !email.hasTransaction;
+    if (!tabMatch) return false;
+    
+    if (bronzeFilter === 'processed') {
+      return isEmailProcessed(email);
+    } else if (bronzeFilter === 'unprocessed') {
+      return !isEmailProcessed(email);
+    }
+    return true;
+  });
 
   const unprocessedEmails = visibleRawEmails.filter(e => !isEmailProcessed(e));
 
@@ -240,6 +251,8 @@ const GmailIntegration: React.FC = () => {
               bronzeSubTab={bronzeSubTab}
               setActiveTab={setActiveTab}
               rawEmails={rawEmails}
+              bronzeFilter={bronzeFilter}
+              setBronzeFilter={setBronzeFilter}
             />
           )}
 
