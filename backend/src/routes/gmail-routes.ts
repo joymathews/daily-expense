@@ -103,6 +103,7 @@ router.post('/extract', async (req, res) => {
           inferredCategory: extracted.category,
           confidenceScore: 0.95,
           status: 'pending' as const,
+          paymentMethod: extracted.paymentMethod,
         };
         await repository.savePendingTransaction(pendingTx);
         results.push(pendingTx);
@@ -232,7 +233,7 @@ router.put('/gold-transactions/:id', async (req, res) => {
  * Stage 3: Confirms a staging transaction and promotes it to the Gold ledger.
  */
 router.post('/approve', async (req, res) => {
-  const { silverId, merchant, amount, currency, date, category, notes } = req.body;
+  const { silverId, merchant, amount, currency, date, category, notes, paymentMethod } = req.body;
   const userId = (req as any).auth?.sub;
 
   if (!silverId || !merchant || amount === undefined || !currency || !date || !category) {
@@ -253,6 +254,7 @@ router.post('/approve', async (req, res) => {
       transactionDate: date,
       category,
       notes: notes || '',
+      paymentMethod,
     });
 
     await repository.close();
@@ -293,6 +295,7 @@ router.post('/approve-batch', async (req, res) => {
           transactionDate: tx.transactionDate,
           category: tx.inferredCategory || 'Other',
           notes: 'Batch approved',
+          paymentMethod: tx.paymentMethod,
         });
         approvedIds.push(silverId);
       }

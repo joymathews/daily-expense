@@ -40,3 +40,7 @@
 - [FUNC-GMAIL-21] Processed Emails Visibility: The system must display a distinct visual status or indicator (such as a 'Processed' badge) for already extracted or approved emails in the Raw Emails (Bronze) list, and disable or update the action button for those emails to prevent duplicate extraction actions.
 - [FUNC-GMAIL-22] Silver Batch Approval: The user must be able to select multiple staging transactions in the Silver queue and approve them in a single batch operation, promoting them directly to the Gold ledger.
 - [FUNC-GMAIL-23] Bronze Ingestion Status Filter: The user must be able to filter the Raw Emails (Bronze) list based on their processing status (e.g., show "All", "Processed only", or "Unprocessed only").
+- [FUNC-GMAIL-24] Payment Method Extraction: The user must be able to see how a transaction was made (such as UPI, credit card, bank transaction) automatically extracted from raw emails and displayed in the staging review queue (Silver layer).
+- [FUNC-GMAIL-25] Staging Payment Review & Editing: The user must be able to view, edit, and correct the extracted payment method in the staging queue (Silver layer) before promoting it to the final ledger.
+- [FUNC-GMAIL-26] Verified Ledger Method Display & Correction: The user must be able to view the payment method in the ledger tables and edit or correct the payment method of approved transaction ledger records in the Gold table.
+

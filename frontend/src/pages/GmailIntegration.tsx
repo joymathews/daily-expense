@@ -136,6 +136,7 @@ const GmailIntegration: React.FC = () => {
           date: silverTx.transactionDate,
           category: silverTx.inferredCategory || 'Other',
           status: silverTx.status,
+          paymentMethod: silverTx.paymentMethod,
         }
       });
     } else {
@@ -172,6 +173,7 @@ const GmailIntegration: React.FC = () => {
                 date: silverTx.transactionDate,
                 category: silverTx.inferredCategory || 'Other',
                 status: silverTx.status,
+                paymentMethod: silverTx.paymentMethod,
               }
             });
           }

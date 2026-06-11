@@ -6,7 +6,7 @@
 ## 2. Mandatory Development Workflow
 For ALL future changes, feature implementations, and code modifications, you must strictly adhere to this sequential workflow:
 
-1. **Plan Mode First:** Formulate a comprehensive implementation plan in Plan Mode before making any modifications.
+1. **Plan Mode First:** Formulate a comprehensive implementation plan in Plan Mode(As per the architectural and Design Policies (SOLID & Clean Code Reference)) before making any modifications.
 2. **Functional Requirements:** Explicitly define functional requirements and update `FUNCTIONAL_DOCUMENTATION.md` FIRST.
 3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with system qualities (Security, Performance, Availability, Scalability, Usability, etc.).
 4. **Tech Stack & Standards:** Document all technical stack choices, library additions, and engineering standards in Section 3 of this `GEMINI.md` file. NEVER add these to requirement documents.

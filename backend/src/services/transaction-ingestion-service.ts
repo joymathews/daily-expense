@@ -56,6 +56,7 @@ export class TransactionIngestionService {
           inferredCategory: extracted.category,
           confidenceScore: 0.95,
           status: 'pending' as const,
+          paymentMethod: extracted.paymentMethod,
         };
         await this.repo.savePendingTransaction(pendingTx);
         return { status: 'extracted', extracted: pendingTx };

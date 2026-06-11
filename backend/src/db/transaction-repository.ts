@@ -26,6 +26,7 @@ export interface PendingTransaction {
   emailSubject?: string;
   emailSender?: string;
   emailReceivedAt?: string;
+  paymentMethod?: string;
 }
 
 export interface Transaction {
@@ -44,6 +45,7 @@ export interface Transaction {
   emailSender?: string;
   emailReceivedAt?: string;
   bronzeEmailId?: string;
+  paymentMethod?: string;
 }
 
 export interface ITransactionRepository {

@@ -18,6 +18,7 @@ export interface GmailMessage {
     date: string;
     category: string;
     status: 'pending' | 'approved' | 'rejected';
+    paymentMethod?: string;
   };
 }
 
@@ -36,6 +37,7 @@ export interface SilverTransaction {
   emailSubject?: string;
   emailSender?: string;
   emailReceivedAt?: string;
+  paymentMethod?: string;
 }
 
 export interface GoldTransaction {
@@ -54,6 +56,7 @@ export interface GoldTransaction {
   emailSender?: string;
   emailReceivedAt?: string;
   bronzeEmailId?: string;
+  paymentMethod?: string;
 }
 
 export const useGmailIntegration = () => {
@@ -258,6 +261,7 @@ export const useGmailIntegration = () => {
                 date: match.transactionDate,
                 category: match.inferredCategory || 'Other',
                 status: match.status,
+                paymentMethod: match.paymentMethod,
               }
             };
           }
@@ -372,7 +376,8 @@ export const useGmailIntegration = () => {
     currency: string,
     date: string,
     category: string,
-    notes?: string
+    notes?: string,
+    paymentMethod?: string
   ) => {
     setIsLoading(true);
     setError(null);
@@ -392,6 +397,7 @@ export const useGmailIntegration = () => {
           date,
           category,
           notes,
+          paymentMethod,
         }),
       });
 
@@ -413,7 +419,8 @@ export const useGmailIntegration = () => {
                   merchant,
                   amount,
                   category,
-                  date
+                  date,
+                  paymentMethod,
                 }
               } 
             : email
@@ -433,7 +440,8 @@ export const useGmailIntegration = () => {
             merchant,
             amount,
             category,
-            date
+            date,
+            paymentMethod,
           },
         });
       }

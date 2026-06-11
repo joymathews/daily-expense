@@ -54,10 +54,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     // Enable Foreign Key support in SQLite session
     await this.run('PRAGMA foreign_keys = ON;');
 
-    // Dynamic Migration check: check if user_id exists in bronze_raw_emails
+    // Dynamic Migration check: check if user_id exists in bronze_raw_emails or payment_method in silver_extracted_transactions
     const info = await this.all<{ name: string }>("PRAGMA table_info(bronze_raw_emails);");
     const hasUserId = info.some(col => col.name === 'user_id');
-    if (info.length > 0 && !hasUserId) {
+    const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
+    const hasPaymentMethod = silverInfo.some(col => col.name === 'payment_method');
+
+    if ((info.length > 0 && !hasUserId) || (silverInfo.length > 0 && !hasPaymentMethod)) {
       await this.run('DROP TABLE IF EXISTS gold_transactions;');
       await this.run('DROP TABLE IF EXISTS silver_extracted_transactions;');
       await this.run('DROP TABLE IF EXISTS bronze_raw_emails;');
@@ -93,6 +96,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         inferred_category TEXT,
         confidence_score REAL,
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+        payment_method TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, bronze_email_id) REFERENCES bronze_raw_emails(user_id, id) ON DELETE CASCADE,
         UNIQUE(user_id, bronze_email_id),
@@ -112,6 +116,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         transaction_date TEXT NOT NULL,
         category TEXT NOT NULL,
         notes TEXT,
+        payment_method TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
         updated_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, silver_tx_id) REFERENCES silver_extracted_transactions(user_id, id) ON DELETE SET NULL
@@ -151,8 +156,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     const amountCents = Math.round(tx.amount * 100);
     await this.run(
       `INSERT OR IGNORE INTO silver_extracted_transactions 
-       (id, user_id, bronze_email_id, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, user_id, bronze_email_id, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tx.id,
         tx.userId,
@@ -165,6 +170,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         tx.inferredCategory || null,
         tx.confidenceScore ?? null,
         tx.status,
+        tx.paymentMethod || null,
       ]
     );
   }
@@ -188,6 +194,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       confidenceScore: row.confidence_score ?? undefined,
       status: row.status as 'pending' | 'approved' | 'rejected',
       extractedAt: row.extracted_at,
+      paymentMethod: row.payment_method || undefined,
     }));
   }
 
@@ -206,8 +213,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       // 2. Insert validated transaction in gold ledger table
       await this.run(
         `INSERT OR IGNORE INTO gold_transactions 
-         (id, silver_tx_id, user_id, merchant, amount_cents, currency, transaction_date, category, notes) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, silver_tx_id, user_id, merchant, amount_cents, currency, transaction_date, category, notes, payment_method) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tx.id,
           pendingId,
@@ -218,6 +225,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           tx.transactionDate,
           tx.category,
           tx.notes || null,
+          tx.paymentMethod || null,
         ]
       );
 
@@ -304,6 +312,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       emailSubject: row.email_subject || undefined,
       emailSender: row.email_sender || undefined,
       emailReceivedAt: row.email_received_at || undefined,
+      paymentMethod: row.payment_method || undefined,
     }));
   }
 
@@ -332,6 +341,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       emailSubject: row.email_subject || undefined,
       emailSender: row.email_sender || undefined,
       emailReceivedAt: row.email_received_at || undefined,
+      paymentMethod: row.payment_method || undefined,
     };
   }
 
@@ -360,6 +370,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       emailSubject: row.email_subject || undefined,
       emailSender: row.email_sender || undefined,
       emailReceivedAt: row.email_received_at || undefined,
+      paymentMethod: row.payment_method || undefined,
     };
   }
 
@@ -398,6 +409,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       emailSender: row.email_sender || undefined,
       emailReceivedAt: row.email_received_at || undefined,
       bronzeEmailId: row.bronze_email_id || undefined,
+      paymentMethod: row.payment_method || undefined,
     }));
   }
 
@@ -427,6 +439,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     if (updates.notes !== undefined) {
       sets.push('notes = ?');
       params.push(updates.notes);
+    }
+    if (updates.paymentMethod !== undefined) {
+      sets.push('payment_method = ?');
+      params.push(updates.paymentMethod);
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now', 'utc')");
@@ -465,6 +481,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     if (updates.status !== undefined) {
       sets.push('status = ?');
       params.push(updates.status);
+    }
+    if (updates.paymentMethod !== undefined) {
+      sets.push('payment_method = ?');
+      params.push(updates.paymentMethod);
     }
     if (sets.length === 0) return;
     params.push(id);

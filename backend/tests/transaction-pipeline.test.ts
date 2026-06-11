@@ -16,6 +16,7 @@ class MockTransactionExtractor implements ITransactionExtractor {
       date: '2023-01-15',
       category: 'Transport',
       description: 'Ride to office',
+      paymentMethod: 'UPI',
     };
   }
 }
@@ -75,6 +76,7 @@ describe('Transaction Processing Pipeline Integration', () => {
     expect(pendingList[0].merchantRaw).toBe('Uber Inc');
     expect(pendingList[0].amount).toBe(14.50);
     expect(pendingList[0].currency).toBe('USD');
+    expect(pendingList[0].paymentMethod).toBe('UPI');
   });
 
   /**
@@ -151,6 +153,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       currency: 'USD',
       transactionDate: '2023-01-16',
       status: 'pending',
+      paymentMethod: 'HDFC credit card',
     });
 
     // 3. Confirm validation and promote to gold transaction ledger
@@ -165,6 +168,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       transactionDate: '2023-01-16',
       category: 'Shopping',
       notes: 'Weekly groceries',
+      paymentMethod: 'HDFC credit card',
     });
 
     // Verify status was changed in silver staging table (status is not pending anymore)
@@ -172,10 +176,11 @@ describe('Transaction Processing Pipeline Integration', () => {
     expect(pendingList).toHaveLength(0);
 
     // Verify that silver status query shows status changed (can query directly using SQLite raw check)
-    const dbRow = await (repository as any).get('SELECT status, amount_cents FROM silver_extracted_transactions WHERE id = ?', [pendingId]);
+    const dbRow = await (repository as any).get('SELECT status, amount_cents, payment_method FROM silver_extracted_transactions WHERE id = ?', [pendingId]);
     expect(dbRow.status).toBe('approved');
     // Amount in cents should remain what it was originally (1000 cents) since staging shows what model extracted
     expect(dbRow.amount_cents).toBe(1000);
+    expect(dbRow.payment_method).toBe('HDFC credit card');
 
     // Verify final transaction is stored in gold approved transactions
     const goldRow = await (repository as any).get('SELECT * FROM gold_transactions WHERE id = ?', [confirmTxId]);
@@ -183,6 +188,7 @@ describe('Transaction Processing Pipeline Integration', () => {
     expect(goldRow.merchant).toBe('Market Store Co.');
     expect(goldRow.amount_cents).toBe(999); // stored as integer cents: 9.99 * 100
     expect(goldRow.category).toBe('Shopping');
+    expect(goldRow.payment_method).toBe('HDFC credit card');
   });
 
   /**
@@ -483,5 +489,88 @@ describe('Transaction Processing Pipeline Integration', () => {
     expect(goldItem).toBeDefined();
     expect(goldItem!.pendingTxId).toBe(silverId);
     expect(goldItem!.bronzeEmailId).toBe(emailId);
+  });
+
+  /**
+   * [FUNC-GMAIL-24] Payment Method Extraction
+   * [FUNC-GMAIL-25] Staging Payment Review & Editing
+   * [FUNC-GMAIL-26] Verified Ledger Method Display & Correction
+   * [NFR-GMAIL-3] Payment Classification Robustness
+   */
+  it('should support payment method end-to-end extraction, editing, promotion, and ledger corrections', async () => {
+    const emailId = 'pm_email_101';
+    const silverId = 'pm_silver_202';
+    const goldId = 'pm_gold_303';
+    const userId = 'user_pm_test';
+
+    // 1. Ingest Bronze layer
+    await repository.saveRawEmail({
+      id: emailId,
+      userId,
+      sender: 'upi@bank.com',
+      subject: 'UPI Payment Alert',
+      snippet: 'Paid INR 250 via UPI',
+      rawBody: 'Tx Details: Paid to Merchant X via UPI.',
+      rawPayload: '{}',
+      receivedAt: '2026-06-11T12:00:00Z',
+    });
+
+    // 2. Extract transaction (Simulating LLM extraction)
+    const extractionResult = await extractor.extractTransaction('Tx Details: Paid to Merchant X via UPI.');
+    expect(extractionResult).toBeDefined();
+    expect(extractionResult!.paymentMethod).toBe('UPI'); // Verify mock returns payment method
+
+    // 3. Save extracted to Silver (Staging)
+    await repository.savePendingTransaction({
+      id: silverId,
+      rawEmailId: emailId,
+      userId,
+      merchantRaw: extractionResult!.merchant,
+      amount: extractionResult!.amount,
+      currency: extractionResult!.currency,
+      transactionDate: extractionResult!.date,
+      status: 'pending',
+      paymentMethod: extractionResult!.paymentMethod,
+    });
+
+    // Verify Silver details displays extracted payment method
+    let pendingList = await repository.getPendingTransactions(userId);
+    expect(pendingList).toHaveLength(1);
+    expect(pendingList[0].paymentMethod).toBe('UPI');
+
+    // 4. Staging Payment Review & Editing: Modify the payment method in staging (e.g. from 'UPI' to 'HDFC Rupay Card')
+    await repository.updatePendingTransaction(silverId, userId, {
+      paymentMethod: 'HDFC Rupay Card',
+      merchantRaw: 'Uber Cleaned',
+    });
+
+    pendingList = await repository.getPendingTransactions(userId);
+    expect(pendingList[0].paymentMethod).toBe('HDFC Rupay Card');
+    expect(pendingList[0].merchantRaw).toBe('Uber Cleaned');
+
+    // 5. Promote and verify it reaches Gold ledger with correct payment method
+    await repository.promoteToTransaction(silverId, {
+      id: goldId,
+      pendingTxId: silverId,
+      userId,
+      merchant: 'Uber Cleaned',
+      amount: 14.50,
+      currency: 'USD',
+      transactionDate: '2023-01-15',
+      category: 'Transport',
+      paymentMethod: 'HDFC Rupay Card',
+    });
+
+    let goldList = await repository.getGoldTransactions(userId);
+    expect(goldList).toHaveLength(1);
+    expect(goldList[0].paymentMethod).toBe('HDFC Rupay Card');
+
+    // 6. Gold corrections support: User updates payment method in gold ledger
+    await repository.updateGoldTransaction(goldId, userId, {
+      paymentMethod: 'HDFC credit card',
+    });
+
+    goldList = await repository.getGoldTransactions(userId);
+    expect(goldList[0].paymentMethod).toBe('HDFC credit card');
   });
 });

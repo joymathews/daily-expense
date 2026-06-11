@@ -14,7 +14,8 @@ interface EmailDetailModalProps {
     currency: string,
     date: string,
     category: string,
-    notes?: string
+    notes?: string,
+    paymentMethod?: string
   ) => Promise<void>;
   
   // Gold Transaction corrections support
@@ -39,6 +40,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const [category, setCategory] = useState('');
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
   
   // Lineage toggle state
   const [showRawInGoldMode, setShowRawInGoldMode] = useState(false);
@@ -52,6 +54,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setCategory(selectedGoldTransaction.category);
       setDate(selectedGoldTransaction.transactionDate || '');
       setNotes(selectedGoldTransaction.notes || '');
+      setPaymentMethod(selectedGoldTransaction.paymentMethod || '');
       setShowRawInGoldMode(false);
       setRawBodyForGoldLineage('');
       
@@ -78,12 +81,14 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setCategory(selectedEmail.extracted.category);
       setDate(selectedEmail.extracted.date);
       setNotes('');
+      setPaymentMethod(selectedEmail.extracted.paymentMethod || '');
     } else {
       setMerchant('');
       setAmount(0);
       setCategory('');
       setDate('');
       setNotes('');
+      setPaymentMethod('');
     }
   }, [selectedEmail, selectedGoldTransaction]);
 
@@ -99,6 +104,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         category,
         transactionDate: date,
         notes,
+        paymentMethod,
       });
       setSelectedGoldTransaction!(null);
     } else if (selectedEmail && selectedEmail.extracted) {
@@ -109,7 +115,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         selectedEmail.extracted.currency,
         date,
         category,
-        notes
+        notes,
+        paymentMethod
       );
     }
   };
@@ -227,6 +234,17 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     onChange={(e) => setDate(e.target.value)}
                   />
                 </div>
+                <div>
+                  <label htmlFor="modal-payment-method" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Payment Method</label>
+                  <input 
+                    id="modal-payment-method"
+                    type="text" 
+                    placeholder="e.g. UPI, HDFC credit card"
+                    className="w-full px-3 py-2 bg-white border border-gray-200 focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all shadow-sm"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                  />
+                </div>
                 <div className="col-span-1 md:col-span-2">
                   <label htmlFor="modal-notes" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Notes / Comments</label>
                   <input 
@@ -251,6 +269,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   <div><span className="font-bold text-gray-400 uppercase text-[10px] tracking-wide block">Amount</span> <span className="font-semibold text-gray-900">{selectedEmail.extracted.amount} {selectedEmail.extracted.currency}</span></div>
                   <div><span className="font-bold text-gray-400 uppercase text-[10px] tracking-wide block">Category</span> <span className="font-semibold text-gray-900">{selectedEmail.extracted.category}</span></div>
                   <div><span className="font-bold text-gray-400 uppercase text-[10px] tracking-wide block">Date</span> <span className="font-semibold text-gray-900">{selectedEmail.extracted.date.split('T')[0]}</span></div>
+                  <div><span className="font-bold text-gray-400 uppercase text-[10px] tracking-wide block">Method</span> <span className="font-semibold text-gray-900">{selectedEmail.extracted.paymentMethod || 'Unknown'}</span></div>
                 </div>
               </div>
             )

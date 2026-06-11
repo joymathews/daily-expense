@@ -51,6 +51,7 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
               <th className="px-2 py-2.5 text-left">Date</th>
               <th className="px-2 py-2.5 text-right">Amount</th>
               <th className="px-2 py-2.5 text-center">Category</th>
+              <th className="px-2 py-2.5 text-center">Method</th>
               <th className="px-2 py-2.5 text-center">Status</th>
               <th className="px-2 py-2.5 text-center">Action</th>
             </tr>
@@ -58,7 +59,7 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
           <tbody className="divide-y divide-gray-50 bg-white">
             {silverTransactions.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-2 py-12 text-center">
+                <td colSpan={8} className="px-2 py-12 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No pending transactions in staging</p>
                 </td>
               </tr>
@@ -82,6 +83,11 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                   <td className="px-2 py-2.5 text-center">
                     <span className="bg-indigo-50/80 text-indigo-700 px-2 py-0.5 rounded-md font-bold uppercase text-[9px] border border-indigo-100/30">
                       {tx.inferredCategory || 'Other'}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                    <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded-md font-bold uppercase text-[9px] border border-slate-100/30">
+                      {tx.paymentMethod || 'Unknown'}
                     </span>
                   </td>
                   <td className="px-2 py-2.5 text-center whitespace-nowrap">

@@ -5,6 +5,7 @@ export interface ExtractedTransaction {
   date: string; // ISO 8601 UTC string
   category: string;
   description?: string;
+  paymentMethod?: string;
 }
 
 export interface ITransactionExtractor {

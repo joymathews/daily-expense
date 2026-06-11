@@ -664,5 +664,125 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-24] Payment Method Extraction
+   * [FUNC-GMAIL-25] Staging Payment Review & Editing
+   * [FUNC-GMAIL-26] Verified Ledger Method Display & Correction
+   */
+  it('supports displaying, editing, and displaying in gold table the transaction payment method', async () => {
+    // Mock emails
+    const mockEmails = [
+      { id: '1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content', hasTransaction: true }
+    ];
+    // Staging contains paymentMethod UPI
+    const mockSilver = [
+      { id: 'silver_1', rawEmailId: '1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'pending', paymentMethod: 'UPI' }
+    ];
+    const mockGold = [
+      { id: 'gold_1', pendingTxId: 'silver_2', userId: 'user1', merchant: 'Merchant B', amount: 200, currency: 'INR', transactionDate: '2023-01-02', category: 'Food', paymentMethod: 'HDFC credit card' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/gmail/fetch')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: mockEmails }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: mockEmails }),
+        });
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockSilver }),
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGold }),
+        });
+      }
+      if (url.includes('/api/gmail/approve')) {
+        const body = JSON.parse(init.body);
+        expect(body.paymentMethod).toBe('UPI Edited');
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ status: 'approved' }),
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions/gold_1')) {
+        const body = JSON.parse(init.body);
+        expect(body.paymentMethod).toBe('HDFC credit card Edited');
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Input filters to pass check
+    fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/End Date/i), { target: { value: '2023-01-31' } });
+    
+    // Add a sender
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    fireEvent.change(senderInput, { target: { value: 'sender@test.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Click Authorize & Fetch
+    fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Click Silver tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    // Wait for staging table and check that payment method 'UPI' is displayed (SilverStagingList)
+    expect(await screen.findByText('UPI')).toBeInTheDocument();
+
+    // Click Review on Silver transaction
+    const reviewButtons = screen.getAllByRole('button', { name: /Review/i });
+    fireEvent.click(reviewButtons[0]);
+
+    // Check modal displays payment method input with value UPI
+    const paymentMethodInput = screen.getByLabelText(/Payment Method/i);
+    expect(paymentMethodInput).toHaveValue('UPI');
+
+    // Edit the payment method
+    fireEvent.change(paymentMethodInput, { target: { value: 'UPI Edited' } });
+    
+    // Click Approve & Save
+    fireEvent.click(screen.getByRole('button', { name: /Approve & Save/i }));
+
+    // Click Gold tab
+    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
+
+    // Check that payment method 'HDFC credit card' is displayed in Gold table
+    expect(await screen.findByText('HDFC credit card')).toBeInTheDocument();
+
+    // Now check gold correction modal
+    const correctButtons = screen.getAllByRole('button', { name: /Correct/i });
+    fireEvent.click(correctButtons[0]);
+
+    // Check modal displays gold transaction payment method input with value HDFC credit card
+    const pmInputGold = screen.getByLabelText(/Payment Method/i);
+    expect(pmInputGold).toHaveValue('HDFC credit card');
+
+    // Edit gold payment method
+    fireEvent.change(pmInputGold, { target: { value: 'HDFC credit card Edited' } });
+
+    // Save Corrections
+    fireEvent.click(screen.getByRole('button', { name: /Save Corrections/i }));
+
+    vi.unstubAllGlobals();
+  });
 });
 

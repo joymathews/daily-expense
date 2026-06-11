@@ -15,13 +15,15 @@ You are a precise financial parser. Extract transaction details from the email t
   "currency": "string",
   "date": "string",
   "category": "string",
-  "description": "string"
+  "description": "string",
+  "paymentMethod": "string"
 }
 
 Ensure:
 - "amount" is a raw decimal number (e.g. 10.50). Do not prefix with currency symbols.
 - "currency" is a 3-letter ISO code (e.g. "USD", "INR", "EUR").
 - "date" is a standardized YYYY-MM-DD string.
+- "paymentMethod" identifies how the transaction was made (e.g. "UPI", "HDFC credit card", "HDFC Rupay Card", "ICICI", "Bank transaction"). If you cannot confidently identify the payment method, return "Unknown".
 - If any field cannot be found, set it to a default (e.g. category to "Other").
 `;
 
@@ -59,7 +61,8 @@ Ensure:
         currency: (parsedJSON.currency || 'USD').toUpperCase(),
         date: parsedJSON.date || new Date().toISOString().split('T')[0],
         category: parsedJSON.category || 'Other',
-        description: parsedJSON.description || undefined
+        description: parsedJSON.description || undefined,
+        paymentMethod: parsedJSON.paymentMethod || 'Unknown'
       };
     } catch (error) {
       console.error('Ollama extraction failed:', error);
