@@ -14,6 +14,7 @@ const gmailService = new GmailService();
  */
 router.post('/fetch', async (req, res) => {
   const { accessToken, filters } = req.body;
+  const userId = (req as any).auth?.sub;
 
   if (!accessToken) {
     return res.status(400).json({ error: 'Google Access Token is required' });
@@ -38,6 +39,7 @@ router.post('/fetch', async (req, res) => {
     for (const email of emails) {
       await repository.saveRawEmail({
         id: email.id,
+        userId,
         sender: email.sender,
         subject: email.subject,
         snippet: email.snippet || '',
@@ -61,6 +63,7 @@ router.post('/fetch', async (req, res) => {
  */
 router.post('/extract', async (req, res) => {
   const { rawEmailIds } = req.body;
+  const userId = (req as any).auth?.sub;
 
   if (!rawEmailIds || !Array.isArray(rawEmailIds) || rawEmailIds.length === 0) {
     return res.status(400).json({ error: 'rawEmailIds array is required' });
@@ -74,13 +77,13 @@ router.post('/extract', async (req, res) => {
     const results: any[] = [];
 
     for (const id of rawEmailIds) {
-      const rawEmail = await repository.getRawEmailById(id);
+      const rawEmail = await repository.getRawEmailById(id, userId);
       if (!rawEmail) {
         continue;
       }
 
       // If already extracted and status is approved, don't run again
-      const existingSilver = await repository.getSilverTransactionByEmailId(id);
+      const existingSilver = await repository.getSilverTransactionByEmailId(id, userId);
       if (existingSilver) {
         results.push(existingSilver);
         continue;
@@ -91,6 +94,7 @@ router.post('/extract', async (req, res) => {
         const pendingTx = {
           id: crypto.randomUUID(),
           rawEmailId: rawEmail.id,
+          userId,
           merchantRaw: extracted.merchant,
           merchantNormalized: extracted.merchant,
           amount: extracted.amount,
@@ -118,11 +122,12 @@ router.post('/extract', async (req, res) => {
  */
 router.get('/raw-emails', async (req, res) => {
   const { startDate, endDate } = req.query;
+  const userId = (req as any).auth?.sub;
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    const emails = await repository.getRawEmails({
+    const emails = await repository.getRawEmails(userId, {
       startDate: startDate as string,
       endDate: endDate as string,
     });
@@ -140,11 +145,12 @@ router.get('/raw-emails', async (req, res) => {
  */
 router.get('/silver-transactions', async (req, res) => {
   const { startDate, endDate } = req.query;
+  const userId = (req as any).auth?.sub;
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    const transactions = await repository.getSilverTransactions({
+    const transactions = await repository.getSilverTransactions(userId, {
       startDate: startDate as string,
       endDate: endDate as string,
     });
@@ -162,11 +168,12 @@ router.get('/silver-transactions', async (req, res) => {
  */
 router.get('/gold-transactions', async (req, res) => {
   const { startDate, endDate } = req.query;
+  const userId = (req as any).auth?.sub;
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    const transactions = await repository.getGoldTransactions({
+    const transactions = await repository.getGoldTransactions(userId, {
       startDate: startDate as string,
       endDate: endDate as string,
     });
@@ -185,11 +192,12 @@ router.get('/gold-transactions', async (req, res) => {
 router.put('/silver-transactions/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
+  const userId = (req as any).auth?.sub;
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    await repository.updatePendingTransaction(id, updates);
+    await repository.updatePendingTransaction(id, userId, updates);
 
     await repository.close();
     res.status(200).json({ status: 'updated' });
@@ -205,11 +213,12 @@ router.put('/silver-transactions/:id', async (req, res) => {
 router.put('/gold-transactions/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
+  const userId = (req as any).auth?.sub;
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    await repository.updateGoldTransaction(id, updates);
+    await repository.updateGoldTransaction(id, userId, updates);
 
     await repository.close();
     res.status(200).json({ status: 'updated' });
@@ -224,6 +233,7 @@ router.put('/gold-transactions/:id', async (req, res) => {
  */
 router.post('/approve', async (req, res) => {
   const { silverId, merchant, amount, currency, date, category, notes } = req.body;
+  const userId = (req as any).auth?.sub;
 
   if (!silverId || !merchant || amount === undefined || !currency || !date || !category) {
     return res.status(400).json({ error: 'All transaction details are required' });
@@ -236,7 +246,7 @@ router.post('/approve', async (req, res) => {
     await repository.promoteToTransaction(silverId, {
       id: crypto.randomUUID(),
       pendingTxId: silverId,
-      userId: 'testuser',
+      userId,
       merchant,
       amount: parseFloat(amount),
       currency,
@@ -258,6 +268,7 @@ router.post('/approve', async (req, res) => {
  */
 router.post('/approve-batch', async (req, res) => {
   const { silverIds } = req.body;
+  const userId = (req as any).auth?.sub;
 
   if (!silverIds || !Array.isArray(silverIds) || silverIds.length === 0) {
     return res.status(400).json({ error: 'silverIds array is required' });
@@ -270,12 +281,12 @@ router.post('/approve-batch', async (req, res) => {
     const approvedIds: string[] = [];
 
     for (const silverId of silverIds) {
-      const tx = await repository.getSilverTransactionById(silverId);
+      const tx = await repository.getSilverTransactionById(silverId, userId);
       if (tx && tx.status === 'pending') {
         await repository.promoteToTransaction(silverId, {
           id: crypto.randomUUID(),
           pendingTxId: silverId,
-          userId: 'testuser',
+          userId,
           merchant: tx.merchantNormalized || tx.merchantRaw,
           amount: tx.amount,
           currency: tx.currency,
@@ -298,11 +309,12 @@ router.post('/approve-batch', async (req, res) => {
  * [FUNC-GMAIL-12] Fetch pending staging transactions (legacy backup)
  */
 router.get('/pending', async (req, res) => {
+  const userId = (req as any).auth?.sub;
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    const pending = await repository.getPendingTransactions();
+    const pending = await repository.getPendingTransactions(userId);
 
     await repository.close();
     res.status(200).json({ pending });

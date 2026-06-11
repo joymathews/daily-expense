@@ -5,6 +5,7 @@
 - [NFR-SEC-2] API Protection: All non-public API endpoints must require a cryptographically verified security token.
 - [NFR-SEC-3] Token Validation: Security tokens must be validated against an official public key set (JWKS) on every inbound request.
 - [NFR-SEC-4] Input Validation: The system must validate all user-provided filters for external API integrations to prevent malformed queries and ensure mandatory criteria are met.
+- [NFR-SEC-5] Data Segregation Enforcement: The database schemas and API logic must enforce strict data boundaries between users, validating that the authenticated user context matching the request payload matches the database records being modified or read, preventing cross-tenant access.
 
 ## Performance & Reliability [NFR-PERF]
 - [NFR-PERF-1] Availability Monitoring: The system must provide a health validation service that responds within 100ms.

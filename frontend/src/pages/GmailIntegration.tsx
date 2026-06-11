@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
+import { fetchAuthSession } from 'aws-amplify/auth';
 import type { GoldTransaction } from '../hooks/use-gmail-integration';
 import { FilterPanel } from '../components/gmail/FilterPanel';
 import { EmailDetailModal } from '../components/gmail/EmailDetailModal';
@@ -140,7 +141,17 @@ const GmailIntegration: React.FC = () => {
     } else {
       // Fetch fallback
       try {
-        const res = await fetch(`/api/gmail/raw-emails`);
+        let authHeaders = {};
+        try {
+          const session = await fetchAuthSession();
+          const token = session.tokens?.idToken?.toString();
+          if (token) {
+            authHeaders = { 'Authorization': `Bearer ${token}` };
+          }
+        } catch (err) {
+          console.warn('Failed to fetch auth token in fallback:', err);
+        }
+        const res = await fetch(`/api/gmail/raw-emails`, { headers: authHeaders });
         if (res.ok) {
           const data = await res.json();
           const match = (data.emails || []).find((e: any) => e.id === silverTx.rawEmailId);

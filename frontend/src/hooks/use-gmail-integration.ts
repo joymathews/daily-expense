@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
 export interface GmailMessage {
   id: string;
@@ -74,13 +75,32 @@ export const useGmailIntegration = () => {
   const [activeTab, setActiveTab] = useState<'bronze' | 'silver' | 'gold' | 'transaction' | 'non-transaction'>('bronze');
   const [selectedEmail, setSelectedEmail] = useState<GmailMessage | null>(null);
 
+  // Helper to fetch authorization headers dynamically
+  const getAuthHeaders = async () => {
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+      return token ? { 'Authorization': `Bearer ${token}` } : {};
+    } catch (err) {
+      console.warn('Failed to fetch auth session (normal in tests):', err);
+      return {};
+    }
+  };
+
   // Loaders
   const loadRawEmails = async (start = startDate, end = endDate) => {
     try {
       const query = new URLSearchParams();
       if (start) query.append('startDate', start);
       if (end) query.append('endDate', end);
-      const res = await fetch(`/api/gmail/raw-emails?${query.toString()}`);
+      const queryString = query.toString();
+      const url = queryString ? `/api/gmail/raw-emails?${queryString}` : '/api/gmail/raw-emails';
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, {
+        headers: {
+          ...authHeaders,
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         const mapped = (data.emails || []).map((e: any) => ({
@@ -106,7 +126,14 @@ export const useGmailIntegration = () => {
       const query = new URLSearchParams();
       if (start) query.append('startDate', start);
       if (end) query.append('endDate', end);
-      const res = await fetch(`/api/gmail/silver-transactions?${query.toString()}`);
+      const queryString = query.toString();
+      const url = queryString ? `/api/gmail/silver-transactions?${queryString}` : '/api/gmail/silver-transactions';
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, {
+        headers: {
+          ...authHeaders,
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         setSilverTransactions(data.transactions || []);
@@ -121,7 +148,14 @@ export const useGmailIntegration = () => {
       const query = new URLSearchParams();
       if (start) query.append('startDate', start);
       if (end) query.append('endDate', end);
-      const res = await fetch(`/api/gmail/gold-transactions?${query.toString()}`);
+      const queryString = query.toString();
+      const url = queryString ? `/api/gmail/gold-transactions?${queryString}` : '/api/gmail/gold-transactions';
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, {
+        headers: {
+          ...authHeaders,
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         setGoldTransactions(data.transactions || []);
@@ -193,9 +227,13 @@ export const useGmailIntegration = () => {
     setIsLoading(true);
     setError(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/gmail/extract', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify({ rawEmailIds: emailIds }),
       });
       if (!response.ok) {
@@ -247,9 +285,13 @@ export const useGmailIntegration = () => {
       setIsFetching(true);
       setError(null);
       try {
+        const authHeaders = await getAuthHeaders();
         const response = await fetch('/api/gmail/fetch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
           body: JSON.stringify({
             accessToken: tokenResponse.access_token,
             filters: { sender: senders, startDate, endDate, subject }
@@ -287,9 +329,13 @@ export const useGmailIntegration = () => {
 
   const updateSilverTransaction = async (id: string, updates: Partial<SilverTransaction>) => {
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(`/api/gmail/silver-transactions/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify(updates),
       });
       if (response.ok) {
@@ -302,9 +348,13 @@ export const useGmailIntegration = () => {
 
   const updateGoldTransaction = async (id: string, updates: Partial<GoldTransaction>) => {
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(`/api/gmail/gold-transactions/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify(updates),
       });
       if (response.ok) {
@@ -327,9 +377,13 @@ export const useGmailIntegration = () => {
     setIsLoading(true);
     setError(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/gmail/approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify({
           silverId,
           merchant,
@@ -397,9 +451,13 @@ export const useGmailIntegration = () => {
     setIsLoading(true);
     setError(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/gmail/approve-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify({ silverIds }),
       });
 

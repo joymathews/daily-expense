@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from './App';
 
 // Mock Amplify and Authenticator
@@ -23,6 +23,17 @@ vi.mock('@aws-amplify/ui-react', async () => {
     }
   };
 });
+
+// Mock aws-amplify/auth for JWT inclusion in API calls
+vi.mock('aws-amplify/auth', () => ({
+  fetchAuthSession: vi.fn().mockResolvedValue({
+    tokens: {
+      idToken: {
+        toString: () => 'valid-token'
+      }
+    }
+  })
+}));
 
 // Mock @react-oauth/google
 vi.mock('@react-oauth/google', async () => {
@@ -374,16 +385,22 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(approveBtn);
 
     // Verify the approve API was called with the modified parameters
-    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
-      method: 'POST',
-      body: expect.stringContaining('"merchant":"Uber Ride Co."')
-    }));
-    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
-      body: expect.stringContaining('"amount":14.99')
-    }));
-    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
-      body: expect.stringContaining('"category":"Travel"')
-    }));
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"merchant":"Uber Ride Co."')
+      }));
+    });
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+        body: expect.stringContaining('"amount":14.99')
+      }));
+    });
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+        body: expect.stringContaining('"category":"Travel"')
+      }));
+    });
 
     // Verify modal status badge updates to 'Approved Ledger' and displays read-only details
     expect(await within(modal).findByText('Approved Ledger')).toBeInTheDocument();
@@ -559,7 +576,9 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(approveSelectedBtn);
 
     // Verify batch approval endpoint was called
-    expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve-batch', expect.any(Object));
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve-batch', expect.any(Object));
+    });
 
     vi.unstubAllGlobals();
   });

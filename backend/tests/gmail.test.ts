@@ -60,6 +60,7 @@ describe('Gmail API Integration', () => {
 
     const response = await request(app)
       .post('/api/gmail/fetch')
+      .set('Authorization', 'Bearer valid-token')
       .send({
         accessToken: 'mock-token',
         filters: { 
@@ -124,6 +125,7 @@ describe('Gmail API Integration', () => {
 
     const response = await request(app)
       .post('/api/gmail/fetch')
+      .set('Authorization', 'Bearer valid-token')
       .send({
         accessToken: 'mock-token',
         filters: { 
@@ -150,6 +152,7 @@ describe('Gmail API Integration', () => {
   it('should return 400 if sender list is empty or missing', async () => {
     const response = await request(app)
       .post('/api/gmail/fetch')
+      .set('Authorization', 'Bearer valid-token')
       .send({ 
         accessToken: 'mock-token',
         filters: { sender: [], startDate: '2023-01-01', endDate: '2023-01-31' } 
@@ -165,6 +168,7 @@ describe('Gmail API Integration', () => {
   it('should return 400 if date range is missing', async () => {
     const response = await request(app)
       .post('/api/gmail/fetch')
+      .set('Authorization', 'Bearer valid-token')
       .send({ 
         accessToken: 'mock-token',
         filters: { sender: ['test@example.com'] } 
@@ -177,6 +181,7 @@ describe('Gmail API Integration', () => {
   it('should return 400 if accessToken is missing', async () => {
     const response = await request(app)
       .post('/api/gmail/fetch')
+      .set('Authorization', 'Bearer valid-token')
       .send({ filters: {} });
     
     expect(response.status).toBe(400);

@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 
 // [FUNC-GMAIL-4] Register Gmail routes
-app.use('/api/gmail', gmailRoutes);
+app.use('/api/gmail', checkJwt, gmailRoutes);
 
 // [FUNC-SKEL-SYS-1] Health-check endpoint (Public)
 app.get('/api/health', (req, res) => {

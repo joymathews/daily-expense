@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { GmailMessage, GoldTransaction } from '../../hooks/use-gmail-integration';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
 interface EmailDetailModalProps {
   selectedEmail: GmailMessage | null;
@@ -56,7 +57,12 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       
       // Load raw body for lineage if we have a bronze ID
       if (selectedGoldTransaction.bronzeEmailId) {
-        fetch(`/api/gmail/raw-emails`)
+        fetchAuthSession()
+          .then(session => {
+            const token = session.tokens?.idToken?.toString();
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            return fetch(`/api/gmail/raw-emails`, { headers });
+          })
           .then(res => res.json())
           .then(data => {
             const match = (data.emails || []).find((e: any) => e.id === selectedGoldTransaction.bronzeEmailId);

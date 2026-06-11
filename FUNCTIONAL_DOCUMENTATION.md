@@ -14,6 +14,7 @@
 - [FUNC-AUTH-1] The user must be challenged for credentials (username/email and password) before being allowed to access protected system areas.
 - [FUNC-AUTH-2] The system must remain inaccessible to unauthenticated users, enforcing a redirection to a secure login interface.
 - [FUNC-AUTH-3] Authenticated users must have the ability to securely terminate their session (Log Out).
+- [FUNC-AUTH-4] The system must isolate transaction data (raw emails/Bronze, staging transactions/Silver, and confirmed ledger/Gold) by user. A logged-in user must only be able to view, save, modify, and delete their own transaction records. Other users' records must not be visible or modifiable under any circumstances.
 
 ## Gmail Integration [FUNC-GMAIL]
 - [FUNC-GMAIL-1] Navigation: The user must be able to navigate to the Gmail Fetcher service through the primary navigation menu.

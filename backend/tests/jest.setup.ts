@@ -6,11 +6,20 @@
 // Mock the authentication middleware globally to avoid ESM parsing issues with 'jose' and 'jwks-rsa'
 jest.mock('../src/middleware/auth-middleware', () => ({
   checkJwt: (req: any, res: any, next: any) => {
-    if (req.headers.authorization === 'Bearer valid-token') {
-      (req as any).auth = { sub: 'user-123' };
-      return next();
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      if (token === 'valid-token') {
+        (req as any).auth = { sub: 'user-123' };
+        return next();
+      } else if (token === 'user-a-token') {
+        (req as any).auth = { sub: 'user-a' };
+        return next();
+      } else if (token === 'user-b-token') {
+        (req as any).auth = { sub: 'user-b' };
+        return next();
+      }
     }
-    // Most routes expect 401 for missing/invalid token
     res.status(401).json({ error: 'Unauthorized' });
   }
 }));

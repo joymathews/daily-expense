@@ -25,6 +25,8 @@ For ALL future changes, feature implementations, and code modifications, you mus
 
 * **Typography & Fonts:** The application standard is Google Font 'Outfit' to provide clean, high-readability UI typography, loaded dynamically through the `index.html` head section.
 
+* **User Isolation Standard**: Every endpoint under `/api/gmail` must use `checkJwt` to authenticate users. The database tables (Bronze, Silver, and Gold layers) must strictly isolate records by `user_id` parsed from `req.auth.sub`. In the frontend, the Cognito JWT token retrieved via `fetchAuthSession` must be attached to the `Authorization` header of all API calls.
+
 
 ## 4. Coding & Naming Conventions
 * **Files:** Use `kebab-case` for all file names.

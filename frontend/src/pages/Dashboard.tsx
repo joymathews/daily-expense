@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
 interface DashboardProps {
   userEmail: string;
@@ -15,26 +16,41 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/gmail/raw-emails').then(res => res.json()).catch(() => ({ emails: [] })),
-      fetch('/api/gmail/silver-transactions').then(res => res.json()).catch(() => ({ transactions: [] })),
-      fetch('/api/gmail/gold-transactions').then(res => res.json()).catch(() => ({ transactions: [] })),
-    ])
-      .then(([raw, silver, gold]) => {
-        const goldTxs = gold.transactions || [];
-        const total = goldTxs.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
-        setMetrics({
-          bronzeCount: (raw.emails || []).length,
-          silverCount: (silver.transactions || []).length,
-          goldCount: goldTxs.length,
-          goldTotalAmount: total,
+    const loadMetrics = async () => {
+      let authHeaders = {};
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        if (token) {
+          authHeaders = { 'Authorization': `Bearer ${token}` };
+        }
+      } catch (err) {
+        console.warn('Failed to fetch auth session (normal in tests):', err);
+      }
+
+      Promise.all([
+        fetch('/api/gmail/raw-emails', { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
+        fetch('/api/gmail/silver-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch('/api/gmail/gold-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+      ])
+        .then(([raw, silver, gold]) => {
+          const goldTxs = gold.transactions || [];
+          const total = goldTxs.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
+          setMetrics({
+            bronzeCount: (raw.emails || []).length,
+            silverCount: (silver.transactions || []).length,
+            goldCount: goldTxs.length,
+            goldTotalAmount: total,
+          });
+          setIsLoading(false);
+        })
+        .catch((err) => {
+          console.error('Failed to load dashboard metrics', err);
+          setIsLoading(false);
         });
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error('Failed to load dashboard metrics', err);
-        setIsLoading(false);
-      });
+    };
+
+    loadMetrics();
   }, []);
 
   // Simulated chart data for visualization

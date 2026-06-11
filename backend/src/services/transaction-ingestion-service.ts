@@ -13,6 +13,7 @@ export class TransactionIngestionService {
    */
   async processEmail(email: {
     id: string;
+    userId: string;
     sender: string;
     subject: string;
     snippet: string;
@@ -22,7 +23,7 @@ export class TransactionIngestionService {
     isTransactional: boolean;
   }): Promise<{ status: 'skipped' | 'ingested' | 'extracted'; extracted?: any }> {
     // 1. Deduplication check
-    const exists = await this.repo.emailExists(email.id);
+    const exists = await this.repo.emailExists(email.id, email.userId);
     if (exists) {
       return { status: 'skipped' };
     }
@@ -30,6 +31,7 @@ export class TransactionIngestionService {
     // 2. Save raw email to the database (Bronze / Raw)
     await this.repo.saveRawEmail({
       id: email.id,
+      userId: email.userId,
       sender: email.sender,
       subject: email.subject,
       snippet: email.snippet,
@@ -45,6 +47,7 @@ export class TransactionIngestionService {
         const pendingTx = {
           id: crypto.randomUUID(),
           rawEmailId: email.id,
+          userId: email.userId,
           merchantRaw: extracted.merchant,
           merchantNormalized: extracted.merchant,
           amount: extracted.amount,
