@@ -20,7 +20,9 @@ For ALL future changes, feature implementations, and code modifications, you mus
 * **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Auth: AWS Amplify (for Cognito), `@react-oauth/google` (for Gmail). Navigation: `react-router-dom`.
 * **Architecture:** Strictly adhere to SOLID principles and Clean Code rules.
 * **Testing:** Backend tests in `backend/tests`, frontend tests in `frontend/src/*.test.tsx`.
+* **CLI Utilities:** Standalone Node.js scripts inside the `tools/` folder, configured via root `package.json` scripts, to perform database administrative and maintenance operations directly.
 * **Style:** Tailwind utility classes are the primary styling method; avoid Vanilla CSS.
+
 * **Typography & Fonts:** The application standard is Google Font 'Outfit' to provide clean, high-readability UI typography, loaded dynamically through the `index.html` head section.
 
 
