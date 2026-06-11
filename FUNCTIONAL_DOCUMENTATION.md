@@ -6,7 +6,6 @@
 - [FUNC-SKEL-UI-1] The user must be able to access the application dashboard through a secure web browser session.
 - [FUNC-SKEL-UI-2] The user must see a personalized greeting and "DAILY EXPENSE" branding on the dashboard to confirm operational status.
 - [FUNC-SKEL-UI-3] The user must experience a high-density responsive interface optimized for desktop, tablet, and mobile screens.
-- [FUNC-CORE-BYPASS] Development Bypass: The frontend must provide a local environment configuration option to bypass Cognito login gates for testing, debugging, and visual analysis in sandbox environments.
 
 ### System Operations [FUNC-SYS]
 - [FUNC-SKEL-SYS-1] An external monitoring system must be able to verify the health of the application services to ensure maximum uptime.

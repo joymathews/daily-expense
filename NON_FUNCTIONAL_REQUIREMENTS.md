@@ -1,7 +1,7 @@
 # Non-Functional Requirements
 
 ## Security [NFR-SEC]
-- [NFR-SEC-1] Identity Management: The system must use a trusted centralized identity provider for all user authentication.
+- [NFR-SEC-1] Identity Management: The system must use a trusted centralized identity provider for all user authentication in all environments, without bypass options.
 - [NFR-SEC-2] API Protection: All non-public API endpoints must require a cryptographically verified security token.
 - [NFR-SEC-3] Token Validation: Security tokens must be validated against an official public key set (JWKS) on every inbound request.
 - [NFR-SEC-4] Input Validation: The system must validate all user-provided filters for external API integrations to prevent malformed queries and ensure mandatory criteria are met.

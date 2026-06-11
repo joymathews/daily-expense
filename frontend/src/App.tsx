@@ -12,7 +12,6 @@ import GmailIntegration from './pages/GmailIntegration';
 Amplify.configure(authConfig);
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true' && import.meta.env.MODE !== 'test';
 
 function App() {
   const renderLayout = (signOut: () => void, userEmail: string) => (
@@ -34,15 +33,11 @@ function App() {
   return (
     <BrowserRouter>
       <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-        {BYPASS_AUTH ? (
-          renderLayout(() => console.log('Mock Sign Out'), 'devuser@example.com')
-        ) : (
-          <Authenticator>
-            {({ signOut, user }) => 
-              renderLayout(signOut!, user?.signInDetails?.loginId || 'User')
-            }
-          </Authenticator>
-        )}
+        <Authenticator>
+          {({ signOut, user }) => 
+            renderLayout(signOut!, user?.signInDetails?.loginId || 'User')
+          }
+        </Authenticator>
       </GoogleOAuthProvider>
     </BrowserRouter>
   );
