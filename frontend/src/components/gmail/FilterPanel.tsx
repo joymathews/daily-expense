@@ -31,62 +31,89 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   error,
 }) => {
   return (
-    <div className="lg:col-span-1 bg-white p-4 border border-gray-100 rounded space-y-4">
-      <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest border-b pb-2 mb-2">Filters</div>
-      <div className="space-y-3">
+    <div className="bg-white p-5 border border-gray-100 rounded-2xl shadow-sm space-y-5">
+      <div className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50 pb-2 mb-1">
+        Fetcher Config
+      </div>
+      <div className="space-y-4">
         <div>
-          <label htmlFor="sender-input" className="block text-[8px] font-black text-gray-400 uppercase mb-1">Sender Emails</label>
-          <div className="flex flex-wrap gap-1 mb-2">
-            {senders.map(email => (
-              <span key={email} className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                {email}
-                <button onClick={() => removeSender(email)} className="ml-1 text-blue-400 hover:text-blue-600">×</button>
-              </span>
-            ))}
-          </div>
+          <label htmlFor="sender-input" className="block text-xs font-bold text-gray-500 uppercase tracking-tight mb-1.5">
+            Sender Emails
+          </label>
+          {senders.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {senders.map(email => (
+                <span key={email} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100/50">
+                  {email}
+                  <button 
+                    onClick={() => removeSender(email)} 
+                    className="ml-1.5 text-indigo-400 hover:text-indigo-600 font-bold cursor-pointer"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <input 
             id="sender-input"
             type="text" 
             placeholder="Add sender email..."
-            className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded outline-none text-[11px] text-gray-700"
+            className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 focus:bg-white focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all duration-200"
             value={currentSender}
             onChange={(e) => setCurrentSender(e.target.value)}
             onKeyDown={handleKeyDown}
           />
-          <p className="text-[8px] text-gray-400 mt-1">Press Enter to add multiple senders</p>
+          <p className="text-[10px] font-medium text-gray-400 mt-1">Press Enter to add multiple senders</p>
         </div>
+        
         <div>
-          <label htmlFor="start-date" className="block text-[8px] font-black text-gray-400 uppercase mb-1">Start Date</label>
+          <label htmlFor="start-date" className="block text-xs font-bold text-gray-500 uppercase tracking-tight mb-1.5">
+            Start Date
+          </label>
           <input 
             id="start-date"
             type="date" 
-            className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded outline-none text-[11px] text-gray-700"
+            className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 focus:bg-white focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all duration-200"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
           />
         </div>
+        
         <div>
-          <label htmlFor="end-date" className="block text-[8px] font-black text-gray-400 uppercase mb-1">End Date</label>
+          <label htmlFor="end-date" className="block text-xs font-bold text-gray-500 uppercase tracking-tight mb-1.5">
+            End Date
+          </label>
           <input 
             id="end-date"
             type="date" 
-            className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded outline-none text-[11px] text-gray-700"
+            className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 focus:bg-white focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all duration-200"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
         </div>
+        
         <div>
-          <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">Email Subject (Optional)</label>
+          <label htmlFor="subject-input" className="block text-xs font-bold text-gray-500 uppercase tracking-tight mb-1.5">
+            Email Subject <span className="text-gray-400 font-medium">(Optional)</span>
+          </label>
           <input 
+            id="subject-input"
             type="text" 
             placeholder="receipt..."
-            className="w-full px-2 py-1.5 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded outline-none text-[11px] text-gray-700"
+            className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 focus:bg-white focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all duration-200"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
           />
         </div>
       </div>
-      {error && <div className="p-2 bg-red-50 text-red-600 text-[10px] font-bold rounded">{error}</div>}
+      
+      {error && (
+        <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-100/50">
+          {error}
+        </div>
+      )}
     </div>
   );
 };
+

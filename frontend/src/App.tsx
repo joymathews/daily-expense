@@ -12,28 +12,37 @@ import GmailIntegration from './pages/GmailIntegration';
 Amplify.configure(authConfig);
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true' && import.meta.env.MODE !== 'test';
 
 function App() {
+  const renderLayout = (signOut: () => void, userEmail: string) => (
+    <div className="min-h-screen bg-[#FDFDFF] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
+      <Navbar onSignOut={signOut} />
+      <main className="flex-grow flex items-start justify-center px-4 sm:px-6 lg:px-8 py-10">
+        <Routes>
+          <Route path="/" element={<Dashboard userEmail={userEmail} />} />
+          <Route path="/gmail" element={<GmailIntegration />} />
+        </Routes>
+      </main>
+      
+      <footer className="py-8 text-center text-gray-400 text-xs border-t border-gray-50 bg-white">
+        <p>&copy; 2026 Daily Expense. Built with SOLID principles and Clean Code.</p>
+      </footer>
+    </div>
+  );
+
   return (
     <BrowserRouter>
       <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-        <Authenticator>
-          {({ signOut, user }) => (
-            <div className="min-h-screen bg-[#FDFDFF] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
-              <Navbar onSignOut={signOut!} />
-              <main className="flex-grow flex items-start justify-center px-4 sm:px-6 lg:px-8 py-10">
-                <Routes>
-                  <Route path="/" element={<Dashboard userEmail={user?.signInDetails?.loginId || 'User'} />} />
-                  <Route path="/gmail" element={<GmailIntegration />} />
-                </Routes>
-              </main>
-              
-              <footer className="py-8 text-center text-gray-400 text-xs border-t border-gray-50 bg-white">
-                <p>&copy; 2026 Daily Expense. Built with SOLID principles and Clean Code.</p>
-              </footer>
-            </div>
-          )}
-        </Authenticator>
+        {BYPASS_AUTH ? (
+          renderLayout(() => console.log('Mock Sign Out'), 'devuser@example.com')
+        ) : (
+          <Authenticator>
+            {({ signOut, user }) => 
+              renderLayout(signOut!, user?.signInDetails?.loginId || 'User')
+            }
+          </Authenticator>
+        )}
       </GoogleOAuthProvider>
     </BrowserRouter>
   );

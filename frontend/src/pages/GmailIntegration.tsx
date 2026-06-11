@@ -172,68 +172,79 @@ const GmailIntegration: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-5xl space-y-4">
-      <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+    <div className="w-full max-w-5xl space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-4 gap-4">
         <div>
-          <h2 className="text-xl font-black text-gray-900 uppercase italic">Fetcher</h2>
-          <p className="text-[10px] text-gray-400 font-bold uppercase">Strict data layers: Bronze Raw ➔ Silver Staging ➔ Gold Ledger</p>
+          <h2 className="text-xl font-extrabold text-gray-900 uppercase tracking-tight">Gmail Ingestion Pipeline</h2>
+          <p className="text-xs text-gray-400 font-semibold uppercase mt-0.5">Medallion Data Architecture: Bronze Raw ➔ Silver Staging ➔ Gold Ledger</p>
         </div>
         
         <button 
           onClick={handleFetchClick}
           disabled={isFetching}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-[10px] font-black px-6 py-2 rounded shadow transition-all uppercase tracking-widest"
+          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow transition-all uppercase tracking-wider cursor-pointer self-start sm:self-auto"
         >
           {isFetching ? 'Processing...' : 'Authorize & Fetch'}
         </button>
       </div>
 
       {/* Main Tab bar (Medallion Layers) */}
-      <div className="flex border-b border-gray-200 bg-white rounded p-1.5 shadow-sm space-x-2">
+      <div className="flex flex-wrap border border-gray-100 bg-white rounded-xl p-1.5 shadow-sm gap-2">
         <button
           onClick={() => setActiveTab('bronze')}
-          className={`px-4 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-colors ${
-            isBronzeActive ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
+          className={`flex items-center px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+            isBronzeActive 
+              ? 'bg-amber-50 text-amber-900 border border-amber-200/50 shadow-sm' 
+              : 'text-gray-500 hover:bg-gray-50 border border-transparent'
           }`}
         >
-          🟫 Bronze (Raw Emails)
+          <span className={`w-2.5 h-2.5 rounded-full mr-2 ${isBronzeActive ? 'bg-amber-500 shadow-sm shadow-amber-400/50' : 'bg-amber-300'}`}></span>
+          Bronze (Raw Emails)
         </button>
         <button
           onClick={() => setActiveTab('silver')}
-          className={`px-4 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-colors ${
-            activeTab === 'silver' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
+          className={`flex items-center px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+            activeTab === 'silver' 
+              ? 'bg-indigo-50 text-indigo-900 border border-indigo-200/50 shadow-sm' 
+              : 'text-gray-500 hover:bg-gray-50 border border-transparent'
           }`}
         >
-          🟦 Silver (Staging Queue)
+          <span className={`w-2.5 h-2.5 rounded-full mr-2 ${activeTab === 'silver' ? 'bg-indigo-500 shadow-sm shadow-indigo-400/50' : 'bg-indigo-300'}`}></span>
+          Silver (Staging Queue)
         </button>
         <button
           onClick={() => setActiveTab('gold')}
-          className={`px-4 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-colors ${
-            activeTab === 'gold' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
+          className={`flex items-center px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+            activeTab === 'gold' 
+              ? 'bg-emerald-50 text-emerald-950 border border-emerald-200/50 shadow-sm' 
+              : 'text-gray-500 hover:bg-gray-50 border border-transparent'
           }`}
         >
-          🟩 Gold (Confirmed Ledger)
+          <span className={`w-2.5 h-2.5 rounded-full mr-2 ${activeTab === 'gold' ? 'bg-emerald-500 shadow-sm shadow-emerald-400/50' : 'bg-emerald-300'}`}></span>
+          Gold (Confirmed Ledger)
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
-        <FilterPanel
-          senders={senders}
-          currentSender={currentSender}
-          setCurrentSender={setCurrentSender}
-          startDate={startDate}
-          setStartDate={setStartDate}
-          endDate={endDate}
-          setEndDate={setEndDate}
-          subject={subject}
-          setSubject={setSubject}
-          addSender={addSender}
-          removeSender={removeSender}
-          handleKeyDown={handleKeyDown}
-          error={error}
-        />
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
+        <div className="xl:col-span-1">
+          <FilterPanel
+            senders={senders}
+            currentSender={currentSender}
+            setCurrentSender={setCurrentSender}
+            startDate={startDate}
+            setStartDate={setStartDate}
+            endDate={endDate}
+            setEndDate={setEndDate}
+            subject={subject}
+            setSubject={setSubject}
+            addSender={addSender}
+            removeSender={removeSender}
+            handleKeyDown={handleKeyDown}
+            error={error}
+          />
+        </div>
 
-        <div className="lg:col-span-3 bg-white border border-gray-100 rounded overflow-hidden shadow-sm">
+        <div className="xl:col-span-4 bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {isBronzeActive && (
             <BronzeEmailList
               visibleRawEmails={visibleRawEmails}
