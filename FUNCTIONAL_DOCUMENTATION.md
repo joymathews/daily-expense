@@ -45,5 +45,6 @@
 - [FUNC-GMAIL-26] Verified Ledger Method Display & Correction: The user must be able to view the payment method in the ledger tables and edit or correct the payment method of approved transaction ledger records in the Gold table.
 - [FUNC-GMAIL-27] Ingestion Progress Tracking: The user must be informed immediately when the email fetching process has started, see real-time progress updates (e.g., current email count being fetched), and receive a clear confirmation message upon completion.
 - [FUNC-GMAIL-28] Extraction Progress Tracking: The user must be informed immediately when the email extraction process (on-demand for a single email or in batch) starts, see real-time progress updates (showing current email index, total count, and current email subject being processed), and receive a clear confirmation message upon completion of extraction.
+- [FUNC-GMAIL-29] Fetcher Filter Layout Isolation: The fetching configuration filter panel ('Fetcher Config') must only be displayed when the user is viewing the Raw Emails (Bronze) tab, and must be hidden on the Staging (Silver) and Ledger (Gold) tabs, allowing the tables in those tabs to utilize the full content width.
 
 

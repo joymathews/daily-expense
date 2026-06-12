@@ -34,4 +34,5 @@
 - [NFR-USAB-2] Ingestion Status Filtering Usability: The status filter controls in the Bronze section must update the view instantly (within 50ms) to allow efficient navigation between processed and unprocessed emails.
 - [NFR-USAB-3] Typography and Readability: The UI must utilize a highly readable, modern font scale (minimum 12px for body copy, avoiding tiny 8px text) and clear contrast hierarchy to prevent eye strain and improve readability.
 - [NFR-USAB-4] Design Consistency and Visual Hierarchy: The layout must use modern, cohesive component styling (glassmorphism/subtle shadows, HSL custom palette, card layouts, and micro-interactions) to establish a premium and professional user interface. Tables and list layouts must be structured to prevent horizontal scrolling or clipping of essential action components (such as Review and Correct buttons) on standard desktop screens (>=1024px).
+- [NFR-USAB-5] Layout Contextual Adaptability: The UI layout must adapt contextually based on the active tab, hiding irrelevant configuration panels and maximizing display area for tables (e.g. extending Silver and Gold tables to full width) when configuration is not needed.
 

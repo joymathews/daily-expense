@@ -1231,6 +1231,35 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-29] Fetcher Filter Layout Isolation: The fetching configuration filter panel must only be displayed in the Bronze tab.
+   * [NFR-USAB-5] Layout Contextual Adaptability: The UI layout must adapt contextually and hide the Fetcher Config panel on Silver and Gold tabs.
+   */
+  it('displays the Fetcher Config panel only on the Bronze tab and hides it on Silver and Gold tabs', async () => {
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // By default, Bronze tab is active, so Fetcher Config should be visible
+    expect(screen.getByText(/Fetcher Config/i)).toBeInTheDocument();
+    
+    // Switch to Silver tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+    // Fetcher Config should NOT be in the document
+    expect(screen.queryByText(/Fetcher Config/i)).not.toBeInTheDocument();
+
+    // Switch to Gold tab
+    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
+    // Fetcher Config should NOT be in the document
+    expect(screen.queryByText(/Fetcher Config/i)).not.toBeInTheDocument();
+
+    // Switch back to Bronze tab
+    fireEvent.click(screen.getByRole('button', { name: /Bronze/i }));
+    // Fetcher Config should be visible again
+    expect(screen.getByText(/Fetcher Config/i)).toBeInTheDocument();
+  });
 });
 
 

@@ -387,25 +387,27 @@ const GmailIntegration: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
-        <div className="xl:col-span-1">
-          <FilterPanel
-            senders={senders}
-            currentSender={currentSender}
-            setCurrentSender={setCurrentSender}
-            startDate={startDate}
-            setStartDate={setStartDate}
-            endDate={endDate}
-            setEndDate={setEndDate}
-            subject={subject}
-            setSubject={setSubject}
-            addSender={addSender}
-            removeSender={removeSender}
-            handleKeyDown={handleKeyDown}
-            error={error}
-          />
-        </div>
+        {isBronzeActive && (
+          <div className="xl:col-span-1">
+            <FilterPanel
+              senders={senders}
+              currentSender={currentSender}
+              setCurrentSender={setCurrentSender}
+              startDate={startDate}
+              setStartDate={setStartDate}
+              endDate={endDate}
+              setEndDate={setEndDate}
+              subject={subject}
+              setSubject={setSubject}
+              addSender={addSender}
+              removeSender={removeSender}
+              handleKeyDown={handleKeyDown}
+              error={error}
+            />
+          </div>
+        )}
 
-        <div className="xl:col-span-4 bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        <div className={`${isBronzeActive ? 'xl:col-span-4' : 'xl:col-span-5 w-full'} bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm`}>
           {isBronzeActive && (
             <BronzeEmailList
               visibleRawEmails={visibleRawEmails}

@@ -78,6 +78,23 @@ Removed the redundant disabled "Processed" button from the action column in `Bro
 * **Test Case**: `frontend/src/App.test.tsx`
   - *displays processed badge and disables extraction/checkbox for already processed emails*
 
+---
+
+## [BUG-006] Fetcher Config Filter Panel Visible Across All Tabs
+
+### Description
+The "Fetcher Config" panel (fetching filter) is displayed constantly on all medallion tabs (Bronze, Silver, and Gold), occupying valuable layout space when managing staging queue (Silver) and confirmed ledger (Gold) records.
+
+### Root Cause
+In `GmailIntegration.tsx`, the `<FilterPanel>` component was placed adjacent to the tab lists within the layout grid without tab-dependent conditional rendering.
+
+### Resolution
+Wrapped the `<FilterPanel>` block inside a conditional statement matching `isBronzeActive`. Furthermore, the content column styling was adjusted to scale dynamically from 4/5ths width (`xl:col-span-4`) to full width (`xl:col-span-5 w-full`) when the filter panel is hidden.
+
+### Verification Test
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *displays the Fetcher Config panel only on the Bronze tab and hides it on Silver and Gold tabs*
+
 
 
 
