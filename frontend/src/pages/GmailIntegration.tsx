@@ -255,14 +255,6 @@ const GmailIntegration: React.FC = () => {
           <h2 className="text-xl font-extrabold text-gray-900 uppercase tracking-tight">Gmail Ingestion Pipeline</h2>
           <p className="text-xs text-gray-400 font-semibold uppercase mt-0.5">Medallion Data Architecture: Bronze Raw ➔ Silver Staging ➔ Gold Ledger</p>
         </div>
-        
-        <button 
-          onClick={handleFetchClick}
-          disabled={isFetching}
-          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow transition-all uppercase tracking-wider cursor-pointer self-start sm:self-auto"
-        >
-          {isFetching ? 'Processing...' : 'Authorize & Fetch'}
-        </button>
       </div>
 
       {/* [FUNC-GMAIL-27] Premium Ingestion Progress Tracker Widget */}
@@ -460,7 +452,7 @@ const GmailIntegration: React.FC = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
         {isBronzeActive && (
-          <div className="xl:col-span-1">
+          <div className="xl:col-span-1 space-y-4">
             <FilterPanel
               senders={senders}
               currentSender={currentSender}
@@ -476,6 +468,14 @@ const GmailIntegration: React.FC = () => {
               handleKeyDown={handleKeyDown}
               error={error}
             />
+            
+            <button 
+              onClick={handleFetchClick}
+              disabled={isFetching}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold py-3 rounded-xl shadow-md hover:shadow-lg transition-all uppercase tracking-wider cursor-pointer text-center"
+            >
+              {isFetching ? 'Processing...' : 'Authorize & Fetch'}
+            </button>
           </div>
         )}
 

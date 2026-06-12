@@ -37,4 +37,5 @@
 - [NFR-USAB-5] Layout Contextual Adaptability: The UI layout must adapt contextually based on the active tab, hiding irrelevant configuration panels and maximizing display area for tables (e.g. extending Silver and Gold tables to full width) when configuration is not needed.
 - [NFR-USAB-6] Data Lineage Traceability & Visibility: The lineage visualization must clearly present the data states across all three layers (raw, staging, and ledger) to allow the user to easily track the origin and downstream confirmation status of any expense item.
 - [NFR-USAB-7] Soft-Delete and Data Integrity: Deleting records must never cause database referential integrity failures. The Trash Bin must maintain relational linkages when items are restored, restoring the original Medallion lineage flow.
+- [NFR-USAB-8] Date Range Filtering Responsiveness: Changing the date range filters on any tab must automatically refresh the respective data lists from the database within 150ms, ensuring consistent and real-time data views across all pipeline stages.
 
