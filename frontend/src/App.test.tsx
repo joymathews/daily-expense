@@ -216,9 +216,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('Weekly Update')).toBeInTheDocument();
     expect(screen.queryByText('Inv 123')).not.toBeInTheDocument();
 
-    // Click on 'Mark Tx' for 'Weekly Update'
-    const markBtn = screen.getByText('Mark Tx');
+    // Open detail modal for 'Weekly Update'
+    fireEvent.click(screen.getByText('Weekly Update'));
+    const modal = screen.getByTestId('email-detail-modal');
+    const markBtn = within(modal).getByRole('button', { name: 'Mark Tx' });
     fireEvent.click(markBtn);
+    // Dismiss the modal
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
 
     // After clicking, the item should disappear from non-transaction tab
     expect(screen.queryByText('Weekly Update')).not.toBeInTheDocument();
@@ -233,9 +237,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('Weekly Update')).toBeInTheDocument();
     
     // Now verify moving it back to Non-Transactional
-    // Click 'Unmark Tx' for 'Inv 123'
-    const markNonBtn = screen.getAllByText('Unmark Tx')[0];
+    // Open detail modal for 'Inv 123'
+    fireEvent.click(screen.getByText('Inv 123'));
+    const modal2 = screen.getByTestId('email-detail-modal');
+    const markNonBtn = within(modal2).getByRole('button', { name: 'Unmark Tx' });
     fireEvent.click(markNonBtn);
+    // Dismiss the modal
+    fireEvent.click(within(modal2).getByRole('button', { name: 'Close' }));
 
     // It should disappear from Transactions tab
     expect(screen.queryByText('Inv 123')).not.toBeInTheDocument();
@@ -563,8 +571,12 @@ describe('Requirement Traceability Matrix Verification', () => {
     const row1 = screen.getByText('Inv 123').closest('tr')!;
     const row2 = screen.getByText('Inv 456').closest('tr')!;
 
-    // In row1, the extract action button should NOT exist as "Processed", but "Unmark Tx" should be disabled
-    expect(within(row1).getByRole('button', { name: 'Unmark Tx' })).toBeDisabled();
+    // Verify that Unmark Tx button is not visible inside detail modal for processed email
+    fireEvent.click(screen.getByText('Inv 123'));
+    const detailModal = screen.getByTestId('email-detail-modal');
+    expect(within(detailModal).queryByRole('button', { name: 'Unmark Tx' })).not.toBeInTheDocument();
+    fireEvent.click(within(detailModal).getByRole('button', { name: 'Close' }));
+
     expect(within(row1).queryByRole('button', { name: 'Processed' })).not.toBeInTheDocument();
     expect(within(row1).getByText('✓ Processed')).toBeInTheDocument();
     expect(within(row1).queryByRole('button', { name: 'Extract' })).not.toBeInTheDocument();
@@ -1315,6 +1327,134 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Close the modal
     fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-31] Multi-Stage Delete & Trash Bin: Verify soft-delete modal prompts target checkbox selections and restoration.
+   * [NFR-USAB-7] Soft-Delete and Data Integrity: Deleting and restoring maintains data linkages and Recycle Bin visibility.
+   */
+  it('supports soft-deleting records from selected stages and restoring them via Trash Bin', async () => {
+    const mockEmails = [
+      { id: 'email_1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content', hasTransaction: true }
+    ];
+    const mockSilver = [
+      { id: 'silver_1', rawEmailId: 'email_1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'approved', paymentMethod: 'UPI' }
+    ];
+    const mockGold = [
+      { id: 'gold_1', pendingTxId: 'silver_1', userId: 'user1', merchant: 'Merchant A Confirmed', amount: 100, currency: 'INR', transactionDate: '2023-01-01', category: 'Food', paymentMethod: 'UPI', bronzeEmailId: 'email_1' }
+    ];
+
+    const deletedEmails = [
+      { id: 'email_deleted', sender: 'deleted@test.com', subject: 'Deleted Inv', date: '2023-01-01', snippet: 'Snippet', body: 'Body', hasTransaction: true, deletedAt: '2023-01-01T00:00:00.000Z' }
+    ];
+    const deletedSilver = [
+      { id: 'silver_deleted', rawEmailId: 'email_deleted', merchantRaw: 'Deleted Staging', amount: 50, currency: 'INR', transactionDate: '2023-01-01', status: 'pending', paymentMethod: 'Cash', deletedAt: '2023-01-01T00:00:00.000Z' }
+    ];
+    const deletedGold = [
+      { id: 'gold_deleted', pendingTxId: 'silver_deleted', userId: 'user1', merchant: 'Deleted Confirmed', amount: 50, currency: 'INR', transactionDate: '2023-01-01', category: 'Travel', paymentMethod: 'Cash', bronzeEmailId: 'email_deleted', deletedAt: '2023-01-01T00:00:00.000Z' }
+    ];
+
+    const deleteMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'deleted' }) });
+    const restoreMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'restored' }) });
+
+    const mockFetch = vi.fn().mockImplementation((url, options) => {
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      if (url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            emails: deletedEmails,
+            silverTransactions: deletedSilver,
+            goldTransactions: deletedGold
+          })
+        });
+      }
+      if (url.includes('/api/gmail/delete')) {
+        return deleteMock(url, options);
+      }
+      if (url.includes('/api/gmail/restore')) {
+        return restoreMock(url, options);
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Verify raw email row delete action is displayed
+    const deleteBtn = await screen.findByTestId('delete-bronze-email_1');
+    expect(deleteBtn).toBeInTheDocument();
+
+    // Click delete action
+    fireEvent.click(deleteBtn);
+
+    // Delete confirmation modal should open
+    const modal = screen.getByTestId('delete-confirmation-modal');
+    expect(modal).toBeInTheDocument();
+
+    // The initiating tab/stage (Bronze) checkbox should be checked by default
+    const bronzeCheckbox = screen.getByTestId('delete-stage-bronze') as HTMLInputElement;
+    expect(bronzeCheckbox.checked).toBe(true);
+
+    // Since the record has a corresponding Silver and Gold record in its lineage, those checkboxes must be rendered
+    const silverCheckbox = screen.getByTestId('delete-stage-silver') as HTMLInputElement;
+    const goldCheckbox = screen.getByTestId('delete-stage-gold') as HTMLInputElement;
+    expect(silverCheckbox).toBeInTheDocument();
+    expect(goldCheckbox).toBeInTheDocument();
+
+    // Check them all to verify multi-stage deletion selection
+    if (!silverCheckbox.checked) fireEvent.click(silverCheckbox);
+    if (!goldCheckbox.checked) fireEvent.click(goldCheckbox);
+
+    // Confirm deletion
+    const confirmBtn = screen.getByTestId('confirm-delete-btn');
+    fireEvent.click(confirmBtn);
+
+    // Verify deletion request was triggered with proper targets
+    await waitFor(() => {
+      expect(deleteMock).toHaveBeenCalled();
+    });
+    const deletePayload = JSON.parse(deleteMock.mock.calls[0][1].body);
+    expect(deletePayload.bronzeId).toBe('email_1');
+    expect(deletePayload.silverId).toBe('silver_1');
+    expect(deletePayload.goldId).toBe('gold_1');
+    expect(deletePayload.targets).toContain('bronze');
+    expect(deletePayload.targets).toContain('silver');
+    expect(deletePayload.targets).toContain('gold');
+
+    // Switch to Trash Bin Tab
+    const trashTabBtn = screen.getByTestId('trash-tab-btn');
+    fireEvent.click(trashTabBtn);
+
+    // Verify deleted items are listed in their respective tables
+    expect(screen.getByText('Deleted Inv')).toBeInTheDocument();
+    expect(screen.getByText('Deleted Staging')).toBeInTheDocument();
+    expect(screen.getByText('Deleted Confirmed')).toBeInTheDocument();
+
+    // Click restore action on Gold record
+    const restoreGoldBtn = screen.getByTestId('restore-gold-gold_deleted');
+    fireEvent.click(restoreGoldBtn);
+
+    // Verify restore request was triggered
+    await waitFor(() => {
+      expect(restoreMock).toHaveBeenCalled();
+    });
+    const restorePayload = JSON.parse(restoreMock.mock.calls[0][1].body);
+    expect(restorePayload.goldId).toBe('gold_deleted');
+    expect(restorePayload.targets).toContain('gold');
 
     vi.unstubAllGlobals();
   });

@@ -27,6 +27,10 @@ interface EmailDetailModalProps {
   rawEmails: GmailMessage[];
   silverTransactions: SilverTransaction[];
   goldTransactions: GoldTransaction[];
+  onDeleteClick: (
+    sourceStage: 'bronze' | 'silver' | 'gold',
+    lineage: { bronzeId?: string; silverId?: string; goldId?: string }
+  ) => void;
 }
 
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
@@ -41,6 +45,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   rawEmails,
   silverTransactions,
   goldTransactions,
+  onDeleteClick,
 }) => {
   // Staging / Gold shared inputs state
   const [merchant, setMerchant] = useState('');
@@ -432,7 +437,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               >
                 {isGoldMode ? 'Save Corrections' : 'Approve & Save'}
               </button>
-            ) : selectedEmail && !selectedEmail.extracted ? (
+            ) : selectedEmail && !selectedEmail.extracted && !resolvedLineage.silverRecord && !resolvedLineage.goldRecord ? (
               // Raw non-extracted email operations
               selectedEmail.hasTransaction ? (
                 <button
@@ -459,6 +464,25 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               )
             ) : null}
             
+            <button
+              type="button"
+              onClick={() => {
+                const lineage = {
+                  bronzeId: resolvedLineage.bronzeRecord?.id,
+                  silverId: resolvedLineage.silverRecord?.id,
+                  goldId: resolvedLineage.goldRecord?.id,
+                };
+                const currentStage = selectedGoldTransaction 
+                  ? 'gold' 
+                  : (selectedEmail?.extracted && selectedEmail.extracted.status === 'pending' ? 'silver' : 'bronze');
+                onDeleteClick(currentStage, lineage);
+              }}
+              className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-4 py-2 rounded-xl border border-rose-200/50 uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
+              data-testid="modal-delete-btn"
+            >
+              Delete
+            </button>
+
             <button
               type="button"
               onClick={handleClose}

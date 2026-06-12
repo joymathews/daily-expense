@@ -24,7 +24,7 @@
 - [FUNC-GMAIL-5] Pagination: The system must retrieve all matching emails for the specified filters by automatically paginating through the Gmail API results.
 - [FUNC-GMAIL-6] Email Segregation: The system must automatically analyze fetched emails and categorize them into two lists: "with transaction" and "without transaction" based on transactional keywords in the subject or body snippet.
 - [FUNC-GMAIL-7] Separate Presentation: The system must display the two lists of emails (transactional and non-transactional) in separate sections or tabs to the user.
-- [FUNC-GMAIL-8] Manual Review: The system must provide options for the user to manually review and move emails between the "with transaction" and "without transaction" sections.
+- [FUNC-GMAIL-8] Manual Review: The system must allow the user to manually review emails and move them between the "with transaction" and "without transaction" sections via the email detail modal, keeping the main table views uncluttered.
 - [FUNC-GMAIL-9] Email Detail View: The user must be able to click on any fetched email to view its details (subject, sender, date, and full decoded plain-text body content) in a secure modal popup.
 - [FUNC-GMAIL-10] Modal Action Override: Inside the detail modal view, the user must have the option to mark the email as transactional or non-transactional, which updates the local email state and count badge immediately.
 - [FUNC-GMAIL-11] Local Email Logging & Audit Trail: The system must automatically store a complete local copy of the fetched email history so that the application has a reliable, queryable log of raw messages for auditing and re-processing.
@@ -47,5 +47,6 @@
 - [FUNC-GMAIL-28] Extraction Progress Tracking: The user must be informed immediately when the email extraction process (on-demand for a single email or in batch) starts, see real-time progress updates (showing current email index, total count, and current email subject being processed), and receive a clear confirmation message upon completion of extraction.
 - [FUNC-GMAIL-29] Fetcher Filter Layout Isolation: The fetching configuration filter panel ('Fetcher Config') must only be displayed when the user is viewing the Raw Emails (Bronze) tab, and must be hidden on the Staging (Silver) and Ledger (Gold) tabs, allowing the tables in those tabs to utilize the full content width.
 - [FUNC-GMAIL-30] Cross-Stage Medallion Lineage Explorer: When viewing any record (Bronze, Silver, or Gold) in the detail view modal, the system must dynamically trace and display the status and details of corresponding records in the other two stages of the Medallion pipeline (e.g. Bronze raw email details, Silver staging details, and Gold confirmed ledger details), establishing absolute data lineage visibility.
+- [FUNC-GMAIL-31] Multi-Stage Delete & Trash Bin: The user must be able to delete records from any Medallion layer (Bronze, Silver, or Gold) with a confirmation dialog prompting them to select the target stages (pre-filled with the source stage). Deleted records must be held in a soft-deleted state, visible in a Trash Bin view, and restorable to their active states with original linkages preserved.
 
 

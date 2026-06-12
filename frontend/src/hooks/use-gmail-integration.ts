@@ -34,6 +34,7 @@ export interface GmailMessage {
     status: 'pending' | 'approved' | 'rejected';
     paymentMethod?: string;
   };
+  deletedAt?: string;
 }
 
 export interface SilverTransaction {
@@ -52,6 +53,7 @@ export interface SilverTransaction {
   emailSender?: string;
   emailReceivedAt?: string;
   paymentMethod?: string;
+  deletedAt?: string;
 }
 
 export interface GoldTransaction {
@@ -71,6 +73,7 @@ export interface GoldTransaction {
   emailReceivedAt?: string;
   bronzeEmailId?: string;
   paymentMethod?: string;
+  deletedAt?: string;
 }
 
 export const useGmailIntegration = () => {
@@ -85,6 +88,9 @@ export const useGmailIntegration = () => {
   const [rawEmails, setRawEmails] = useState<GmailMessage[]>([]);
   const [silverTransactions, setSilverTransactions] = useState<SilverTransaction[]>([]);
   const [goldTransactions, setGoldTransactions] = useState<GoldTransaction[]>([]);
+  const [deletedRawEmails, setDeletedRawEmails] = useState<GmailMessage[]>([]);
+  const [deletedSilverTransactions, setDeletedSilverTransactions] = useState<SilverTransaction[]>([]);
+  const [deletedGoldTransactions, setDeletedGoldTransactions] = useState<GoldTransaction[]>([]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -99,7 +105,7 @@ export const useGmailIntegration = () => {
     current: 0,
     total: 0
   });
-  const [activeTab, setActiveTab] = useState<'bronze' | 'silver' | 'gold' | 'transaction' | 'non-transaction'>('bronze');
+  const [activeTab, setActiveTab] = useState<'bronze' | 'silver' | 'gold' | 'transaction' | 'non-transaction' | 'trash'>('bronze');
   const [selectedEmail, setSelectedEmail] = useState<GmailMessage | null>(null);
 
   // Helper to fetch authorization headers dynamically
@@ -192,12 +198,42 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const loadDeletedLayers = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/gmail/deleted', {
+        headers: {
+          ...authHeaders,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.emails || []).map((e: any) => ({
+          id: e.id,
+          sender: e.sender,
+          subject: e.subject,
+          date: e.receivedAt || e.date,
+          snippet: e.snippet,
+          body: e.rawBody || e.body || '',
+          hasTransaction: e.hasTransaction !== undefined ? !!e.hasTransaction : false,
+          deletedAt: e.deletedAt,
+        }));
+        setDeletedRawEmails(mapped);
+        setDeletedSilverTransactions(data.silverTransactions || []);
+        setDeletedGoldTransactions(data.goldTransactions || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load deleted layers silently (normal in test mocks):', err);
+    }
+  };
+
   const loadAllLayers = async (start = startDate, end = endDate) => {
     setIsLoading(true);
     await Promise.all([
       loadRawEmails(start, end),
       loadSilverTransactions(start, end),
       loadGoldTransactions(start, end),
+      loadDeletedLayers(),
     ]);
     setIsLoading(false);
   };
@@ -638,6 +674,66 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const deleteRecords = async (
+    bronzeId: string | undefined,
+    silverId: string | undefined,
+    goldId: string | undefined,
+    targets: string[]
+  ) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/gmail/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ bronzeId, silverId, goldId, targets }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to delete records');
+      }
+      await loadAllLayers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const restoreRecords = async (
+    bronzeId: string | undefined,
+    silverId: string | undefined,
+    goldId: string | undefined,
+    targets: string[]
+  ) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/gmail/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ bronzeId, silverId, goldId, targets }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to restore records');
+      }
+      await loadAllLayers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleFetchClick = () => {
     if (senders.length === 0 || !startDate || !endDate) {
       setError("Sender and Date Range are mandatory.");
@@ -660,6 +756,9 @@ export const useGmailIntegration = () => {
     rawEmails,
     silverTransactions,
     goldTransactions,
+    deletedRawEmails,
+    deletedSilverTransactions,
+    deletedGoldTransactions,
     isLoading,
     isFetching,
     error,
@@ -683,5 +782,8 @@ export const useGmailIntegration = () => {
     approveTransaction,
     approveTransactionsBatch,
     loadAllLayers,
+    deleteRecords,
+    restoreRecords,
+    loadDeletedLayers,
   };
 };

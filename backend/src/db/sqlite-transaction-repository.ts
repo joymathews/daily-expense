@@ -80,6 +80,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         received_at TEXT NOT NULL,
         has_transaction INTEGER NOT NULL DEFAULT 1,
         ingested_at TEXT DEFAULT (datetime('now', 'utc')),
+        deleted_at TEXT,
         PRIMARY KEY (user_id, id)
       );
     `);
@@ -99,6 +100,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         confidence_score REAL,
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
         payment_method TEXT,
+        deleted_at TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, bronze_email_id) REFERENCES bronze_raw_emails(user_id, id) ON DELETE CASCADE,
         UNIQUE(user_id, bronze_email_id),
@@ -119,11 +121,28 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         category TEXT NOT NULL,
         notes TEXT,
         payment_method TEXT,
+        deleted_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
         updated_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, silver_tx_id) REFERENCES silver_extracted_transactions(user_id, id) ON DELETE SET NULL
       );
     `);
+
+    // Dynamic migrations for deleted_at column
+    const bronzeInfo = await this.all<{ name: string }>("PRAGMA table_info(bronze_raw_emails);");
+    if (bronzeInfo.length > 0 && !bronzeInfo.some(col => col.name === 'deleted_at')) {
+      await this.run("ALTER TABLE bronze_raw_emails ADD COLUMN deleted_at TEXT;");
+    }
+
+    const silverInfo2 = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
+    if (silverInfo2.length > 0 && !silverInfo2.some(col => col.name === 'deleted_at')) {
+      await this.run("ALTER TABLE silver_extracted_transactions ADD COLUMN deleted_at TEXT;");
+    }
+
+    const goldInfo = await this.all<{ name: string }>("PRAGMA table_info(gold_transactions);");
+    if (goldInfo.length > 0 && !goldInfo.some(col => col.name === 'deleted_at')) {
+      await this.run("ALTER TABLE gold_transactions ADD COLUMN deleted_at TEXT;");
+    }
 
     // 4. Create Indexes
     await this.run('CREATE INDEX IF NOT EXISTS idx_bronze_emails_sender ON bronze_raw_emails(sender);');
@@ -196,7 +215,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
   async getPendingTransactions(userId: string): Promise<PendingTransaction[]> {
     const rows = await this.all<any>(
-      `SELECT * FROM silver_extracted_transactions WHERE status = 'pending' AND user_id = ?`,
+      `SELECT * FROM silver_extracted_transactions WHERE status = 'pending' AND user_id = ? AND deleted_at IS NULL`,
       [userId]
     );
 
@@ -256,7 +275,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
   }
 
   async getRawEmails(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawEmail[]> {
-    let sql = 'SELECT * FROM bronze_raw_emails WHERE user_id = ?';
+    let sql = 'SELECT * FROM bronze_raw_emails WHERE user_id = ? AND deleted_at IS NULL';
     const params: any[] = [userId];
     if (filters?.startDate) {
       sql += ' AND date(received_at) >= date(?)';
@@ -311,7 +330,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
       FROM silver_extracted_transactions s
       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
-      WHERE s.user_id = ?
+      WHERE s.user_id = ? AND s.deleted_at IS NULL
     `;
     const params: any[] = [userId];
     if (filters?.startDate) {
@@ -349,7 +368,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       `SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
        FROM silver_extracted_transactions s
        LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
-       WHERE s.bronze_email_id = ? AND s.user_id = ?`,
+       WHERE s.bronze_email_id = ? AND s.user_id = ? AND s.deleted_at IS NULL`,
       [emailId, userId]
     );
     if (!row) return undefined;
@@ -378,7 +397,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       `SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
        FROM silver_extracted_transactions s
        LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
-       WHERE s.id = ? AND s.user_id = ?`,
+       WHERE s.id = ? AND s.user_id = ? AND s.deleted_at IS NULL`,
       [id, userId]
     );
     if (!row) return undefined;
@@ -408,7 +427,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       FROM gold_transactions g
       LEFT JOIN silver_extracted_transactions s ON g.silver_tx_id = s.id AND g.user_id = s.user_id
       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND g.user_id = b.user_id
-      WHERE g.user_id = ?
+      WHERE g.user_id = ? AND g.deleted_at IS NULL
     `;
     const params: any[] = [userId];
     if (filters?.startDate) {
@@ -518,6 +537,154 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     params.push(id);
     params.push(userId);
     await this.run(`UPDATE silver_extracted_transactions SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`, params);
+  }
+
+  async softDeleteRecords(
+    userId: string,
+    targets: string[],
+    bronzeId?: string,
+    silverId?: string,
+    goldId?: string
+  ): Promise<void> {
+    await this.run('BEGIN TRANSACTION');
+    try {
+      const now = new Date().toISOString();
+      if (targets.includes('bronze') && bronzeId) {
+        await this.run(
+          'UPDATE bronze_raw_emails SET deleted_at = ? WHERE id = ? AND user_id = ?',
+          [now, bronzeId, userId]
+        );
+      }
+      if (targets.includes('silver') && silverId) {
+        await this.run(
+          'UPDATE silver_extracted_transactions SET deleted_at = ? WHERE id = ? AND user_id = ?',
+          [now, silverId, userId]
+        );
+      }
+      if (targets.includes('gold') && goldId) {
+        await this.run(
+          'UPDATE gold_transactions SET deleted_at = ? WHERE id = ? AND user_id = ?',
+          [now, goldId, userId]
+        );
+      }
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
+  }
+
+  async restoreRecords(
+    userId: string,
+    targets: string[],
+    bronzeId?: string,
+    silverId?: string,
+    goldId?: string
+  ): Promise<void> {
+    await this.run('BEGIN TRANSACTION');
+    try {
+      if (targets.includes('bronze') && bronzeId) {
+        await this.run(
+          'UPDATE bronze_raw_emails SET deleted_at = NULL WHERE id = ? AND user_id = ?',
+          [bronzeId, userId]
+        );
+      }
+      if (targets.includes('silver') && silverId) {
+        await this.run(
+          'UPDATE silver_extracted_transactions SET deleted_at = NULL WHERE id = ? AND user_id = ?',
+          [silverId, userId]
+        );
+      }
+      if (targets.includes('gold') && goldId) {
+        await this.run(
+          'UPDATE gold_transactions SET deleted_at = NULL WHERE id = ? AND user_id = ?',
+          [goldId, userId]
+        );
+      }
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
+  }
+
+  async getDeletedRawEmails(userId: string): Promise<RawEmail[]> {
+    const rows = await this.all<any>(
+      'SELECT * FROM bronze_raw_emails WHERE user_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC',
+      [userId]
+    );
+    return rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      sender: row.sender,
+      subject: row.subject,
+      snippet: row.snippet || '',
+      rawBody: row.raw_body,
+      rawPayload: row.raw_payload || '',
+      receivedAt: row.received_at,
+      hasTransaction: row.has_transaction === 1,
+      ingestedAt: row.ingested_at,
+      deletedAt: row.deleted_at,
+    }));
+  }
+
+  async getDeletedSilverTransactions(userId: string): Promise<PendingTransaction[]> {
+    const rows = await this.all<any>(
+      `SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+       FROM silver_extracted_transactions s
+       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
+       WHERE s.user_id = ? AND s.deleted_at IS NOT NULL ORDER BY s.deleted_at DESC`,
+      [userId]
+    );
+    return rows.map(row => ({
+      id: row.id,
+      rawEmailId: row.bronze_email_id,
+      userId: row.user_id,
+      merchantRaw: row.merchant_raw,
+      merchantNormalized: row.merchant_normalized || undefined,
+      amount: row.amount_cents / 100,
+      currency: row.currency,
+      transactionDate: row.transaction_date,
+      inferredCategory: row.inferred_category || undefined,
+      confidenceScore: row.confidence_score ?? undefined,
+      status: row.status as 'pending' | 'approved' | 'rejected',
+      extractedAt: row.extracted_at,
+      emailSubject: row.email_subject || undefined,
+      emailSender: row.email_sender || undefined,
+      emailReceivedAt: row.email_received_at || undefined,
+      paymentMethod: row.payment_method || undefined,
+      deletedAt: row.deleted_at,
+    }));
+  }
+
+  async getDeletedGoldTransactions(userId: string): Promise<Transaction[]> {
+    const rows = await this.all<any>(
+      `SELECT g.*, s.bronze_email_id, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+       FROM gold_transactions g
+       LEFT JOIN silver_extracted_transactions s ON g.silver_tx_id = s.id AND g.user_id = s.user_id
+       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND g.user_id = b.user_id
+       WHERE g.user_id = ? AND g.deleted_at IS NOT NULL ORDER BY g.deleted_at DESC`,
+      [userId]
+    );
+    return rows.map(row => ({
+      id: row.id,
+      pendingTxId: row.silver_tx_id || undefined,
+      userId: row.user_id,
+      merchant: row.merchant,
+      amount: row.amount_cents / 100,
+      currency: row.currency,
+      transactionDate: row.transaction_date,
+      category: row.category,
+      notes: row.notes || undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      emailSubject: row.email_subject || undefined,
+      emailSender: row.email_sender || undefined,
+      emailReceivedAt: row.email_received_at || undefined,
+      bronzeEmailId: row.bronze_email_id || undefined,
+      paymentMethod: row.payment_method || undefined,
+      deletedAt: row.deleted_at,
+    }));
   }
 
   close(): Promise<void> {

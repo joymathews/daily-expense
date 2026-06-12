@@ -4,11 +4,13 @@ import type { GoldTransaction } from '../../hooks/use-gmail-integration';
 interface GoldLedgerListProps {
   goldTransactions: GoldTransaction[];
   setSelectedGoldTransaction: (tx: GoldTransaction) => void;
+  onDeleteClick: (tx: GoldTransaction) => void;
 }
 
 export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
   goldTransactions,
   setSelectedGoldTransaction,
+  onDeleteClick,
 }) => {
   return (
     <div>
@@ -56,12 +58,21 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
                     </div>
                   </td>
                   <td className="px-2 py-2.5 text-center">
-                    <button
-                      onClick={() => setSelectedGoldTransaction(tx)}
-                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-1 border border-emerald-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
-                    >
-                      Correct
-                    </button>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => setSelectedGoldTransaction(tx)}
+                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-1 border border-emerald-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
+                      >
+                        Correct
+                      </button>
+                      <button
+                        onClick={() => onDeleteClick(tx)}
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-3 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
+                        data-testid={`delete-gold-${tx.id}`}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

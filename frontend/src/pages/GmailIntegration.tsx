@@ -7,6 +7,7 @@ import { EmailDetailModal } from '../components/gmail/EmailDetailModal';
 import { BronzeEmailList } from '../components/gmail/BronzeEmailList';
 import { SilverStagingList } from '../components/gmail/SilverStagingList';
 import { GoldLedgerList } from '../components/gmail/GoldLedgerList';
+import { DeleteConfirmationModal } from '../components/gmail/DeleteConfirmationModal';
 
 const GmailIntegration: React.FC = () => {
   const {
@@ -22,6 +23,9 @@ const GmailIntegration: React.FC = () => {
     rawEmails,
     silverTransactions,
     goldTransactions,
+    deletedRawEmails,
+    deletedSilverTransactions,
+    deletedGoldTransactions,
     isLoading,
     isFetching,
     error,
@@ -43,6 +47,9 @@ const GmailIntegration: React.FC = () => {
     setFetchProgress,
     extractionProgress,
     setExtractionProgress,
+    deleteRecords,
+    restoreRecords,
+    loadDeletedLayers,
   } = useGmailIntegration();
 
   // Multi-select state for Bronze batch extraction
@@ -56,6 +63,59 @@ const GmailIntegration: React.FC = () => {
 
   // Ingestion status filtering for Bronze section
   const [bronzeFilter, setBronzeFilter] = useState<'all' | 'processed' | 'unprocessed'>('all');
+
+  // Delete modal trigger states
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteLineage, setDeleteLineage] = useState<{ bronzeId?: string; silverId?: string; goldId?: string }>({});
+  const [deleteSourceStage, setDeleteSourceStage] = useState<'bronze' | 'silver' | 'gold'>('bronze');
+
+  const handleDeleteClick = (
+    stage: 'bronze' | 'silver' | 'gold',
+    lineage: { bronzeId?: string; silverId?: string; goldId?: string }
+  ) => {
+    setSelectedEmail(null);
+    setSelectedGoldTransaction(null);
+    setDeleteLineage(lineage);
+    setDeleteSourceStage(stage);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleBronzeDeleteClick = (email: typeof rawEmails[0]) => {
+    const silver = silverTransactions.find(tx => tx.rawEmailId === email.id);
+    const gold = goldTransactions.find(tx => tx.bronzeEmailId === email.id || (silver && tx.pendingTxId === silver.id));
+    handleDeleteClick('bronze', {
+      bronzeId: email.id,
+      silverId: silver?.id,
+      goldId: gold?.id,
+    });
+  };
+
+  const handleSilverDeleteClick = (tx: typeof silverTransactions[0]) => {
+    const gold = goldTransactions.find(g => g.pendingTxId === tx.id || g.bronzeEmailId === tx.rawEmailId);
+    handleDeleteClick('silver', {
+      bronzeId: tx.rawEmailId,
+      silverId: tx.id,
+      goldId: gold?.id,
+    });
+  };
+
+  const handleGoldDeleteClick = (tx: typeof goldTransactions[0]) => {
+    handleDeleteClick('gold', {
+      bronzeId: tx.bronzeEmailId,
+      silverId: tx.pendingTxId,
+      goldId: tx.id,
+    });
+  };
+
+  const handleConfirmDelete = async (targets: string[]) => {
+    setIsDeleteModalOpen(false);
+    await deleteRecords(
+      deleteLineage.bronzeId,
+      deleteLineage.silverId,
+      deleteLineage.goldId,
+      targets
+    );
+  };
 
   // Manage Bronze layer sub-tabs (compatibility with Vitest tests)
   const isBronzeActive = activeTab === 'bronze' || activeTab === 'transaction' || activeTab === 'non-transaction';
@@ -384,6 +444,18 @@ const GmailIntegration: React.FC = () => {
           <span className={`w-2.5 h-2.5 rounded-full mr-2 ${activeTab === 'gold' ? 'bg-emerald-500 shadow-sm shadow-emerald-400/50' : 'bg-emerald-300'}`}></span>
           Gold (Confirmed Ledger)
         </button>
+        <button
+          onClick={() => setActiveTab('trash')}
+          className={`flex items-center px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+            activeTab === 'trash' 
+              ? 'bg-rose-50 text-rose-900 border border-rose-200/50 shadow-sm' 
+              : 'text-gray-500 hover:bg-gray-50 border border-transparent'
+          }`}
+          data-testid="trash-tab-btn"
+        >
+          <span className={`w-2.5 h-2.5 rounded-full mr-2 ${activeTab === 'trash' ? 'bg-rose-500 shadow-sm shadow-rose-400/50' : 'bg-rose-300'}`}></span>
+          Trash Bin
+        </button>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
@@ -427,6 +499,7 @@ const GmailIntegration: React.FC = () => {
               rawEmails={rawEmails}
               bronzeFilter={bronzeFilter}
               setBronzeFilter={setBronzeFilter}
+              onDeleteClick={handleBronzeDeleteClick}
             />
           )}
 
@@ -438,6 +511,7 @@ const GmailIntegration: React.FC = () => {
               toggleSilverCheck={toggleSilverCheck}
               handleBatchApprove={handleBatchApprove}
               handleReviewSilver={handleReviewSilver}
+              onDeleteClick={handleSilverDeleteClick}
             />
           )}
 
@@ -445,7 +519,156 @@ const GmailIntegration: React.FC = () => {
             <GoldLedgerList
               goldTransactions={goldTransactions}
               setSelectedGoldTransaction={setSelectedGoldTransaction}
+              onDeleteClick={handleGoldDeleteClick}
             />
+          )}
+
+          {activeTab === 'trash' && (
+            <div className="space-y-8 p-5">
+              {/* Trash Bin Header */}
+              <div className="border-b border-gray-100 pb-3 flex justify-between items-center bg-gray-50/70 -mx-5 -mt-5 px-5 py-3">
+                <span className="text-xs font-bold text-rose-700 uppercase tracking-wider">Recycle Bin / Soft-Deleted Records</span>
+                <button
+                  onClick={() => loadDeletedLayers()}
+                  className="bg-gray-100 hover:bg-gray-200 border border-gray-250/30 text-gray-700 text-[10px] font-bold px-3 py-1 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
+                >
+                  🔄 Refresh Trash
+                </button>
+              </div>
+
+              {/* Deleted Bronze Emails */}
+              <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm bg-white">
+                <div className="bg-gray-50/50 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                  <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Bronze: Deleted Raw Emails ({deletedRawEmails.length})</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100 text-xs">
+                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Sender</th>
+                        <th className="px-3 py-2 text-left">Subject</th>
+                        <th className="px-3 py-2 text-left">Deleted At</th>
+                        <th className="px-3 py-2 text-center w-24">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 bg-white">
+                      {deletedRawEmails.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-8 text-center text-gray-400 font-bold uppercase tracking-wider text-[10px]">No deleted raw emails</td>
+                        </tr>
+                      ) : (
+                        deletedRawEmails.map(email => (
+                          <tr key={email.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-3 py-2 text-gray-700 font-bold max-w-[120px] truncate" title={email.sender}>{email.sender.split('<')[0].trim()}</td>
+                            <td className="px-3 py-2 text-gray-900 font-semibold max-w-[200px] truncate" title={email.subject}>{email.subject}</td>
+                            <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{email.deletedAt ? new Date(email.deletedAt).toLocaleString() : 'Unknown'}</td>
+                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => restoreRecords(email.id, undefined, undefined, ['bronze'])}
+                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-1 border border-emerald-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm animate-fade-in"
+                                data-testid={`restore-bronze-${email.id}`}
+                              >
+                                Restore
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Deleted Silver Transactions */}
+              <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm bg-white">
+                <div className="bg-gray-50/50 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                  <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Silver: Deleted Staging Queue ({deletedSilverTransactions.length})</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100 text-xs">
+                    <thead className="bg-gray-55 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Date</th>
+                        <th className="px-3 py-2 text-left">Merchant</th>
+                        <th className="px-3 py-2 text-right">Amount</th>
+                        <th className="px-3 py-2 text-left">Deleted At</th>
+                        <th className="px-3 py-2 text-center w-24">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 bg-white">
+                      {deletedSilverTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-8 text-center text-gray-400 font-bold uppercase tracking-wider text-[10px]">No deleted staging transactions</td>
+                        </tr>
+                      ) : (
+                        deletedSilverTransactions.map(tx => (
+                          <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{tx.transactionDate}</td>
+                            <td className="px-3 py-2 text-gray-900 font-bold max-w-[150px] truncate" title={tx.merchantNormalized || tx.merchantRaw}>{tx.merchantNormalized || tx.merchantRaw}</td>
+                            <td className="px-3 py-2 text-right font-extrabold text-gray-700 whitespace-nowrap">{tx.amount.toFixed(2)} {tx.currency}</td>
+                            <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{tx.deletedAt ? new Date(tx.deletedAt).toLocaleString() : 'Unknown'}</td>
+                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => restoreRecords(tx.rawEmailId, tx.id, undefined, ['silver'])}
+                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-1 border border-emerald-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm animate-fade-in"
+                                data-testid={`restore-silver-${tx.id}`}
+                              >
+                                Restore
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Deleted Gold Transactions */}
+              <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm bg-white">
+                <div className="bg-gray-50/50 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                  <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Gold: Deleted Verified Ledger ({deletedGoldTransactions.length})</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100 text-xs">
+                    <thead className="bg-gray-55 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Date</th>
+                        <th className="px-3 py-2 text-left">Merchant</th>
+                        <th className="px-3 py-2 text-right">Amount</th>
+                        <th className="px-3 py-2 text-left">Deleted At</th>
+                        <th className="px-3 py-2 text-center w-24">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 bg-white">
+                      {deletedGoldTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-8 text-center text-gray-400 font-bold uppercase tracking-wider text-[10px]">No deleted verified transactions</td>
+                        </tr>
+                      ) : (
+                        deletedGoldTransactions.map(tx => (
+                          <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{tx.transactionDate}</td>
+                            <td className="px-3 py-2 text-gray-900 font-bold max-w-[150px] truncate" title={tx.merchant}>{tx.merchant}</td>
+                            <td className="px-3 py-2 text-right font-extrabold text-emerald-600 whitespace-nowrap">{tx.amount.toFixed(2)} {tx.currency}</td>
+                            <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{tx.deletedAt ? new Date(tx.deletedAt).toLocaleString() : 'Unknown'}</td>
+                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => restoreRecords(tx.bronzeEmailId, tx.pendingTxId, tx.id, ['gold'])}
+                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-1 border border-emerald-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm animate-fade-in"
+                                data-testid={`restore-gold-${tx.id}`}
+                              >
+                                Restore
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -462,6 +685,15 @@ const GmailIntegration: React.FC = () => {
         rawEmails={rawEmails}
         silverTransactions={silverTransactions}
         goldTransactions={goldTransactions}
+        onDeleteClick={handleDeleteClick}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        lineage={deleteLineage}
+        sourceStage={deleteSourceStage}
       />
     </div>
   );

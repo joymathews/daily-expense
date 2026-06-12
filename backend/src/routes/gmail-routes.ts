@@ -436,4 +436,74 @@ router.get('/pending', async (req, res) => {
   }
 });
 
+/**
+ * [FUNC-GMAIL-31] POST /api/gmail/delete
+ * Soft deletes records from targets list of layers (bronze, silver, gold).
+ */
+router.post('/delete', async (req, res) => {
+  const { bronzeId, silverId, goldId, targets } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!targets || !Array.isArray(targets) || targets.length === 0) {
+    return res.status(400).json({ error: 'targets array is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.softDeleteRecords(userId, targets, bronzeId, silverId, goldId);
+    await repository.close();
+    res.status(200).json({ status: 'deleted' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Deletion failed' });
+  }
+});
+
+/**
+ * [FUNC-GMAIL-31] POST /api/gmail/restore
+ * Restores soft-deleted records and preserves lineages.
+ */
+router.post('/restore', async (req, res) => {
+  const { bronzeId, silverId, goldId, targets } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!targets || !Array.isArray(targets) || targets.length === 0) {
+    return res.status(400).json({ error: 'targets array is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.restoreRecords(userId, targets, bronzeId, silverId, goldId);
+    await repository.close();
+    res.status(200).json({ status: 'restored' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Restoration failed' });
+  }
+});
+
+/**
+ * [FUNC-GMAIL-31] GET /api/gmail/deleted
+ * Retrieves all soft-deleted records for Bronze, Silver, and Gold.
+ */
+router.get('/deleted', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const emails = await repository.getDeletedRawEmails(userId);
+    const silver = await repository.getDeletedSilverTransactions(userId);
+    const gold = await repository.getDeletedGoldTransactions(userId);
+    await repository.close();
+    res.status(200).json({
+      emails,
+      silverTransactions: silver,
+      goldTransactions: gold
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch deleted records' });
+  }
+});
+
 export default router;

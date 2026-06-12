@@ -19,6 +19,7 @@ interface BronzeEmailListProps {
   rawEmails: GmailMessage[];
   bronzeFilter: 'all' | 'processed' | 'unprocessed';
   setBronzeFilter: (filter: 'all' | 'processed' | 'unprocessed') => void;
+  onDeleteClick: (email: GmailMessage) => void;
 }
 
 export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
@@ -39,6 +40,7 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
   rawEmails,
   bronzeFilter,
   setBronzeFilter,
+  onDeleteClick,
 }) => {
   return (
     <div>
@@ -164,34 +166,33 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                   <td onClick={() => setSelectedEmail(email)} className="px-4 py-3 whitespace-nowrap text-right text-xs font-semibold text-gray-500 uppercase cursor-pointer">
                     {new Date(email.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-center space-x-2">
+                  <td className="px-4 py-3 whitespace-nowrap text-center">
                     {bronzeSubTab === 'non-transaction' ? (
-                      <button
-                        type="button"
-                        onClick={() => markAsTransaction(email.id)}
-                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-2.5 py-1 border border-indigo-100/50 rounded-lg uppercase cursor-pointer transition-colors"
-                      >
-                        Mark Tx
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onDeleteClick(email)}
+                          className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
+                          data-testid={`delete-bronze-${email.id}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     ) : (
                       <>
                         {isEmailProcessed(email) ? (
-                          <button
-                            type="button"
-                            disabled
-                            className="bg-gray-50 text-gray-300 text-xs font-bold px-2.5 py-1 border border-gray-100 rounded-lg uppercase cursor-not-allowed"
-                          >
-                            Unmark Tx
-                          </button>
-                        ) : (
-                          <>
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
-                              onClick={() => markAsNonTransaction(email.id)}
-                              className="bg-amber-50 hover:bg-amber-100/80 text-amber-700 text-xs font-bold px-2.5 py-1 border border-amber-100 rounded-lg uppercase cursor-pointer transition-colors"
+                              onClick={() => onDeleteClick(email)}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
+                              data-testid={`delete-bronze-${email.id}`}
                             >
-                              Unmark Tx
+                              Delete
                             </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
                               onClick={() => extractSelectedEmails([email.id])}
@@ -199,7 +200,15 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                             >
                               Extract
                             </button>
-                          </>
+                            <button
+                              type="button"
+                              onClick={() => onDeleteClick(email)}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
+                              data-testid={`delete-bronze-${email.id}`}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         )}
                       </>
                     )}

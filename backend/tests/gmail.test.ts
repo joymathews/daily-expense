@@ -400,5 +400,114 @@ describe('Gmail API Integration', () => {
     expect(email).toBeDefined();
     expect(email.hasTransaction).toBe(false);
   });
+
+  /**
+   * [FUNC-GMAIL-31] Multi-Stage Delete & Trash Bin: Verify delete, restore, and fetch-deleted endpoints.
+   */
+  it('should soft delete, fetch deleted, and restore records across Bronze, Silver, and Gold layers', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    // 1. Seed active records in Bronze, Silver, Gold
+    await repository.saveRawEmail({
+      id: 'del_bronze_1',
+      userId: 'user-123',
+      sender: 'sender@del.com',
+      subject: 'Raw Del Test',
+      snippet: 'Raw text snippet',
+      rawBody: 'Full email body',
+      receivedAt: '2023-01-10T10:00:00Z',
+    });
+
+    await repository.savePendingTransaction({
+      id: 'del_silver_1',
+      rawEmailId: 'del_bronze_1',
+      userId: 'user-123',
+      merchantRaw: 'Del Merchant',
+      amount: 45.99,
+      currency: 'USD',
+      transactionDate: '2023-01-10',
+      status: 'pending',
+    });
+
+    await repository.promoteToTransaction('del_silver_1', {
+      id: 'del_gold_1',
+      pendingTxId: 'del_silver_1',
+      userId: 'user-123',
+      merchant: 'Del Merchant Approved',
+      amount: 45.99,
+      currency: 'USD',
+      transactionDate: '2023-01-10',
+      category: 'Food',
+    });
+
+    await repository.close();
+
+    // 2. Verify all are currently active and not deleted
+    const initialEmailsRes = await request(app).get('/api/gmail/raw-emails').set('Authorization', 'Bearer valid-token');
+    const initialSilverRes = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
+    const initialGoldRes = await request(app).get('/api/gmail/gold-transactions').set('Authorization', 'Bearer valid-token');
+
+    expect(initialEmailsRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
+    expect(initialSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(true);
+    expect(initialGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(true);
+
+    // 3. Perform soft-delete from targets (silver and gold only)
+    const deleteRes = await request(app)
+      .post('/api/gmail/delete')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        bronzeId: 'del_bronze_1',
+        silverId: 'del_silver_1',
+        goldId: 'del_gold_1',
+        targets: ['silver', 'gold']
+      });
+
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.body.status).toBe('deleted');
+
+    // 4. Verify that silver and gold are excluded from active endpoints, but bronze is still active
+    const activeEmailsRes = await request(app).get('/api/gmail/raw-emails').set('Authorization', 'Bearer valid-token');
+    const activeSilverRes = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
+    const activeGoldRes = await request(app).get('/api/gmail/gold-transactions').set('Authorization', 'Bearer valid-token');
+
+    expect(activeEmailsRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
+    expect(activeSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(false);
+    expect(activeGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(false);
+
+    // 5. Fetch from recycle bin (/api/gmail/deleted)
+    const deletedRes = await request(app)
+      .get('/api/gmail/deleted')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(deletedRes.status).toBe(200);
+    expect(deletedRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(false); // Bronze not deleted
+    expect(deletedRes.body.silverTransactions.some((t: any) => t.id === 'del_silver_1')).toBe(true); // Silver is deleted
+    expect(deletedRes.body.goldTransactions.some((t: any) => t.id === 'del_gold_1')).toBe(true); // Gold is deleted
+
+    // 6. Restore silver and gold
+    const restoreRes = await request(app)
+      .post('/api/gmail/restore')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        bronzeId: 'del_bronze_1',
+        silverId: 'del_silver_1',
+        goldId: 'del_gold_1',
+        targets: ['silver', 'gold']
+      });
+
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.body.status).toBe('restored');
+
+    // 7. Verify they are active again
+    const restoredEmailsRes = await request(app).get('/api/gmail/raw-emails').set('Authorization', 'Bearer valid-token');
+    const restoredSilverRes = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
+    const restoredGoldRes = await request(app).get('/api/gmail/gold-transactions').set('Authorization', 'Bearer valid-token');
+
+    expect(restoredEmailsRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
+    expect(restoredSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(true);
+    expect(restoredGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(true);
+  });
 });
 

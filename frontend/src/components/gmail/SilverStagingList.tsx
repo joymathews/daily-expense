@@ -8,6 +8,7 @@ interface SilverStagingListProps {
   toggleSilverCheck: (id: string) => void;
   handleBatchApprove: () => void;
   handleReviewSilver: (tx: SilverTransaction) => void;
+  onDeleteClick: (tx: SilverTransaction) => void;
 }
 
 export const SilverStagingList: React.FC<SilverStagingListProps> = ({
@@ -17,6 +18,7 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
   toggleSilverCheck,
   handleBatchApprove,
   handleReviewSilver,
+  onDeleteClick,
 }) => {
   return (
     <div>
@@ -99,12 +101,21 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                       }`}>
                         {tx.status}
                       </span>
-                      <button
-                        onClick={() => handleReviewSilver(tx)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider cursor-pointer shadow-sm transition-all duration-150 whitespace-nowrap"
-                      >
-                        Review
-                      </button>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => handleReviewSilver(tx)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider cursor-pointer shadow-sm transition-all duration-150 whitespace-nowrap"
+                        >
+                          Review
+                        </button>
+                        <button
+                          onClick={() => onDeleteClick(tx)}
+                          className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-2.5 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer shadow-sm transition-colors whitespace-nowrap"
+                          data-testid={`delete-silver-${tx.id}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </td>
                 </tr>
