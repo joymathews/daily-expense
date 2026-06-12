@@ -1058,5 +1058,81 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [BUG-004] Gmail Staging Staging Queue Table Actions Clipped / Cut Off
+   */
+  it('displays separate date, separate amount, stacked category/method, and stacked status/action in staging table [BUG-004]', async () => {
+    const mockSilver = [
+      { 
+        id: 'silver_999', 
+        rawEmailId: '1', 
+        merchantRaw: 'Special Stacked Merchant', 
+        amount: 250.00, 
+        currency: 'INR', 
+        transactionDate: '2026-06-12', 
+        inferredCategory: 'Shopping', 
+        paymentMethod: 'Test Stacked Method',
+        status: 'pending' 
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockSilver }),
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [] }),
+        });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Click Silver tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    // Wait for the Silver staging records to appear
+    expect(await screen.findByText('Special Stacked Merchant')).toBeInTheDocument();
+
+    // Check that column headers exist for Merchant, Date, Amount, Category & Method, Status / Action
+    const tableHeaders = screen.getAllByRole('columnheader');
+    const headerTexts = tableHeaders.map(th => th.textContent);
+    
+    expect(headerTexts).toContain('Merchant');
+    expect(headerTexts).toContain('Date');
+    expect(headerTexts).toContain('Amount');
+    expect(headerTexts).toContain('Category & Method');
+    expect(headerTexts).toContain('Status / Action');
+    
+    // Check that separate columns for Method, Category, Status, and Action DO NOT exist
+    expect(headerTexts).not.toContain('Method');
+    expect(headerTexts).not.toContain('Category');
+    expect(headerTexts).not.toContain('Status');
+    expect(headerTexts).not.toContain('Action');
+
+    // Check that the date and method are displayed inside the table
+    expect(screen.getByText('2026-06-12')).toBeInTheDocument();
+    expect(screen.getByText('Test Stacked Method')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
+
 

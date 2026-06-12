@@ -60,3 +60,22 @@ Updated `saveRawEmail` in `sqlite-transaction-repository.ts` to normalize all ra
 * **Test Case**: `backend/tests/gmail.test.ts`
   - *should return raw emails with hasTransaction derived correctly from payload/subject* (verifies ISO format is stored and returned cleanly).
   - Existing date range filter tests in `transaction-pipeline.test.ts` and `gmail.test.ts`.
+
+---
+
+## [BUG-004] Gmail Staging Staging Queue Table Actions Clipped / Cut Off
+
+### Description
+The "Review" action button on the far right of the Silver staging queue list table is clipped/cut off on standard desktop monitors and requires manual horizontal scrolling. However, scrollbars are hidden by default on macOS, leaving the user with no visual cue that scrolling is possible, rendering the staging table actions effectively invisible.
+
+### Root Cause
+The staging queue table layout has 8 distinct columns (Checkbox, Merchant, Date, Amount, Category, Method, Status, Action) with explicit padding (`px-2`) and layout widths (`whitespace-nowrap` on Date, Amount, Method, and Status). When anomalies occur (e.g. date containing long strings like `Via: HDFC Bank Credit Card`), the table expands beyond the parent grid column container (~800px) and gets clipped.
+
+### Resolution
+Restructured the Silver table columns by keeping Date and Amount as separate columns, stacking Category and Payment Method in another column, and stacking Status and Action (Review button) in the final column. This reduces the columns from 8 to 6 and prevents horizontal overflow while keeping layouts clean.
+
+### Verification Test
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *displays separate date, separate amount, stacked category/method, and stacked status/action in staging table [BUG-004]*
+
+

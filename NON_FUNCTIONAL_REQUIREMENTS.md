@@ -33,5 +33,5 @@
 - [NFR-USAB-1] Ingestion Status Feedback: The UI must clearly indicate the processing status of each raw email within 100ms of loading the Raw Emails list to prevent cognitive load and redundant user attempts.
 - [NFR-USAB-2] Ingestion Status Filtering Usability: The status filter controls in the Bronze section must update the view instantly (within 50ms) to allow efficient navigation between processed and unprocessed emails.
 - [NFR-USAB-3] Typography and Readability: The UI must utilize a highly readable, modern font scale (minimum 12px for body copy, avoiding tiny 8px text) and clear contrast hierarchy to prevent eye strain and improve readability.
-- [NFR-USAB-4] Design Consistency and Visual Hierarchy: The layout must use modern, cohesive component styling (glassmorphism/subtle shadows, HSL custom palette, card layouts, and micro-interactions) to establish a premium and professional user interface.
+- [NFR-USAB-4] Design Consistency and Visual Hierarchy: The layout must use modern, cohesive component styling (glassmorphism/subtle shadows, HSL custom palette, card layouts, and micro-interactions) to establish a premium and professional user interface. Tables and list layouts must be structured to prevent horizontal scrolling or clipping of essential action components (such as Review buttons) on standard desktop screens (>=1024px).
 
