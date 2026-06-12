@@ -61,5 +61,23 @@ Updated `saveRawEmail` in `sqlite-transaction-repository.ts` to normalize all ra
   - *should return raw emails with hasTransaction derived correctly from payload/subject* (verifies ISO format is stored and returned cleanly).
   - Existing date range filter tests in `transaction-pipeline.test.ts` and `gmail.test.ts`.
 
+---
+
+## [BUG-005] Redundant "Processed" UI Badge & Button on Bronze Screen
+
+### Description
+The Bronze (Raw Emails) screen displays a green "✓ Processed" badge next to the subject of emails that have already been processed. However, under the "Action" column of the same row, a disabled button with the label "Processed" is also displayed, causing duplicate "Processed" text indicators.
+
+### Root Cause
+In `BronzeEmailList.tsx`, when an email is determined to be processed via `isEmailProcessed(email)`, the action column render logic creates a disabled "Unmark Tx" button AND a disabled "Processed" button. The latter button is redundant as the email subject area already renders the custom "✓ Processed" status badge.
+
+### Resolution
+Removed the redundant disabled "Processed" button from the action column in `BronzeEmailList.tsx` for processed emails.
+
+### Verification Test
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *displays processed badge and disables extraction/checkbox for already processed emails*
+
+
 
 

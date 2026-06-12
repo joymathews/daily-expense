@@ -176,22 +176,13 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                     ) : (
                       <>
                         {isEmailProcessed(email) ? (
-                          <>
-                            <button
-                              type="button"
-                              disabled
-                              className="bg-gray-50 text-gray-300 text-xs font-bold px-2.5 py-1 border border-gray-100 rounded-lg uppercase cursor-not-allowed"
-                            >
-                              Unmark Tx
-                            </button>
-                            <button
-                              type="button"
-                              disabled
-                              className="bg-gray-100 text-gray-400 text-xs font-bold px-2.5 py-1 rounded-lg border border-gray-200 uppercase cursor-not-allowed"
-                            >
-                              Processed
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            disabled
+                            className="bg-gray-50 text-gray-300 text-xs font-bold px-2.5 py-1 border border-gray-100 rounded-lg uppercase cursor-not-allowed"
+                          >
+                            Unmark Tx
+                          </button>
                         ) : (
                           <>
                             <button

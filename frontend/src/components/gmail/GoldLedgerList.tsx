@@ -21,48 +21,39 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
         <table className="min-w-full divide-y divide-gray-100">
           <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
             <tr>
-              <th className="px-2 py-2.5 text-left">Merchant</th>
               <th className="px-2 py-2.5 text-left">Date</th>
+              <th className="px-2 py-2.5 text-left">Merchant</th>
               <th className="px-2 py-2.5 text-right">Amount</th>
-              <th className="px-2 py-2.5 text-center">Category</th>
-              <th className="px-2 py-2.5 text-center">Method</th>
-              <th className="px-2 py-2.5 text-left">Lineage / Comments</th>
+              <th className="px-2 py-2.5 text-center">Category & Method</th>
               <th className="px-2 py-2.5 text-center">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 bg-white">
             {goldTransactions.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-2 py-12 text-center">
+                <td colSpan={5} className="px-2 py-12 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No validated ledger items found</p>
                 </td>
               </tr>
             ) : (
               goldTransactions.map(tx => (
                 <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors text-xs">
-                  <td className="px-2 py-2.5 font-bold text-gray-900">{tx.merchant}</td>
-                  <td className="px-2 py-2.5 text-gray-500 whitespace-nowrap">{tx.transactionDate}</td>
+                  <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
+                    {tx.transactionDate}
+                  </td>
+                  <td className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px] truncate" title={tx.merchant}>
+                    {tx.merchant}
+                  </td>
                   <td className="px-2 py-2.5 font-extrabold text-right text-emerald-600 whitespace-nowrap">{tx.amount.toFixed(2)} {tx.currency}</td>
                   <td className="px-2 py-2.5 text-center">
-                    <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-bold uppercase text-[9px] border border-emerald-100/30">
-                      {tx.category}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2.5 text-center whitespace-nowrap">
-                    <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded-md font-bold uppercase text-[9px] border border-slate-100/30">
-                      {tx.paymentMethod || 'Unknown'}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2.5 text-left max-w-[180px]">
-                    <span 
-                      className="text-[10px] text-indigo-600 font-semibold block uppercase tracking-wide truncate max-w-[160px] cursor-help" 
-                      title={tx.emailSubject || 'Linked source raw receipt'}
-                    >
-                      🔗 Email: {tx.emailSubject || 'Linked source raw receipt'}
-                    </span>
-                    <span className="text-[11px] text-gray-400 italic block truncate max-w-[160px]" title={tx.notes || undefined}>
-                      {tx.notes || 'No comments'}
-                    </span>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-emerald-100/30 whitespace-nowrap">
+                        {tx.category}
+                      </span>
+                      <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-slate-100/30 truncate max-w-[120px] whitespace-nowrap" title={tx.paymentMethod}>
+                        {tx.paymentMethod || 'Unknown'}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-2 py-2.5 text-center">
                     <button

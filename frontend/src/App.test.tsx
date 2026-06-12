@@ -563,8 +563,9 @@ describe('Requirement Traceability Matrix Verification', () => {
     const row1 = screen.getByText('Inv 123').closest('tr')!;
     const row2 = screen.getByText('Inv 456').closest('tr')!;
 
-    // In row1, the extract action button should be labeled as "Processed" and disabled
-    expect(within(row1).getByRole('button', { name: 'Processed' })).toBeDisabled();
+    // In row1, the extract action button should NOT exist as "Processed", but "Unmark Tx" should be disabled
+    expect(within(row1).getByRole('button', { name: 'Unmark Tx' })).toBeDisabled();
+    expect(within(row1).queryByRole('button', { name: 'Processed' })).not.toBeInTheDocument();
     expect(within(row1).getByText('✓ Processed')).toBeInTheDocument();
     expect(within(row1).queryByRole('button', { name: 'Extract' })).not.toBeInTheDocument();
 
@@ -1134,6 +1135,99 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Check that the date and method are displayed inside the table
     expect(screen.getByText('2026-06-12')).toBeInTheDocument();
     expect(screen.getByText('Test Stacked Method')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-4] Verified Ledger (Gold) layout verification
+   */
+  it('displays separate date, separate amount, stacked category/method, and action in Gold ledger table (lineage accessible via modal)', async () => {
+    const mockGold = [
+      { 
+        id: 'gold_999', 
+        pendingTxId: 'silver_2',
+        userId: 'user1',
+        merchant: 'Special Gold Merchant', 
+        amount: 350.00, 
+        currency: 'INR', 
+        transactionDate: '2026-06-12', 
+        category: 'Food', 
+        paymentMethod: 'Gold Stacked Method',
+        emailSubject: 'Uber Ride Receipt',
+        notes: 'Verified comment'
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGold }),
+        });
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [] }),
+        });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Click Gold tab
+    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
+
+    // Wait for the Gold ledger records to appear
+    expect(await screen.findByText('Special Gold Merchant')).toBeInTheDocument();
+
+    // Check that column headers exist for Date, Merchant, Amount, Category & Method, Action
+    const tableHeaders = screen.getAllByRole('columnheader');
+    const headerTexts = tableHeaders.map(th => th.textContent);
+    
+    expect(headerTexts).toContain('Date');
+    expect(headerTexts).toContain('Merchant');
+    expect(headerTexts).toContain('Amount');
+    expect(headerTexts).toContain('Category & Method');
+    expect(headerTexts).not.toContain('Lineage / Comments');
+    expect(headerTexts).toContain('Action');
+    
+    // Verify specific column ordering (Date is first data column, followed by Merchant)
+    expect(headerTexts[0]).toBe('Date');
+    expect(headerTexts[1]).toBe('Merchant');
+    
+    // Check that separate columns for Method and Category DO NOT exist
+    expect(headerTexts).not.toContain('Method');
+    expect(headerTexts).not.toContain('Category');
+
+    // Check that the date and method are displayed inside the table
+    expect(screen.getByText('2026-06-12')).toBeInTheDocument();
+    expect(screen.getByText('Gold Stacked Method')).toBeInTheDocument();
+
+    // Verify that the comment/notes are not visible on the table page initially
+    expect(screen.queryByText('Verified comment')).not.toBeInTheDocument();
+
+    // Click the Correct button to open the modal
+    fireEvent.click(screen.getByRole('button', { name: /Correct/i }));
+
+    // Verify that the comment/notes and correct modal details are accessible in the modal
+    expect(screen.getByDisplayValue('Verified comment')).toBeInTheDocument();
+    expect(screen.getByText('Correct Gold Ledger: Special Gold Merchant')).toBeInTheDocument();
+
+    // Close the modal
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss/i }));
 
     vi.unstubAllGlobals();
   });
