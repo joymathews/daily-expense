@@ -39,3 +39,9 @@ rtm_report.html
 backend/.env.example
 .gitignore
 frontend/.env.example
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+backend/data/
