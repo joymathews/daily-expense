@@ -239,8 +239,8 @@ export const useGmailIntegration = () => {
   };
 
   useEffect(() => {
-    loadAllLayers();
-  }, []);
+    loadAllLayers(startDate, endDate);
+  }, [startDate, endDate]);
 
   const addSender = () => {
     if (currentSender && !senders.includes(currentSender)) {

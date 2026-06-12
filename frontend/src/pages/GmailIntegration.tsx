@@ -500,6 +500,10 @@ const GmailIntegration: React.FC = () => {
               bronzeFilter={bronzeFilter}
               setBronzeFilter={setBronzeFilter}
               onDeleteClick={handleBronzeDeleteClick}
+              startDate={startDate}
+              setStartDate={setStartDate}
+              endDate={endDate}
+              setEndDate={setEndDate}
             />
           )}
 
@@ -512,6 +516,10 @@ const GmailIntegration: React.FC = () => {
               handleBatchApprove={handleBatchApprove}
               handleReviewSilver={handleReviewSilver}
               onDeleteClick={handleSilverDeleteClick}
+              startDate={startDate}
+              setStartDate={setStartDate}
+              endDate={endDate}
+              setEndDate={setEndDate}
             />
           )}
 
@@ -520,6 +528,10 @@ const GmailIntegration: React.FC = () => {
               goldTransactions={goldTransactions}
               setSelectedGoldTransaction={setSelectedGoldTransaction}
               onDeleteClick={handleGoldDeleteClick}
+              startDate={startDate}
+              setStartDate={setStartDate}
+              endDate={endDate}
+              setEndDate={setEndDate}
             />
           )}
 

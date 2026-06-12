@@ -9,6 +9,10 @@ interface SilverStagingListProps {
   handleBatchApprove: () => void;
   handleReviewSilver: (tx: SilverTransaction) => void;
   onDeleteClick: (tx: SilverTransaction) => void;
+  startDate: string;
+  setStartDate: (val: string) => void;
+  endDate: string;
+  setEndDate: (val: string) => void;
 }
 
 export const SilverStagingList: React.FC<SilverStagingListProps> = ({
@@ -19,6 +23,10 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
   handleBatchApprove,
   handleReviewSilver,
   onDeleteClick,
+  startDate,
+  setStartDate,
+  endDate,
+  setEndDate,
 }) => {
   return (
     <div>
@@ -37,6 +45,30 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider self-start sm:self-auto">{silverTransactions.length} Pending Items</span>
       </div>
       
+      {/* Date Filter Bar */}
+      <div className="flex flex-wrap items-center gap-4 bg-gray-50/30 px-4 py-2 border-b border-gray-100">
+        <div className="flex items-center space-x-2">
+          <label htmlFor="silver-start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Start Date:</label>
+          <input 
+            id="silver-start-date"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="bg-white border border-gray-200 rounded-lg outline-none text-xs font-bold text-gray-755 px-2.5 py-1 focus:border-indigo-500 transition-colors"
+          />
+        </div>
+        <div className="flex items-center space-x-2">
+          <label htmlFor="silver-end-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">End Date:</label>
+          <input 
+            id="silver-end-date"
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="bg-white border border-gray-200 rounded-lg outline-none text-xs font-bold text-gray-755 px-2.5 py-1 focus:border-indigo-500 transition-colors"
+          />
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-100">
           <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">

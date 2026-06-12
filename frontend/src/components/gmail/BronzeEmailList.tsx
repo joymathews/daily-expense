@@ -20,6 +20,10 @@ interface BronzeEmailListProps {
   bronzeFilter: 'all' | 'processed' | 'unprocessed';
   setBronzeFilter: (filter: 'all' | 'processed' | 'unprocessed') => void;
   onDeleteClick: (email: GmailMessage) => void;
+  startDate: string;
+  setStartDate: (val: string) => void;
+  endDate: string;
+  setEndDate: (val: string) => void;
 }
 
 export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
@@ -41,6 +45,10 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
   bronzeFilter,
   setBronzeFilter,
   onDeleteClick,
+  startDate,
+  setStartDate,
+  endDate,
+  setEndDate,
 }) => {
   return (
     <div>
@@ -89,13 +97,36 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
               🚀 Extract Selected ({checkedEmailIds.length})
             </button>
           )}
+          <div className="flex items-center space-x-3 bg-gray-50/50 border border-gray-200/50 rounded-xl px-3 py-1">
+            <div className="flex items-center space-x-1.5">
+              <label htmlFor="bronze-start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Start:</label>
+              <input 
+                id="bronze-start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-white border border-gray-200 text-xs font-bold text-gray-750 px-2 py-0.5 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+              />
+            </div>
+            <div className="flex items-center space-x-1.5">
+              <label htmlFor="bronze-end-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">End:</label>
+              <input 
+                id="bronze-end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-white border border-gray-200 text-xs font-bold text-gray-750 px-2 py-0.5 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
           <div className="flex items-center space-x-2">
             <label htmlFor="bronze-status-filter" className="text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Filter:</label>
             <select
               id="bronze-status-filter"
               value={bronzeFilter}
               onChange={(e) => setBronzeFilter(e.target.value as 'all' | 'processed' | 'unprocessed')}
-              className="bg-white border border-gray-200 text-xs font-bold text-gray-700 px-2.5 py-1 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
+              className="bg-white border border-gray-200 text-xs font-bold text-gray-750 px-2.5 py-1 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
             >
               <option value="all">All</option>
               <option value="processed">Processed</option>

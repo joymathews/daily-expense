@@ -1462,6 +1462,79 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-16] Date Range Filtering: Filter Silver and Gold records by start/end dates.
+   * [NFR-USAB-8] Date Range Filtering Responsiveness: Automatically trigger fetch on date change.
+   */
+  it('supports date range filtering contextually in Silver and Gold tabs', async () => {
+    const mockSilver = [
+      { id: 'silver_1', rawEmailId: '1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-15', status: 'pending', paymentMethod: 'UPI' }
+    ];
+    const mockGold = [
+      { id: 'gold_1', pendingTxId: 'silver_2', userId: 'user1', merchant: 'Merchant B', amount: 200, currency: 'INR', transactionDate: '2023-01-20', category: 'Food', paymentMethod: 'HDFC credit card' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockSilver }),
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGold }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Switch to Silver tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    // Verify Date Range Filter fields exist
+    const silverStartDate = screen.getByLabelText(/Start Date:/i) as HTMLInputElement;
+    const silverEndDate = screen.getByLabelText(/End Date:/i) as HTMLInputElement;
+    expect(silverStartDate).toBeInTheDocument();
+    expect(silverEndDate).toBeInTheDocument();
+
+    // Change dates to verify reload trigger
+    fireEvent.change(silverStartDate, { target: { value: '2023-01-10' } });
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('startDate=2023-01-10'), expect.any(Object));
+    });
+
+    // Switch to Gold tab
+    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
+
+    // Verify Date Range Filter fields exist in Gold
+    const goldStartDate = screen.getByLabelText(/Start Date:/i) as HTMLInputElement;
+    const goldEndDate = screen.getByLabelText(/End Date:/i) as HTMLInputElement;
+    expect(goldStartDate).toBeInTheDocument();
+    expect(goldEndDate).toBeInTheDocument();
+
+    // Change date in Gold
+    fireEvent.change(goldStartDate, { target: { value: '2023-01-12' } });
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('startDate=2023-01-12'), expect.any(Object));
+    });
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
