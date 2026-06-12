@@ -21,6 +21,7 @@
 - [NFR-GMAIL-2] Classification Performance: The email categorization must run locally on the server in O(N) complexity using a predefined set of case-insensitive transactional keywords to avoid external service calls.
 - [NFR-GMAIL-3] Payment Classification Robustness: The LLM extraction service must parse and classify transaction payment methods with structured precision, defaulting to "Unknown" when payment details are absent from the source content.
 - [NFR-GMAIL-4] Progress Feedback Responsiveness: The progress status in the UI must update within 150ms of each email detail ingestion completing, ensuring the user gets real-time awareness of the pipeline status.
+- [NFR-GMAIL-5] Extraction Progress Feedback Responsiveness: The progress status in the UI must update within 150ms of each email detail extraction completing, ensuring the user gets real-time awareness of the pipeline status.
 
 ## Database & LLM Architecture Constraints [NFR-ARCH]
 - [NFR-DB-1] Database Portability & Zero-Recode Migration: The storage layer must allow transitioning from a lightweight local environment to a cloud production platform (such as AWS RDS) without requiring modifications to the core business logic code.

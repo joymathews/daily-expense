@@ -44,5 +44,6 @@
 - [FUNC-GMAIL-25] Staging Payment Review & Editing: The user must be able to view, edit, and correct the extracted payment method in the staging queue (Silver layer) before promoting it to the final ledger.
 - [FUNC-GMAIL-26] Verified Ledger Method Display & Correction: The user must be able to view the payment method in the ledger tables and edit or correct the payment method of approved transaction ledger records in the Gold table.
 - [FUNC-GMAIL-27] Ingestion Progress Tracking: The user must be informed immediately when the email fetching process has started, see real-time progress updates (e.g., current email count being fetched), and receive a clear confirmation message upon completion.
+- [FUNC-GMAIL-28] Extraction Progress Tracking: The user must be informed immediately when the email extraction process (on-demand for a single email or in batch) starts, see real-time progress updates (showing current email index, total count, and current email subject being processed), and receive a clear confirmation message upon completion of extraction.
 
 

@@ -9,6 +9,13 @@ export interface FetchProgress {
   currentSubject?: string;
 }
 
+export interface ExtractionProgress {
+  status: 'idle' | 'started' | 'extracting' | 'completed' | 'error';
+  current: number;
+  total: number;
+  currentSubject?: string;
+}
+
 export interface GmailMessage {
   id: string;
   sender: string;
@@ -83,6 +90,11 @@ export const useGmailIntegration = () => {
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetchProgress, setFetchProgress] = useState<FetchProgress>({
+    status: 'idle',
+    current: 0,
+    total: 0
+  });
+  const [extractionProgress, setExtractionProgress] = useState<ExtractionProgress>({
     status: 'idle',
     current: 0,
     total: 0
@@ -267,53 +279,91 @@ export const useGmailIntegration = () => {
   };
 
   const extractSelectedEmails = async (emailIds: string[]) => {
+    if (emailIds.length === 0) return;
+
     setIsLoading(true);
     setError(null);
+    setExtractionProgress({ status: 'started', current: 0, total: emailIds.length });
+
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/gmail/extract', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-        body: JSON.stringify({ rawEmailIds: emailIds }),
-      });
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Extraction failed');
-      }
-      const data = await response.json();
-      
-      // Update local rawEmails and emails state
-      const updateState = (prev: GmailMessage[]) =>
-        prev.map(email => {
-          const match = (data.extracted || []).find((e: any) => e.rawEmailId === email.id);
-          if (match) {
-            return {
-              ...email,
-              hasTransaction: true,
-              extracted: {
-                id: match.id,
-                merchant: match.merchantNormalized || match.merchantRaw,
-                amount: match.amount,
-                currency: match.currency,
-                date: match.transactionDate,
-                category: match.inferredCategory || 'Other',
-                status: match.status,
-                paymentMethod: match.paymentMethod,
-              }
-            };
-          }
-          return email;
-        });
+      const extractedResults: any[] = [];
 
-      setRawEmails(updateState);
-      setEmails(updateState);
+      setExtractionProgress({ status: 'extracting', current: 0, total: emailIds.length });
+
+      for (let i = 0; i < emailIds.length; i++) {
+        const id = emailIds[i];
+        
+        // Find subject for visual feedback
+        const currentEmail = rawEmails.find(e => e.id === id);
+        const subject = currentEmail ? currentEmail.subject : 'email';
+
+        setExtractionProgress(prev => ({
+          ...prev,
+          status: 'extracting',
+          current: i + 1,
+          currentSubject: subject,
+        }));
+
+        try {
+          const response = await fetch('/api/gmail/extract', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              ...authHeaders,
+            },
+            body: JSON.stringify({ rawEmailIds: [id] }),
+          });
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || `Extraction failed for message ${id}`);
+          }
+
+          const data = await response.json();
+          const matches = data.extracted || [];
+          extractedResults.push(...matches);
+
+          // Update local rawEmails and emails state
+          const updateState = (prev: GmailMessage[]) =>
+            prev.map(email => {
+              const match = matches.find((e: any) => e.rawEmailId === email.id);
+              if (match) {
+                return {
+                  ...email,
+                  hasTransaction: true,
+                  extracted: {
+                    id: match.id,
+                    merchant: match.merchantNormalized || match.merchantRaw,
+                    amount: match.amount,
+                    currency: match.currency,
+                    date: match.transactionDate,
+                    category: match.inferredCategory || 'Other',
+                    status: match.status,
+                    paymentMethod: match.paymentMethod,
+                  }
+                };
+              }
+              return email;
+            });
+
+          setRawEmails(updateState);
+          setEmails(updateState);
+        } catch (singleErr) {
+          console.warn(`Extraction failed for email ID ${id}:`, singleErr);
+        }
+      }
+
+      setExtractionProgress(prev => ({
+        ...prev,
+        status: 'completed',
+        current: emailIds.length,
+      }));
 
       await loadSilverTransactions();
     } catch (err: any) {
       setError(err.message);
+      setExtractionProgress(prev => ({ ...prev, status: 'error' }));
     } finally {
       setIsLoading(false);
     }
@@ -615,6 +665,8 @@ export const useGmailIntegration = () => {
     error,
     fetchProgress,
     setFetchProgress,
+    extractionProgress,
+    setExtractionProgress,
     activeTab,
     setActiveTab,
     selectedEmail,

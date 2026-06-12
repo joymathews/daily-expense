@@ -41,6 +41,8 @@ const GmailIntegration: React.FC = () => {
     approveTransactionsBatch,
     fetchProgress,
     setFetchProgress,
+    extractionProgress,
+    setExtractionProgress,
   } = useGmailIntegration();
 
   // Multi-select state for Bronze batch extraction
@@ -267,6 +269,78 @@ const GmailIntegration: React.FC = () => {
               <button 
                 onClick={() => setFetchProgress({ status: 'idle', current: 0, total: 0 })}
                 className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider border border-indigo-200/40 hover:bg-indigo-50 px-2.5 py-1 rounded-md transition-all shadow-sm bg-white cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* [FUNC-GMAIL-28] Premium Extraction Progress Tracker Widget */}
+      {extractionProgress && extractionProgress.status !== 'idle' && (
+        <div 
+          data-testid="extraction-progress-widget"
+          className="bg-gradient-to-r from-purple-50/70 to-indigo-50/70 border border-purple-100/50 backdrop-blur-md rounded-2xl p-5 shadow-sm space-y-3 animate-fade-in relative overflow-hidden"
+        >
+          {/* Subtle micro-animation backdrop glow */}
+          <div className="absolute top-0 right-0 -mt-6 -mr-6 w-24 h-24 bg-purple-400/10 rounded-full blur-xl animate-pulse"></div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              {extractionProgress.status === 'started' || extractionProgress.status === 'extracting' ? (
+                <div className="flex space-x-1">
+                  <span className="w-2.5 h-2.5 bg-purple-600 rounded-full animate-bounce"></span>
+                  <span className="w-2.5 h-2.5 bg-purple-600 rounded-full animate-bounce delay-100"></span>
+                  <span className="w-2.5 h-2.5 bg-purple-600 rounded-full animate-bounce delay-200"></span>
+                </div>
+              ) : extractionProgress.status === 'completed' ? (
+                <span className="text-lg">✅</span>
+              ) : (
+                <span className="text-lg">❌</span>
+              )}
+              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-900">
+                {extractionProgress.status === 'started' && 'Initializing Ollama LLM Extraction...'}
+                {extractionProgress.status === 'extracting' && `Extracting transaction details (${extractionProgress.current} of ${extractionProgress.total})`}
+                {extractionProgress.status === 'completed' && 'Extraction Completed Successfully!'}
+                {extractionProgress.status === 'error' && 'Extraction Failed'}
+              </h4>
+            </div>
+            {extractionProgress.status === 'extracting' && (
+              <span className="text-xs font-extrabold text-purple-700 whitespace-nowrap bg-purple-100/60 px-2 py-0.5 rounded-md">
+                {Math.round((extractionProgress.current / extractionProgress.total) * 100)}%
+              </span>
+            )}
+          </div>
+
+          {extractionProgress.status === 'extracting' && extractionProgress.currentSubject && (
+            <p className="text-xs text-gray-500 font-medium truncate max-w-lg">
+              <span className="font-bold text-purple-400/80 uppercase text-[10px] tracking-wider block">Current Email</span>
+              {extractionProgress.currentSubject}
+            </p>
+          )}
+
+          {extractionProgress.status === 'completed' && (
+            <p className="text-xs text-emerald-700 font-bold uppercase tracking-wider">
+              🎉 Successfully processed and extracted {extractionProgress.total} email(s) into your Silver layer.
+            </p>
+          )}
+
+          {/* Progress Bar Container */}
+          {(extractionProgress.status === 'extracting' || extractionProgress.status === 'completed') && (
+            <div className="w-full bg-purple-100/30 h-2.5 rounded-full overflow-hidden border border-purple-200/20">
+              <div 
+                className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full rounded-full transition-all duration-300 ease-out shadow-sm"
+                style={{ width: `${extractionProgress.total > 0 ? (extractionProgress.current / extractionProgress.total) * 100 : 0}%` }}
+              ></div>
+            </div>
+          )}
+
+          {extractionProgress.status === 'completed' && (
+            <div className="pt-1 flex justify-end">
+              <button 
+                onClick={() => setExtractionProgress({ status: 'idle', current: 0, total: 0 })}
+                className="text-[10px] font-bold text-purple-600 hover:text-purple-800 uppercase tracking-wider border border-purple-200/40 hover:bg-purple-50 px-2.5 py-1 rounded-md transition-all shadow-sm bg-white cursor-pointer"
               >
                 Dismiss
               </button>

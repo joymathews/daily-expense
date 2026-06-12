@@ -951,5 +951,112 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-28] Extraction Progress Tracking: Inform when extraction starts, updates, and completes.
+   * [NFR-GMAIL-5] Extraction Progress Feedback Responsiveness: Progress updates when detail extraction finishes.
+   */
+  it('allows the user to see real-time progress updates during batch transaction extraction', async () => {
+    const mockEmails = [
+      { id: 'e1', sender: 'uber@test.com', subject: 'Uber Ride Receipt', date: '2023-01-01', snippet: 'Paid Rs. 150', body: 'Ride details', hasTransaction: true },
+      { id: 'e2', sender: 'swiggy@test.com', subject: 'Swiggy Food Order', date: '2023-01-02', snippet: 'Paid Rs. 320', body: 'Food details', hasTransaction: true }
+    ];
+
+    let extractCallsCount = 0;
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/gmail/fetch-list')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messageIds: ['e1', 'e2'] }),
+        });
+      }
+      if (url.includes('/api/gmail/fetch-detail')) {
+        const bodyObj = JSON.parse(init.body);
+        const email = mockEmails.find(e => e.id === bodyObj.messageId);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ status: 'fetched', email }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/extract')) {
+        extractCallsCount++;
+        const bodyObj = JSON.parse(init.body);
+        const rawEmailId = bodyObj.rawEmailIds[0];
+        const match = mockEmails.find(e => e.id === rawEmailId);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            extracted: [{
+              id: `silver_${rawEmailId}`,
+              rawEmailId,
+              merchantRaw: match?.sender || 'Unknown',
+              amount: 100,
+              currency: 'INR',
+              transactionDate: '2023-01-01',
+              status: 'pending'
+            }]
+          })
+        });
+      }
+      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Input filters to pass check
+    fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/End Date/i), { target: { value: '2023-01-31' } });
+    
+    // Add a sender
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    fireEvent.change(senderInput, { target: { value: 'sender@test.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Click Authorize & Fetch to load emails
+    fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Wait for the mock fetch to resolve
+    expect(await screen.findByText('Uber Ride Receipt')).toBeInTheDocument();
+
+    // Check both emails
+    const checkBoxes = screen.getAllByRole('checkbox');
+    // First checkbox is header select-all, second is Uber, third is Swiggy
+    // Let's click the select-all checkbox (first one)
+    fireEvent.click(checkBoxes[0]);
+
+    // Click "Extract Selected" button
+    const extractBtn = screen.getByRole('button', { name: /Extract Selected/i });
+    fireEvent.click(extractBtn);
+
+    // 1. Should display extraction progress widget immediately
+    const extractionProgressWidget = await screen.findByTestId('extraction-progress-widget');
+    expect(extractionProgressWidget).toBeInTheDocument();
+
+    // 2. Expect progress tracking text
+    // Wait for completed status to show up
+    await waitFor(() => {
+      expect(screen.getByText(/Extraction Completed Successfully/i)).toBeInTheDocument();
+    });
+    
+    expect(screen.getByText(/Successfully processed and extracted 2 email/i)).toBeInTheDocument();
+    expect(extractCallsCount).toBe(2);
+
+    // 3. Click dismiss
+    const dismissBtn = within(extractionProgressWidget).getByRole('button', { name: /Dismiss/i });
+    fireEvent.click(dismissBtn);
+    expect(screen.queryByTestId('extraction-progress-widget')).not.toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
 
