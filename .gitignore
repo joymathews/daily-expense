@@ -45,3 +45,7 @@ frontend/.env.example
 *.sqlite
 *.sqlite3
 backend/data/
+
+# Personal Learnings
+learnings/
+
