@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { GmailMessage, GoldTransaction } from '../../hooks/use-gmail-integration';
+import type { GmailMessage, GoldTransaction, SilverTransaction } from '../../hooks/use-gmail-integration';
 import { fetchAuthSession } from 'aws-amplify/auth';
 
 interface EmailDetailModalProps {
@@ -22,6 +22,11 @@ interface EmailDetailModalProps {
   selectedGoldTransaction?: GoldTransaction | null;
   setSelectedGoldTransaction?: (tx: GoldTransaction | null) => void;
   updateGoldTransaction?: (id: string, updates: Partial<GoldTransaction>) => Promise<void>;
+
+  // Lineage lists
+  rawEmails: GmailMessage[];
+  silverTransactions: SilverTransaction[];
+  goldTransactions: GoldTransaction[];
 }
 
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
@@ -33,6 +38,9 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   selectedGoldTransaction,
   setSelectedGoldTransaction,
   updateGoldTransaction,
+  rawEmails,
+  silverTransactions,
+  goldTransactions,
 }) => {
   // Staging / Gold shared inputs state
   const [merchant, setMerchant] = useState('');
@@ -45,6 +53,31 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   // Lineage toggle state
   const [showRawInGoldMode, setShowRawInGoldMode] = useState(false);
   const [rawBodyForGoldLineage, setRawBodyForGoldLineage] = useState('');
+
+  // Resolve related records for the selected item (lineage tracking)
+  const resolvedLineage = React.useMemo(() => {
+    let bronzeRecord: GmailMessage | null = null;
+    let silverRecord: SilverTransaction | null = null;
+    let goldRecord: GoldTransaction | null = null;
+
+    if (selectedGoldTransaction) {
+      goldRecord = selectedGoldTransaction;
+      if (selectedGoldTransaction.bronzeEmailId) {
+        bronzeRecord = rawEmails.find(e => e.id === selectedGoldTransaction.bronzeEmailId) || null;
+      }
+      if (selectedGoldTransaction.pendingTxId) {
+        silverRecord = silverTransactions.find(tx => tx.id === selectedGoldTransaction.pendingTxId) || null;
+      }
+    } else if (selectedEmail) {
+      bronzeRecord = selectedEmail;
+      // Find in Silver Staging
+      silverRecord = silverTransactions.find(tx => tx.rawEmailId === selectedEmail.id) || null;
+      // Find in Gold confirmed
+      goldRecord = goldTransactions.find(tx => tx.bronzeEmailId === selectedEmail.id || (silverRecord && tx.pendingTxId === silverRecord.id)) || null;
+    }
+
+    return { bronzeRecord, silverRecord, goldRecord };
+  }, [selectedEmail, selectedGoldTransaction, rawEmails, silverTransactions, goldTransactions]);
 
   // Sync inputs with selected active item
   useEffect(() => {
@@ -185,6 +218,85 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         {/* Scrollable Body */}
         <div className="p-5 overflow-y-auto flex-1 bg-white space-y-5">
           
+          {/* Medallion Pipeline Lineage Explorer */}
+          <div className="border border-gray-150/70 rounded-2xl bg-gray-50/30 p-4 space-y-3">
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-150/70 pb-2 flex items-center justify-between">
+              <span>🔗 Medallion Data Lineage Linkages</span>
+              <span className="text-[10px] text-gray-400 lowercase font-medium">Trace data evolution</span>
+            </div>
+            
+            <div className="space-y-2.5">
+              {/* Bronze Row */}
+              <div className="flex items-start space-x-3 text-xs">
+                <span className="flex-shrink-0 w-16 text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded text-center">
+                  Bronze
+                </span>
+                <div className="flex-1 min-w-0">
+                  {resolvedLineage.bronzeRecord ? (
+                    <div>
+                      <div className="font-bold text-gray-800 truncate" title={resolvedLineage.bronzeRecord.subject}>
+                        {resolvedLineage.bronzeRecord.subject}
+                      </div>
+                      <div className="text-[10px] text-gray-450 truncate">
+                        Sender: {resolvedLineage.bronzeRecord.sender} | Date: {resolvedLineage.bronzeRecord.date}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-gray-450 italic">No Bronze raw email found</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Silver Row */}
+              <div className="flex items-start space-x-3 text-xs">
+                <span className="flex-shrink-0 w-16 text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-200/50 px-1.5 py-0.5 rounded text-center">
+                  Silver
+                </span>
+                <div className="flex-1 min-w-0">
+                  {resolvedLineage.silverRecord ? (
+                    <div>
+                      <div className="font-bold text-gray-800">
+                        {resolvedLineage.silverRecord.merchantNormalized || resolvedLineage.silverRecord.merchantRaw} -{' '}
+                        <span className="text-indigo-600 font-extrabold">
+                          {resolvedLineage.silverRecord.amount.toFixed(2)} {resolvedLineage.silverRecord.currency}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-gray-450">
+                        Category: {resolvedLineage.silverRecord.inferredCategory || 'N/A'} | Status: {resolvedLineage.silverRecord.status} | Method: {resolvedLineage.silverRecord.paymentMethod || 'Unknown'}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-gray-450 italic">Pending LLM extraction / No staging record found</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Gold Row */}
+              <div className="flex items-start space-x-3 text-xs">
+                <span className="flex-shrink-0 w-16 text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-1.5 py-0.5 rounded text-center">
+                  Gold
+                </span>
+                <div className="flex-1 min-w-0">
+                  {resolvedLineage.goldRecord ? (
+                    <div>
+                      <div className="font-bold text-gray-800">
+                        {resolvedLineage.goldRecord.merchant} -{' '}
+                        <span className="text-emerald-600 font-extrabold">
+                          {resolvedLineage.goldRecord.amount.toFixed(2)} {resolvedLineage.goldRecord.currency}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-gray-450 truncate">
+                        Category: {resolvedLineage.goldRecord.category} | Method: {resolvedLineage.goldRecord.paymentMethod || 'Unknown'} {resolvedLineage.goldRecord.notes ? `| Notes: ${resolvedLineage.goldRecord.notes}` : ''}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-gray-450 italic">Not approved or promoted to confirmed ledger yet</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Main Edit Form for Gold Corrections or Silver Pending */}
           {(isGoldMode || (selectedEmail?.extracted && selectedEmail.extracted.status === 'pending')) ? (
             <div className="border border-indigo-100/50 rounded-2xl bg-indigo-50/15 p-5 space-y-4">

@@ -46,5 +46,6 @@
 - [FUNC-GMAIL-27] Ingestion Progress Tracking: The user must be informed immediately when the email fetching process has started, see real-time progress updates (e.g., current email count being fetched), and receive a clear confirmation message upon completion.
 - [FUNC-GMAIL-28] Extraction Progress Tracking: The user must be informed immediately when the email extraction process (on-demand for a single email or in batch) starts, see real-time progress updates (showing current email index, total count, and current email subject being processed), and receive a clear confirmation message upon completion of extraction.
 - [FUNC-GMAIL-29] Fetcher Filter Layout Isolation: The fetching configuration filter panel ('Fetcher Config') must only be displayed when the user is viewing the Raw Emails (Bronze) tab, and must be hidden on the Staging (Silver) and Ledger (Gold) tabs, allowing the tables in those tabs to utilize the full content width.
+- [FUNC-GMAIL-30] Cross-Stage Medallion Lineage Explorer: When viewing any record (Bronze, Silver, or Gold) in the detail view modal, the system must dynamically trace and display the status and details of corresponding records in the other two stages of the Medallion pipeline (e.g. Bronze raw email details, Silver staging details, and Gold confirmed ledger details), establishing absolute data lineage visibility.
 
 

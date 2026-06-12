@@ -459,6 +459,9 @@ const GmailIntegration: React.FC = () => {
         selectedGoldTransaction={selectedGoldTransaction}
         setSelectedGoldTransaction={setSelectedGoldTransaction}
         updateGoldTransaction={updateGoldTransaction}
+        rawEmails={rawEmails}
+        silverTransactions={silverTransactions}
+        goldTransactions={goldTransactions}
       />
     </div>
   );

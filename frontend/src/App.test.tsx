@@ -1260,6 +1260,64 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Fetcher Config should be visible again
     expect(screen.getByText(/Fetcher Config/i)).toBeInTheDocument();
   });
+
+  /**
+   * [FUNC-GMAIL-30] Cross-Stage Medallion Lineage Explorer: Verify lineage details across all three stages.
+   * [NFR-USAB-6] Data Lineage Traceability & Visibility: The detail modal must display associated Bronze, Silver, and Gold records.
+   */
+  it('displays full cross-stage medallion lineage linkages when opening any record in detail modal', async () => {
+    const mockEmails = [
+      { id: 'email_1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content', hasTransaction: true }
+    ];
+    const mockSilver = [
+      { id: 'silver_1', rawEmailId: 'email_1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'approved', paymentMethod: 'UPI' }
+    ];
+    const mockGold = [
+      { id: 'gold_1', pendingTxId: 'silver_1', userId: 'user1', merchant: 'Merchant A Confirmed', amount: 100, currency: 'INR', transactionDate: '2023-01-01', category: 'Food', paymentMethod: 'UPI', bronzeEmailId: 'email_1' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      return Promise.reject(new Error('Unknown url'));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+    
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Wait for the Bronze raw emails to load and open the first one
+    const emailSubject = await screen.findByText('Inv 123');
+    fireEvent.click(emailSubject);
+
+    // Verify detail modal opens and contains the lineage explorer
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText(/Medallion Data Lineage Linkages/i)).toBeInTheDocument();
+
+    // Verify Bronze layer trace is shown
+    expect(within(modal).getAllByText('Inv 123').length).toBeGreaterThan(0);
+    
+    // Verify Silver layer trace is shown (Merchant A)
+    expect(within(modal).getByText(/^Merchant A -/i)).toBeInTheDocument();
+
+    // Verify Gold layer trace is shown (Merchant A Confirmed)
+    expect(within(modal).getByText(/^Merchant A Confirmed -/i)).toBeInTheDocument();
+
+    // Close the modal
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
