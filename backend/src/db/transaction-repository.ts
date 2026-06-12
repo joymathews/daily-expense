@@ -7,6 +7,7 @@ export interface RawEmail {
   rawBody: string;
   rawPayload: string; // JSON string payload
   receivedAt: string; // ISO UTC string
+  hasTransaction?: boolean; // Derivation cache
   ingestedAt?: string; // ISO UTC string
 }
 
@@ -61,6 +62,7 @@ export interface ITransactionRepository {
   updateGoldTransaction(id: string, userId: string, updates: Partial<Transaction>): Promise<void>;
   updatePendingTransaction(id: string, userId: string, updates: Partial<PendingTransaction>): Promise<void>;
   getRawEmailById(id: string, userId: string): Promise<RawEmail | undefined>;
+  updateRawEmailClassification(id: string, userId: string, hasTransaction: boolean): Promise<void>;
   getSilverTransactionByEmailId(emailId: string, userId: string): Promise<PendingTransaction | undefined>;
   getSilverTransactionById(id: string, userId: string): Promise<PendingTransaction | undefined>;
   close(): Promise<void>;

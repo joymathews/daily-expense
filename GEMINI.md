@@ -11,9 +11,10 @@ For ALL future changes, feature implementations, and code modifications, you mus
 3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with system qualities (Security, Performance, Availability, Scalability, Usability, etc.).
 4. **Tech Stack & Standards:** Document all technical stack choices, library additions, and engineering standards in Section 3 of this `GEMINI.md` file. NEVER add these to requirement documents.
 5. **Requirements Hygiene:** NEVER include technical noise, shell command outputs, or implementation logs in documentation.
-5. **Test-Driven Development (TDD):** Update or create test cases based *only* on the newly updated documentation. Every test MUST use the Test Justification Framework mapping to a `[FUNC-*]` or `[NFR-*]` ID.
-6. **Implementation:** Write or modify code specifically to make the new and existing tests pass.
-7. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
+6. **Defect Resolution Workflow (Bug Fixing):** When fixing a reported bug or edge-case defect, you MUST log the issue in `BUG_REGISTRY.md` with a unique ID `[BUG-XXXX]`, write regression tests mapping to this ID, and record the resolution details in the registry.
+7. **Test-Driven Development (TDD):** Update or create test cases based *only* on the newly updated documentation/defect log. Every test MUST use the Test Justification Framework mapping to a `[FUNC-*]`, `[NFR-*]`, or `[BUG-*]` ID.
+8. **Implementation:** Write or modify code specifically to make the new and existing tests pass.
+9. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
 
 ## 3. Tech Stack & Engineering Standards
 * **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail). Database: `sqlite3`. LLM Integration: Ollama (localhost API interface). Environment Configuration: `dotenv`.

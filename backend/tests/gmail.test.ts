@@ -28,8 +28,13 @@ jest.mock('googleapis', () => {
 describe('Gmail API Integration', () => {
   const gmail = google.gmail('v1');
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await (repository as any).run("DELETE FROM bronze_raw_emails WHERE id IN ('detail_msg_1', 'test_raw_tx_1', 'test_raw_otp_1')");
+    await repository.close();
   });
 
   /**
@@ -250,6 +255,150 @@ describe('Gmail API Integration', () => {
     };
     // Should prefer plain text part
     expect(service.extractBody(nestedPayload)).toBe('Alternative plain text');
+  });
+
+  /**
+   * [FUNC-GMAIL-27] Ingestion Progress Tracking
+   * Test verifies matching message IDs are fetched and individual detail fetch saves to Bronze raw.
+   */
+  it('should list message IDs and fetch detail for single message id, then save to db', async () => {
+    // Mock list response
+    (gmail.users.messages.list as jest.Mock).mockResolvedValue({
+      data: { messages: [{ id: 'detail_msg_1' }] }
+    });
+
+    // Mock get response
+    (gmail.users.messages.get as jest.Mock).mockResolvedValue({
+      data: {
+        id: 'detail_msg_1',
+        snippet: 'Test Snippet',
+        payload: {
+          headers: [
+            { name: 'From', value: 'sender@test.com' },
+            { name: 'Subject', value: 'Test Subject' },
+            { name: 'Date', value: '2023-01-01' }
+          ]
+        }
+      }
+    });
+
+    // Test /api/gmail/fetch-list
+    const listRes = await request(app)
+      .post('/api/gmail/fetch-list')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        accessToken: 'mock-token',
+        filters: { 
+          sender: ['test@example.com'], 
+          startDate: '2023-01-01', 
+          endDate: '2023-01-31'
+        }
+      });
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.messageIds).toEqual(['detail_msg_1']);
+
+    // Test /api/gmail/fetch-detail
+    const detailRes = await request(app)
+      .post('/api/gmail/fetch-detail')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        accessToken: 'mock-token',
+        messageId: 'detail_msg_1'
+      });
+
+    expect(detailRes.status).toBe(200);
+    expect(detailRes.body.status).toBe('fetched');
+    expect(detailRes.body.email.id).toBe('detail_msg_1');
+    expect(detailRes.body.email.subject).toBe('Test Subject');
+  });
+
+  /**
+   * [BUG-002] Ingestion Status Persistence: Verify raw-emails endpoint returns hasTransaction correctly.
+   * [BUG-003] ISO Date Normalization: Verify receivedAt ISO string normalization inside saveRawEmail.
+   */
+  it('should return raw emails with hasTransaction derived correctly from payload/subject', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    await repository.saveRawEmail({
+      id: 'test_raw_tx_1',
+      userId: 'user-123',
+      sender: 'store@shop.com',
+      subject: 'Order Receipt',
+      snippet: 'Thanks for spending money',
+      rawBody: 'Full email body',
+      rawPayload: JSON.stringify({ id: 'test_raw_tx_1', hasTransaction: true }),
+      receivedAt: '2023-01-10T10:00:00Z',
+    });
+
+    await repository.saveRawEmail({
+      id: 'test_raw_otp_1',
+      userId: 'user-123',
+      sender: 'bank@auth.com',
+      subject: 'Your OTP Code',
+      snippet: 'OTP is 123456',
+      rawBody: 'Do not share',
+      rawPayload: JSON.stringify({ id: 'test_raw_otp_1' }),
+      receivedAt: '2023-01-11T10:00:00Z',
+    });
+    await repository.close();
+
+    const response = await request(app)
+      .get('/api/gmail/raw-emails')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body.emails).toBeDefined();
+    
+    const txEmail = response.body.emails.find((e: any) => e.id === 'test_raw_tx_1');
+    const otpEmail = response.body.emails.find((e: any) => e.id === 'test_raw_otp_1');
+
+    expect(txEmail).toBeDefined();
+    expect(txEmail.hasTransaction).toBe(true);
+
+    expect(otpEmail).toBeDefined();
+    expect(otpEmail.hasTransaction).toBe(false);
+  });
+
+  /**
+   * [BUG-002] Ingestion Status Persistence: Verify PUT raw-emails endpoint updates hasTransaction correctly.
+   */
+  it('should update raw email transactional classification status successfully', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    await repository.saveRawEmail({
+      id: 'test_raw_tx_1',
+      userId: 'user-123',
+      sender: 'store@shop.com',
+      subject: 'Order Receipt',
+      snippet: 'Thanks for spending money',
+      rawBody: 'Full email body',
+      rawPayload: JSON.stringify({ id: 'test_raw_tx_1', hasTransaction: true }),
+      receivedAt: '2023-01-10T10:00:00Z',
+    });
+    await repository.close();
+
+    // Perform PUT update to hasTransaction = false
+    const updateRes = await request(app)
+      .put('/api/gmail/raw-emails/test_raw_tx_1')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ hasTransaction: false });
+
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.body.status).toBe('updated');
+
+    // Fetch raw email again and verify it is updated in database
+    const fetchRes = await request(app)
+      .get('/api/gmail/raw-emails')
+      .set('Authorization', 'Bearer valid-token');
+
+    const email = fetchRes.body.emails.find((e: any) => e.id === 'test_raw_tx_1');
+    expect(email).toBeDefined();
+    expect(email.hasTransaction).toBe(false);
   });
 });
 

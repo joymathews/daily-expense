@@ -5,6 +5,7 @@ const { execSync } = require('child_process');
 const rootDir = path.resolve(__dirname, '../../');
 const funcDocPath = path.join(rootDir, 'FUNCTIONAL_DOCUMENTATION.md');
 const nfrDocPath = path.join(rootDir, 'NON_FUNCTIONAL_REQUIREMENTS.md');
+const bugDocPath = path.join(rootDir, 'BUG_REGISTRY.md');
 const testDirs = [
   path.join(rootDir, 'backend/tests'),
   path.join(rootDir, 'frontend/src')
@@ -16,8 +17,8 @@ function getRequirements(filePath) {
   const lines = content.split('\n');
   const requirements = [];
   
-  // Pattern: - [ID] Description
-  const reqPattern = /^-\s+\[((?:FUNC|NFR)-[A-Z0-9-]+)\]\s+(.*)/;
+  // Pattern: - [ID] Description or ## [ID] Description
+  const reqPattern = /^(?:-\s+|##\s+)\[((?:FUNC|NFR|BUG)-[A-Z0-9-]+)\]\s+(.*)/;
   
   lines.forEach(line => {
     const match = line.trim().match(reqPattern);
@@ -124,7 +125,8 @@ function generateHtml(requirements) {
 
 const requirements = [
   ...getRequirements(funcDocPath),
-  ...getRequirements(nfrDocPath)
+  ...getRequirements(nfrDocPath),
+  ...getRequirements(bugDocPath)
 ];
 
 findTests(testDirs, requirements);

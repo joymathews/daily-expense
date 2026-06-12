@@ -54,13 +54,14 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     // Enable Foreign Key support in SQLite session
     await this.run('PRAGMA foreign_keys = ON;');
 
-    // Dynamic Migration check: check if user_id exists in bronze_raw_emails or payment_method in silver_extracted_transactions
+    // Dynamic Migration check: check if user_id and has_transaction exist in bronze_raw_emails or payment_method in silver_extracted_transactions
     const info = await this.all<{ name: string }>("PRAGMA table_info(bronze_raw_emails);");
     const hasUserId = info.some(col => col.name === 'user_id');
+    const hasHasTransaction = info.some(col => col.name === 'has_transaction');
     const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
     const hasPaymentMethod = silverInfo.some(col => col.name === 'payment_method');
 
-    if ((info.length > 0 && !hasUserId) || (silverInfo.length > 0 && !hasPaymentMethod)) {
+    if ((info.length > 0 && (!hasUserId || !hasHasTransaction)) || (silverInfo.length > 0 && !hasPaymentMethod)) {
       await this.run('DROP TABLE IF EXISTS gold_transactions;');
       await this.run('DROP TABLE IF EXISTS silver_extracted_transactions;');
       await this.run('DROP TABLE IF EXISTS bronze_raw_emails;');
@@ -77,6 +78,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         raw_body TEXT NOT NULL,
         raw_payload TEXT,
         received_at TEXT NOT NULL,
+        has_transaction INTEGER NOT NULL DEFAULT 1,
         ingested_at TEXT DEFAULT (datetime('now', 'utc')),
         PRIMARY KEY (user_id, id)
       );
@@ -135,10 +137,26 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
   }
 
   async saveRawEmail(email: RawEmail): Promise<void> {
+    const { EmailClassifier } = require('../services/email-classifier');
+    const hasTx = email.hasTransaction !== undefined
+      ? (email.hasTransaction ? 1 : 0)
+      : (EmailClassifier.isTransaction(email.subject) ? 1 : 0);
+
+    // Normalize date to ISO-8601 string for SQLite compatibility
+    let normalizedReceivedAt = email.receivedAt;
+    try {
+      const parsedDate = new Date(email.receivedAt);
+      if (!isNaN(parsedDate.getTime())) {
+        normalizedReceivedAt = parsedDate.toISOString();
+      }
+    } catch (err) {
+      // Fallback to original receivedAt string
+    }
+
     await this.run(
       `INSERT OR IGNORE INTO bronze_raw_emails 
-       (id, user_id, sender, subject, snippet, raw_body, raw_payload, received_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, user_id, sender, subject, snippet, raw_body, raw_payload, received_at, has_transaction) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         email.id,
         email.userId,
@@ -147,7 +165,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         email.snippet,
         email.rawBody,
         email.rawPayload,
-        email.receivedAt,
+        normalizedReceivedAt,
+        hasTx,
       ]
     );
   }
@@ -258,6 +277,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       rawBody: row.raw_body,
       rawPayload: row.raw_payload || '',
       receivedAt: row.received_at,
+      hasTransaction: row.has_transaction === 1,
       ingestedAt: row.ingested_at,
     }));
   }
@@ -274,8 +294,16 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       rawBody: row.raw_body,
       rawPayload: row.raw_payload || '',
       receivedAt: row.received_at,
+      hasTransaction: row.has_transaction === 1,
       ingestedAt: row.ingested_at,
     };
+  }
+
+  async updateRawEmailClassification(id: string, userId: string, hasTransaction: boolean): Promise<void> {
+    await this.run(
+      'UPDATE bronze_raw_emails SET has_transaction = ? WHERE id = ? AND user_id = ?',
+      [hasTransaction ? 1 : 0, id, userId]
+    );
   }
 
   async getSilverTransactions(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<PendingTransaction[]> {

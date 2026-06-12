@@ -140,4 +140,89 @@ export class GmailService {
       throw new Error('Failed to fetch messages from Gmail');
     }
   }
+
+  /**
+   * [FUNC-GMAIL-27] Retrieves message IDs matching the filters.
+   */
+  async fetchMessageIds(accessToken: string, filters: GmailFetchFilters): Promise<string[]> {
+    const gmail = this.getGmailClient(accessToken);
+    const formatDate = (dateStr: string) => dateStr.replace(/-/g, '/');
+    let query = '';
+    
+    if (filters.sender && filters.sender.length > 0) {
+      const senderQuery = filters.sender.map(s => `from:${s}`).join(' OR ');
+      query += `(${senderQuery}) `;
+    }
+    
+    if (filters.startDate) {
+      query += `after:${formatDate(filters.startDate)} `;
+    }
+    
+    if (filters.endDate) {
+      query += `before:${formatDate(filters.endDate)} `;
+    }
+
+    if (filters.subject) {
+      query += `subject:${filters.subject} `;
+    }
+
+    try {
+      let allMessages: any[] = [];
+      let pageToken: string | undefined = undefined;
+
+      do {
+        const response: any = await gmail.users.messages.list({
+          userId: 'me',
+          q: query.trim(),
+          maxResults: 100,
+          pageToken: pageToken,
+        });
+
+        if (response.data.messages) {
+          allMessages = allMessages.concat(response.data.messages);
+        }
+        pageToken = response.data.nextPageToken || undefined;
+      } while (pageToken);
+
+      return allMessages.map(m => m.id!);
+    } catch (error) {
+      console.error('Error listing messages from Gmail API:', error);
+      throw new Error('Failed to list messages from Gmail');
+    }
+  }
+
+  /**
+   * [FUNC-GMAIL-27] Fetches full email details for a single message ID.
+   */
+  async fetchEmailDetail(accessToken: string, messageId: string): Promise<FormattedEmail> {
+    const gmail = this.getGmailClient(accessToken);
+    try {
+      const msg = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+      });
+
+      const headers = msg.data.payload?.headers || [];
+      const sender = headers.find(h => h.name?.toLowerCase() === 'from')?.value || 'Unknown';
+      const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '(No Subject)';
+      const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || 'Unknown';
+      const snippet = msg.data.snippet || '';
+      const hasTransaction = this.isTransaction(subject, snippet);
+      const rawBody = this.extractBody(msg.data.payload);
+      const body = rawBody || snippet;
+
+      return {
+        id: messageId,
+        sender,
+        subject,
+        date,
+        snippet,
+        body,
+        hasTransaction,
+      };
+    } catch (error) {
+      console.error(`Error getting details for message ${messageId}:`, error);
+      throw new Error(`Failed to fetch message details for ${messageId}`);
+    }
+  }
 }

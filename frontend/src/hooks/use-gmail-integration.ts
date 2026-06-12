@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { fetchAuthSession } from 'aws-amplify/auth';
 
+export interface FetchProgress {
+  status: 'idle' | 'started' | 'fetching' | 'completed' | 'error';
+  current: number;
+  total: number;
+  currentSubject?: string;
+}
+
 export interface GmailMessage {
   id: string;
   sender: string;
@@ -75,6 +82,11 @@ export const useGmailIntegration = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchProgress, setFetchProgress] = useState<FetchProgress>({
+    status: 'idle',
+    current: 0,
+    total: 0
+  });
   const [activeTab, setActiveTab] = useState<'bronze' | 'silver' | 'gold' | 'transaction' | 'non-transaction'>('bronze');
   const [selectedEmail, setSelectedEmail] = useState<GmailMessage | null>(null);
 
@@ -110,10 +122,10 @@ export const useGmailIntegration = () => {
           id: e.id,
           sender: e.sender,
           subject: e.subject,
-          date: e.receivedAt,
+          date: e.receivedAt || e.date,
           snippet: e.snippet,
-          body: e.rawBody,
-          hasTransaction: false, // Default will check against silver or keywords
+          body: e.rawBody || e.body || '',
+          hasTransaction: e.hasTransaction !== undefined ? !!e.hasTransaction : false,
         }));
         setRawEmails(mapped);
         // Backwards compatibility for tests that read "emails"
@@ -200,7 +212,7 @@ export const useGmailIntegration = () => {
     }
   };
 
-  const markAsTransaction = (id: string) => {
+  const markAsTransaction = async (id: string) => {
     setRawEmails(prev =>
       prev.map(email =>
         email.id === id ? { ...email, hasTransaction: true } : email
@@ -211,9 +223,23 @@ export const useGmailIntegration = () => {
         email.id === id ? { ...email, hasTransaction: true } : email
       )
     );
+
+    try {
+      const authHeaders = await getAuthHeaders();
+      await fetch(`/api/gmail/raw-emails/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ hasTransaction: true }),
+      });
+    } catch (err) {
+      console.error('Failed to update classification on server:', err);
+    }
   };
 
-  const markAsNonTransaction = (id: string) => {
+  const markAsNonTransaction = async (id: string) => {
     setRawEmails(prev =>
       prev.map(email =>
         email.id === id ? { ...email, hasTransaction: false } : email
@@ -224,6 +250,20 @@ export const useGmailIntegration = () => {
         email.id === id ? { ...email, hasTransaction: false } : email
       )
     );
+
+    try {
+      const authHeaders = await getAuthHeaders();
+      await fetch(`/api/gmail/raw-emails/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ hasTransaction: false }),
+      });
+    } catch (err) {
+      console.error('Failed to update classification on server:', err);
+    }
   };
 
   const extractSelectedEmails = async (emailIds: string[]) => {
@@ -288,9 +328,10 @@ export const useGmailIntegration = () => {
 
       setIsFetching(true);
       setError(null);
+      setFetchProgress({ status: 'started', current: 0, total: 0 });
       try {
         const authHeaders = await getAuthHeaders();
-        const response = await fetch('/api/gmail/fetch', {
+        const response = await fetch('/api/gmail/fetch-list', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -303,26 +344,73 @@ export const useGmailIntegration = () => {
         });
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch emails');
+          throw new Error(errorData.error || 'Failed to fetch email list');
         }
         const data = await response.json();
-        const fetchedEmails = (data.emails || []).map((e: any) => ({
-          id: e.id,
-          sender: e.sender,
-          subject: e.subject,
-          date: e.date,
-          snippet: e.snippet,
-          body: e.body || '',
-          hasTransaction: e.hasTransaction,
-          extracted: e.extracted,
-        }));
+        const messageIds = data.messageIds || [];
+
+        if (messageIds.length === 0) {
+          setFetchProgress({ status: 'completed', current: 0, total: 0 });
+          await loadAllLayers();
+          return;
+        }
+
+        setFetchProgress({ status: 'fetching', current: 0, total: messageIds.length });
+        const fetchedEmails: GmailMessage[] = [];
+
+        for (let i = 0; i < messageIds.length; i++) {
+          const msgId = messageIds[i];
+          try {
+            const detailRes = await fetch('/api/gmail/fetch-detail', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...authHeaders,
+              },
+              body: JSON.stringify({
+                accessToken: tokenResponse.access_token,
+                messageId: msgId,
+              }),
+            });
+
+            if (detailRes.ok) {
+              const detailData = await detailRes.json();
+              const { email } = detailData;
+              if (email) {
+                const mapped = {
+                  id: email.id,
+                  sender: email.sender,
+                  subject: email.subject,
+                  date: email.date,
+                  snippet: email.snippet,
+                  body: email.body || '',
+                  hasTransaction: email.hasTransaction,
+                  extracted: email.extracted,
+                };
+                fetchedEmails.push(mapped);
+                setEmails([...fetchedEmails]);
+                setRawEmails([...fetchedEmails]);
+                setFetchProgress(prev => ({
+                  status: 'fetching',
+                  current: i + 1,
+                  total: messageIds.length,
+                  currentSubject: email.subject,
+                }));
+              }
+            }
+          } catch (detailErr) {
+            console.warn(`Failed to fetch details for message ${msgId}:`, detailErr);
+          }
+        }
+
         setEmails(fetchedEmails);
         setRawEmails(fetchedEmails);
 
-        await loadSilverTransactions();
-        await loadGoldTransactions();
+        setFetchProgress({ status: 'completed', current: messageIds.length, total: messageIds.length });
+        await loadAllLayers();
       } catch (err: any) {
         setError(err.message);
+        setFetchProgress(prev => ({ ...prev, status: 'error' }));
       } finally {
         setIsFetching(false);
       }
@@ -525,6 +613,8 @@ export const useGmailIntegration = () => {
     isLoading,
     isFetching,
     error,
+    fetchProgress,
+    setFetchProgress,
     activeTab,
     setActiveTab,
     selectedEmail,

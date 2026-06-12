@@ -39,6 +39,8 @@ const GmailIntegration: React.FC = () => {
     handleFetchClick,
     approveTransaction,
     approveTransactionsBatch,
+    fetchProgress,
+    setFetchProgress,
   } = useGmailIntegration();
 
   // Multi-select state for Bronze batch extraction
@@ -200,6 +202,78 @@ const GmailIntegration: React.FC = () => {
           {isFetching ? 'Processing...' : 'Authorize & Fetch'}
         </button>
       </div>
+
+      {/* [FUNC-GMAIL-27] Premium Ingestion Progress Tracker Widget */}
+      {fetchProgress.status !== 'idle' && (
+        <div 
+          data-testid="ingestion-progress-widget"
+          className="bg-gradient-to-r from-indigo-50/70 to-blue-50/70 border border-indigo-100/50 backdrop-blur-md rounded-2xl p-5 shadow-sm space-y-3 animate-fade-in relative overflow-hidden"
+        >
+          {/* Subtle micro-animation backdrop glow */}
+          <div className="absolute top-0 right-0 -mt-6 -mr-6 w-24 h-24 bg-indigo-400/10 rounded-full blur-xl animate-pulse"></div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              {fetchProgress.status === 'started' || fetchProgress.status === 'fetching' ? (
+                <div className="flex space-x-1">
+                  <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-bounce"></span>
+                  <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-bounce delay-100"></span>
+                  <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-bounce delay-200"></span>
+                </div>
+              ) : fetchProgress.status === 'completed' ? (
+                <span className="text-lg">✅</span>
+              ) : (
+                <span className="text-lg">❌</span>
+              )}
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900">
+                {fetchProgress.status === 'started' && 'Initializing Google Gmail Connection...'}
+                {fetchProgress.status === 'fetching' && `Ingesting receipts (${fetchProgress.current} of ${fetchProgress.total})`}
+                {fetchProgress.status === 'completed' && 'Ingestion Completed Successfully!'}
+                {fetchProgress.status === 'error' && 'Ingestion Failed'}
+              </h4>
+            </div>
+            {fetchProgress.status === 'fetching' && (
+              <span className="text-xs font-extrabold text-indigo-700 whitespace-nowrap bg-indigo-100/60 px-2 py-0.5 rounded-md">
+                {Math.round((fetchProgress.current / fetchProgress.total) * 100)}%
+              </span>
+            )}
+          </div>
+
+          {fetchProgress.status === 'fetching' && fetchProgress.currentSubject && (
+            <p className="text-xs text-gray-500 font-medium truncate max-w-lg">
+              <span className="font-bold text-indigo-400/80 uppercase text-[10px] tracking-wider block">Current Message</span>
+              {fetchProgress.currentSubject}
+            </p>
+          )}
+
+          {fetchProgress.status === 'completed' && (
+            <p className="text-xs text-emerald-700 font-bold uppercase tracking-wider">
+              🎉 Loaded {fetchProgress.total} raw receipt email(s) into your Bronze layer.
+            </p>
+          )}
+
+          {/* Progress Bar Container */}
+          {(fetchProgress.status === 'fetching' || fetchProgress.status === 'completed') && (
+            <div className="w-full bg-indigo-100/30 h-2.5 rounded-full overflow-hidden border border-indigo-200/20">
+              <div 
+                className="bg-gradient-to-r from-indigo-600 to-blue-500 h-full rounded-full transition-all duration-300 ease-out shadow-sm"
+                style={{ width: `${fetchProgress.total > 0 ? (fetchProgress.current / fetchProgress.total) * 100 : 0}%` }}
+              ></div>
+            </div>
+          )}
+
+          {fetchProgress.status === 'completed' && (
+            <div className="pt-1 flex justify-end">
+              <button 
+                onClick={() => setFetchProgress({ status: 'idle', current: 0, total: 0 })}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider border border-indigo-200/40 hover:bg-indigo-50 px-2.5 py-1 rounded-md transition-all shadow-sm bg-white cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Tab bar (Medallion Layers) */}
       <div className="flex flex-wrap border border-gray-100 bg-white rounded-xl p-1.5 shadow-sm gap-2">
