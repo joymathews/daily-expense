@@ -26,8 +26,8 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
               <th className="px-2 py-2.5 text-left">Date</th>
               <th className="px-2 py-2.5 text-left">Merchant</th>
               <th className="px-2 py-2.5 text-right">Amount</th>
-              <th className="px-2 py-2.5 text-center">Category & Method</th>
-              <th className="px-2 py-2.5 text-center">Action</th>
+              <th className="px-2 py-2.5 text-center">Category</th>
+              <th className="px-2 py-2.5 text-center">Method</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 bg-white">
@@ -43,36 +43,19 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
                   <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
                     {tx.transactionDate}
                   </td>
-                  <td className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px] truncate" title={tx.merchant}>
+                  <td onClick={() => setSelectedGoldTransaction(tx)} className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px] truncate cursor-pointer hover:text-emerald-750 transition-colors" title={tx.merchant}>
                     {tx.merchant}
                   </td>
                   <td className="px-2 py-2.5 font-extrabold text-right text-emerald-600 whitespace-nowrap">{tx.amount.toFixed(2)} {tx.currency}</td>
                   <td className="px-2 py-2.5 text-center">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-emerald-100/30 whitespace-nowrap">
-                        {tx.category}
-                      </span>
-                      <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-slate-100/30 truncate max-w-[120px] whitespace-nowrap" title={tx.paymentMethod}>
-                        {tx.paymentMethod || 'Unknown'}
-                      </span>
-                    </div>
+                    <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-emerald-100/30 whitespace-nowrap">
+                      {tx.category}
+                    </span>
                   </td>
                   <td className="px-2 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => setSelectedGoldTransaction(tx)}
-                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-1 border border-emerald-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
-                      >
-                        Correct
-                      </button>
-                      <button
-                        onClick={() => onDeleteClick(tx)}
-                        className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-3 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
-                        data-testid={`delete-gold-${tx.id}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-slate-100/30 truncate max-w-[120px] whitespace-nowrap" title={tx.paymentMethod}>
+                      {tx.paymentMethod || 'Unknown'}
+                    </span>
                   </td>
                 </tr>
               ))

@@ -577,12 +577,11 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(within(detailModal).queryByRole('button', { name: 'Unmark Tx' })).not.toBeInTheDocument();
     fireEvent.click(within(detailModal).getByRole('button', { name: 'Close' }));
 
-    expect(within(row1).queryByRole('button', { name: 'Processed' })).not.toBeInTheDocument();
     expect(within(row1).getByText('✓ Processed')).toBeInTheDocument();
     expect(within(row1).queryByRole('button', { name: 'Extract' })).not.toBeInTheDocument();
 
-    // In row2, the extract action should still be available
-    expect(within(row2).getByRole('button', { name: 'Extract' })).toBeInTheDocument();
+    // In row2, the row-level extract action should also not be present (Action column removed)
+    expect(within(row2).queryByRole('button', { name: 'Extract' })).not.toBeInTheDocument();
 
     // The checkbox in row1 should be disabled
     const checkbox1 = within(row1).getByRole('checkbox');
@@ -861,9 +860,8 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Wait for staging table and check that payment method 'UPI' is displayed (SilverStagingList)
     expect(await screen.findByText('UPI')).toBeInTheDocument();
 
-    // Click Review on Silver transaction
-    const reviewButtons = screen.getAllByRole('button', { name: /Review/i });
-    fireEvent.click(reviewButtons[0]);
+    // Click Merchant cell on Silver transaction to open modal
+    fireEvent.click(screen.getByText('Merchant A'));
 
     // Check modal displays payment method input with value UPI
     const paymentMethodInput = screen.getByLabelText(/Payment Method/i);
@@ -881,9 +879,8 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Check that payment method 'HDFC credit card' is displayed in Gold table
     expect(await screen.findByText('HDFC credit card')).toBeInTheDocument();
 
-    // Now check gold correction modal
-    const correctButtons = screen.getAllByRole('button', { name: /Correct/i });
-    fireEvent.click(correctButtons[0]);
+    // Click Merchant cell on Gold transaction to open modal
+    fireEvent.click(screen.getByText('Merchant B'));
 
     // Check modal displays gold transaction payment method input with value HDFC credit card
     const pmInputGold = screen.getByLabelText(/Payment Method/i);
@@ -1124,23 +1121,23 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Wait for the Silver staging records to appear
     expect(await screen.findByText('Special Stacked Merchant')).toBeInTheDocument();
 
-    // Check that column headers exist for Merchant, Date, Amount, Category & Method, Status / Action
+    // Check that column headers exist for Merchant, Date, Amount, Category, Method, Status / Action
     const tableHeaders = screen.getAllByRole('columnheader');
     const headerTexts = tableHeaders.map(th => th.textContent);
     
     expect(headerTexts).toContain('Merchant');
     expect(headerTexts).toContain('Date');
     expect(headerTexts).toContain('Amount');
-    expect(headerTexts).toContain('Category & Method');
+    expect(headerTexts).toContain('Category');
+    expect(headerTexts).toContain('Method');
     expect(headerTexts).toContain('Status / Action');
     
     // Verify specific column ordering (Date is the first data column, followed by Merchant)
     expect(headerTexts[1]).toBe('Date');
     expect(headerTexts[2]).toBe('Merchant');
     
-    // Check that separate columns for Method, Category, Status, and Action DO NOT exist
-    expect(headerTexts).not.toContain('Method');
-    expect(headerTexts).not.toContain('Category');
+    // Check that stacked columns and separate Status and Action columns DO NOT exist
+    expect(headerTexts).not.toContain('Category & Method');
     expect(headerTexts).not.toContain('Status');
     expect(headerTexts).not.toContain('Action');
 
@@ -1205,24 +1202,24 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Wait for the Gold ledger records to appear
     expect(await screen.findByText('Special Gold Merchant')).toBeInTheDocument();
 
-    // Check that column headers exist for Date, Merchant, Amount, Category & Method, Action
+    // Check that column headers exist for Date, Merchant, Amount, Category, Method
     const tableHeaders = screen.getAllByRole('columnheader');
     const headerTexts = tableHeaders.map(th => th.textContent);
     
     expect(headerTexts).toContain('Date');
     expect(headerTexts).toContain('Merchant');
     expect(headerTexts).toContain('Amount');
-    expect(headerTexts).toContain('Category & Method');
+    expect(headerTexts).toContain('Category');
+    expect(headerTexts).toContain('Method');
     expect(headerTexts).not.toContain('Lineage / Comments');
-    expect(headerTexts).toContain('Action');
+    expect(headerTexts).not.toContain('Action');
     
     // Verify specific column ordering (Date is first data column, followed by Merchant)
     expect(headerTexts[0]).toBe('Date');
     expect(headerTexts[1]).toBe('Merchant');
     
-    // Check that separate columns for Method and Category DO NOT exist
-    expect(headerTexts).not.toContain('Method');
-    expect(headerTexts).not.toContain('Category');
+    // Check that stacked column DOES NOT exist
+    expect(headerTexts).not.toContain('Category & Method');
 
     // Check that the date and method are displayed inside the table
     expect(screen.getByText('2026-06-12')).toBeInTheDocument();
@@ -1231,8 +1228,8 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Verify that the comment/notes are not visible on the table page initially
     expect(screen.queryByText('Verified comment')).not.toBeInTheDocument();
 
-    // Click the Correct button to open the modal
-    fireEvent.click(screen.getByRole('button', { name: /Correct/i }));
+    // Click the Merchant cell to open the modal
+    fireEvent.click(screen.getByText('Special Gold Merchant'));
 
     // Verify that the comment/notes and correct modal details are accessible in the modal
     expect(screen.getByDisplayValue('Verified comment')).toBeInTheDocument();
@@ -1394,11 +1391,18 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Navigate to Gmail Fetch page
     fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
 
-    // Verify raw email row delete action is displayed
-    const deleteBtn = await screen.findByTestId('delete-bronze-email_1');
+    // Open detail modal via raw email subject cell
+    const subjectCell = await screen.findByText('Inv 123');
+    expect(subjectCell).toBeInTheDocument();
+    fireEvent.click(subjectCell);
+
+    // Verify modal is open and has delete button
+    const detailModal = screen.getByTestId('email-detail-modal');
+    expect(detailModal).toBeInTheDocument();
+    const deleteBtn = screen.getByTestId('modal-delete-btn');
     expect(deleteBtn).toBeInTheDocument();
 
-    // Click delete action
+    // Click delete button inside modal
     fireEvent.click(deleteBtn);
 
     // Delete confirmation modal should open

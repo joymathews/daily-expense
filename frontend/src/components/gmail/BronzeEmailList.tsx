@@ -122,13 +122,12 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
               <th className="px-4 py-3 text-left">Sender</th>
               <th className="px-4 py-3 text-left">Subject / Details</th>
               <th className="px-4 py-3 text-right">Received Date</th>
-              <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 bg-white">
             {visibleRawEmails.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-12 text-center">
+                <td colSpan={4} className="px-4 py-12 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
                     {isLoading ? 'Scanning Pipeline...' : 'No data in this view'}
                   </p>
@@ -148,11 +147,11 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                       }`}
                     />
                   </td>
-                  <td onClick={() => setSelectedEmail(email)} className="px-4 py-3 whitespace-nowrap cursor-pointer">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-xs font-bold text-gray-800">{email.sender.split('<')[0].trim()}</div>
                     <div className="text-[10px] text-gray-400 truncate max-w-[120px]" title={email.sender}>{email.sender}</div>
                   </td>
-                  <td onClick={() => setSelectedEmail(email)} className="px-4 py-3 cursor-pointer">
+                  <td onClick={() => setSelectedEmail(email)} className="px-4 py-3 cursor-pointer hover:text-indigo-650 transition-colors">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="text-xs font-semibold text-gray-900 leading-tight">{email.subject}</span>
                       {isEmailProcessed(email) && (
@@ -163,55 +162,8 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                     </div>
                     <div className="text-[11px] text-gray-400 line-clamp-1 italic max-w-lg">{email.snippet}</div>
                   </td>
-                  <td onClick={() => setSelectedEmail(email)} className="px-4 py-3 whitespace-nowrap text-right text-xs font-semibold text-gray-500 uppercase cursor-pointer">
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-semibold text-gray-500 uppercase">
                     {new Date(email.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-center">
-                    {bronzeSubTab === 'non-transaction' ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onDeleteClick(email)}
-                          className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
-                          data-testid={`delete-bronze-${email.id}`}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        {isEmailProcessed(email) ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onDeleteClick(email)}
-                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
-                              data-testid={`delete-bronze-${email.id}`}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => extractSelectedEmails([email.id])}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1 rounded-lg uppercase cursor-pointer transition-all shadow-sm"
-                            >
-                              Extract
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onDeleteClick(email)}
-                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 border border-rose-200/50 rounded-lg uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
-                              data-testid={`delete-bronze-${email.id}`}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
                   </td>
                 </tr>
               ))
