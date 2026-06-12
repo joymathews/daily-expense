@@ -47,8 +47,8 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                   className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
                 />
               </th>
-              <th className="px-2 py-2.5 text-left">Merchant</th>
               <th className="px-2 py-2.5 text-left">Date</th>
+              <th className="px-2 py-2.5 text-left">Merchant</th>
               <th className="px-2 py-2.5 text-right">Amount</th>
               <th className="px-2 py-2.5 text-center">Category & Method</th>
               <th className="px-2 py-2.5 text-center">Status / Action</th>
@@ -72,12 +72,12 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                       className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
                     />
                   </td>
+                  <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
+                    {tx.transactionDate}
+                  </td>
                   <td className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px]">
                     <div className="truncate">{tx.merchantNormalized || tx.merchantRaw}</div>
                     <span className="block text-[10px] font-normal text-gray-400 truncate max-w-[160px]" title={tx.emailSubject}>{tx.emailSubject || 'Source Raw Email'}</span>
-                  </td>
-                  <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
-                    {tx.transactionDate}
                   </td>
                   <td className="px-2 py-2.5 text-right font-bold text-gray-800 whitespace-nowrap">
                     {tx.amount.toFixed(2)} {tx.currency}

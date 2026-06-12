@@ -1121,6 +1121,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(headerTexts).toContain('Category & Method');
     expect(headerTexts).toContain('Status / Action');
     
+    // Verify specific column ordering (Date is the first data column, followed by Merchant)
+    expect(headerTexts[1]).toBe('Date');
+    expect(headerTexts[2]).toBe('Merchant');
+    
     // Check that separate columns for Method, Category, Status, and Action DO NOT exist
     expect(headerTexts).not.toContain('Method');
     expect(headerTexts).not.toContain('Category');
