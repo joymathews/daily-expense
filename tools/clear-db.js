@@ -56,11 +56,11 @@ db.serialize(() => {
     }
   });
 
-  db.run('DELETE FROM bronze_raw_emails;', (err) => {
+  db.run('DELETE FROM bronze_raw_inputs;', (err) => {
     if (err) {
-      console.error('Failed to clear bronze_raw_emails:', err.message);
+      console.error('Failed to clear bronze_raw_inputs:', err.message);
     } else {
-      console.log('✔ Cleared bronze_raw_emails (Bronze Layer)');
+      console.log('✔ Cleared bronze_raw_inputs (Bronze Layer)');
     }
   });
 
