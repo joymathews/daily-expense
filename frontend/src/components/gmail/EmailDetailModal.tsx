@@ -597,7 +597,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               data-testid="modal-delete-btn"
             >
               {resolvedLineage.goldRecord 
-                ? 'Revert to Staging' 
+                ? (resolvedLineage.goldRecord.sourceType === 'manual' ? 'Delete' : 'Revert to Staging') 
                 : (resolvedLineage.silverRecord ? 'Revert to Raw' : 'Delete')}
             </button>
 

@@ -652,35 +652,43 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
   async revertGoldToSilver(userId: string, goldId: string): Promise<void> {
     await this.run('BEGIN TRANSACTION');
     try {
-      const goldTx = await this.get<{ silver_tx_id: string }>(
-        'SELECT silver_tx_id FROM gold_transactions WHERE id = ? AND user_id = ?',
+      const goldTx = await this.get<{ silver_tx_id: string; source_type: string }>(
+        'SELECT silver_tx_id, source_type FROM gold_transactions WHERE id = ? AND user_id = ?',
         [goldId, userId]
       );
       if (!goldTx) {
         throw new Error('Gold transaction not found');
       }
       const silverTxId = goldTx.silver_tx_id;
-      if (silverTxId) {
-        const silverTx = await this.getSilverTransactionById(silverTxId, userId);
-        if (silverTx) {
-          const hasMerchant = !!(silverTx.merchantNormalized?.trim() || silverTx.merchantRaw?.trim());
-          const hasDate = !!(silverTx.transactionDate?.trim() && silverTx.transactionDate !== 'N/A');
-          const hasAmount = silverTx.amount !== undefined && silverTx.amount !== null && !isNaN(silverTx.amount) && silverTx.amount !== 0;
-          const hasMethod = !!(silverTx.paymentMethod?.trim() && silverTx.paymentMethod !== 'Unknown' && silverTx.paymentMethod !== 'N/A');
-          const calculatedStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : 'pending';
-          
-          await this.run(
-            `UPDATE silver_extracted_transactions 
-             SET status = ?, deleted_at = NULL 
-             WHERE id = ? AND user_id = ?`,
-            [calculatedStatus, silverTxId, userId]
-          );
+      if (goldTx.source_type === 'manual' || !silverTxId) {
+        const now = new Date().toISOString();
+        await this.run(
+          'UPDATE gold_transactions SET deleted_at = ? WHERE id = ? AND user_id = ?',
+          [now, goldId, userId]
+        );
+      } else {
+        if (silverTxId) {
+          const silverTx = await this.getSilverTransactionById(silverTxId, userId);
+          if (silverTx) {
+            const hasMerchant = !!(silverTx.merchantNormalized?.trim() || silverTx.merchantRaw?.trim());
+            const hasDate = !!(silverTx.transactionDate?.trim() && silverTx.transactionDate !== 'N/A');
+            const hasAmount = silverTx.amount !== undefined && silverTx.amount !== null && !isNaN(silverTx.amount) && silverTx.amount !== 0;
+            const hasMethod = !!(silverTx.paymentMethod?.trim() && silverTx.paymentMethod !== 'Unknown' && silverTx.paymentMethod !== 'N/A');
+            const calculatedStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : 'pending';
+            
+            await this.run(
+              `UPDATE silver_extracted_transactions 
+               SET status = ?, deleted_at = NULL 
+               WHERE id = ? AND user_id = ?`,
+              [calculatedStatus, silverTxId, userId]
+            );
+          }
         }
+        await this.run(
+          'DELETE FROM gold_transactions WHERE id = ? AND user_id = ?',
+          [goldId, userId]
+        );
       }
-      await this.run(
-        'DELETE FROM gold_transactions WHERE id = ? AND user_id = ?',
-        [goldId, userId]
-      );
       await this.run('COMMIT');
     } catch (err) {
       await this.run('ROLLBACK');
@@ -718,6 +726,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     await this.run(
       'UPDATE bronze_raw_inputs SET deleted_at = NULL WHERE id = ? AND user_id = ?',
       [bronzeId, userId]
+    );
+  }
+
+  async restoreGoldTransaction(userId: string, goldId: string): Promise<void> {
+    await this.run(
+      'UPDATE gold_transactions SET deleted_at = NULL WHERE id = ? AND user_id = ?',
+      [goldId, userId]
     );
   }
 

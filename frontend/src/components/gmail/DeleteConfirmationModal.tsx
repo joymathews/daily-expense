@@ -5,6 +5,7 @@ interface DeleteConfirmationModalProps {
   onClose: () => void;
   onConfirm: () => void;
   sourceStage: 'bronze' | 'silver' | 'gold';
+  isManual?: boolean;
 }
 
 export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
@@ -12,6 +13,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   onClose,
   onConfirm,
   sourceStage,
+  isManual,
 }) => {
   if (!isOpen) return null;
 
@@ -21,10 +23,16 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   let buttonBgColor = 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500';
 
   if (sourceStage === 'gold') {
-    title = 'Revert to Staging';
-    description = 'Are you sure you want to revert this Gold transaction to Silver staging? This will delete the confirmed Gold ledger record and return the staging transaction to pending or error status.';
-    confirmText = 'Revert to Staging';
-    buttonBgColor = 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500';
+    if (isManual) {
+      title = 'Delete Manual Transaction';
+      description = 'Are you sure you want to soft-delete this manual transaction? It will be moved to the Trash Bin, where you can restore it later if needed.';
+      confirmText = 'Delete';
+    } else {
+      title = 'Revert to Staging';
+      description = 'Are you sure you want to revert this Gold transaction to Silver staging? This will delete the confirmed Gold ledger record and return the staging transaction to pending or error status.';
+      confirmText = 'Revert to Staging';
+      buttonBgColor = 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500';
+    }
   } else if (sourceStage === 'silver') {
     title = 'Revert to Raw Email';
     description = 'Are you sure you want to revert this Silver staging transaction to a raw unprocessed Bronze email? This will delete the Silver staging transaction and mark the raw email as unprocessed.';

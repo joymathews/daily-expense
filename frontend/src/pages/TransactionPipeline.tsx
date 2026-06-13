@@ -35,6 +35,7 @@ const TransactionPipeline: React.FC = () => {
     setExtractionProgress,
     revertOrDeleteRecord,
     restoreBronzeEmail,
+    restoreGoldTransaction,
     loadDeletedLayers,
   } = useGmailIntegration();
 
@@ -56,6 +57,7 @@ const TransactionPipeline: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteLineage, setDeleteLineage] = useState<{ bronzeId?: string; silverId?: string; goldId?: string }>({});
   const [deleteSourceStage, setDeleteSourceStage] = useState<'bronze' | 'silver' | 'gold'>('bronze');
+  const [isDeleteManual, setIsDeleteManual] = useState(false);
 
   const handleDeleteClick = (
     stage: 'bronze' | 'silver' | 'gold',
@@ -65,6 +67,12 @@ const TransactionPipeline: React.FC = () => {
     setSelectedGoldTransaction(null);
     setDeleteLineage(lineage);
     setDeleteSourceStage(stage);
+    
+    // Check if the record being deleted is a manual Gold transaction
+    const isManualGold = stage === 'gold' && !!lineage.goldId && 
+      goldTransactions.some(g => g.id === lineage.goldId && g.sourceType === 'manual');
+      
+    setIsDeleteManual(isManualGold);
     setIsDeleteModalOpen(true);
   };
 
@@ -443,12 +451,59 @@ const TransactionPipeline: React.FC = () => {
                         <tr key={email.id} className="hover:bg-gray-50/30">
                           <td className="px-4 py-3 font-semibold text-gray-800">{email.sender}</td>
                           <td className="px-4 py-3 text-gray-600 truncate max-w-xs">{email.subject}</td>
-                          <td className="px-4 py-3 text-gray-550">{email.date}</td>
+                          <td className="px-4 py-3 text-gray-555">{email.date}</td>
                           <td className="px-4 py-3 text-rose-500 font-medium">{email.deletedAt}</td>
                           <td className="px-4 py-3 text-right">
                             <button
                               onClick={() => restoreBronzeEmail(email.id)}
                               data-testid={`restore-bronze-${email.id}`}
+                              className="text-[10px] font-bold text-indigo-650 hover:text-indigo-850 uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100/40 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                            >
+                              Restore
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Deleted Gold manual transactions */}
+            <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm bg-white mt-6">
+              <div className="bg-gray-50/50 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Gold: Deleted Manual Transactions ({deletedGoldTransactions.length})</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-100 text-xs">
+                  <thead className="bg-gray-50 font-bold text-gray-400 uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Merchant</th>
+                      <th className="px-4 py-3 text-left">Amount</th>
+                      <th className="px-4 py-3 text-left">Category</th>
+                      <th className="px-4 py-3 text-left">Date</th>
+                      <th className="px-4 py-3 text-left">Deleted At</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 bg-white">
+                    {deletedGoldTransactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-gray-400 font-medium">No deleted manual transactions</td>
+                      </tr>
+                    ) : (
+                      deletedGoldTransactions.map(tx => (
+                        <tr key={tx.id} className="hover:bg-gray-50/30">
+                          <td className="px-4 py-3 font-semibold text-gray-800">{tx.merchant}</td>
+                          <td className="px-4 py-3 text-gray-650 font-semibold">{tx.amount.toFixed(2)} {tx.currency}</td>
+                          <td className="px-4 py-3 text-gray-555">{tx.category}</td>
+                          <td className="px-4 py-3 text-gray-555">{tx.transactionDate}</td>
+                          <td className="px-4 py-3 text-rose-500 font-medium">{tx.deletedAt}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => restoreGoldTransaction(tx.id)}
+                              data-testid={`restore-gold-${tx.id}`}
                               className="text-[10px] font-bold text-indigo-650 hover:text-indigo-850 uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100/40 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
                             >
                               Restore
@@ -488,6 +543,7 @@ const TransactionPipeline: React.FC = () => {
         onConfirm={handleConfirmDelete}
         lineage={deleteLineage}
         sourceStage={deleteSourceStage}
+        isManual={isDeleteManual}
       />
     </div>
   );

@@ -223,6 +223,8 @@ describe('Transaction Processing Pipeline Integration', () => {
       deleteBronzeInput: jest.fn().mockResolvedValue(undefined),
       restoreBronzeInput: jest.fn().mockResolvedValue(undefined),
       getDeletedRawInputs: jest.fn().mockResolvedValue([]),
+      restoreGoldTransaction: jest.fn().mockResolvedValue(undefined),
+      getDeletedGoldTransactions: jest.fn().mockResolvedValue([]),
       close: jest.fn().mockResolvedValue(undefined),
     };
 

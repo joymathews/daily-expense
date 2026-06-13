@@ -691,4 +691,80 @@ describe('Gmail API Integration', () => {
     expect(approveFail.status).toBe(400);
     expect(approveFail.body.error).toContain('required');
   });
+
+  /**
+   * [FUNC-GMAIL-31] / [NFR-USAB-7] Manual Gold Transaction Deletion & Restoration:
+   * Verify soft-deleting a manual direct Gold entry and restoring it from Trash.
+   */
+  it('should soft-delete a direct manual Gold transaction and allow restoring it from the Trash', async () => {
+    // 1. Create a direct manual Gold transaction
+    const addRes = await request(app)
+      .post('/api/pipeline/add-transaction')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        merchant: 'Manual Shop',
+        amount: 45.99,
+        currency: 'INR',
+        transactionDate: '2023-01-15',
+        category: 'Shopping',
+        paymentMethod: 'UPI',
+        notes: 'Manual entry test'
+      });
+
+    expect(addRes.status).toBe(200);
+    expect(addRes.body.status).toBe('added');
+
+    // Fetch gold transactions to find the ID of the created manual entry
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repo = new SQLiteTransactionRepository();
+    await repo.initializeSchema();
+    const activeGold = await repo.getGoldTransactions('user-123');
+    const manualTx = activeGold.find((g: any) => g.merchant === 'Manual Shop');
+    expect(manualTx).toBeDefined();
+    const goldId = manualTx!.id;
+    await repo.close();
+
+    // 2. Soft-delete the manual transaction via revert-to-silver endpoint
+    const deleteRes = await request(app)
+      .post('/api/pipeline/revert-to-silver')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ goldId });
+
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.body.status).toBe('reverted');
+
+    // 3. Verify it is not returned in active Gold transactions
+    const repo2 = new SQLiteTransactionRepository();
+    await repo2.initializeSchema();
+    const activeGoldAfterDelete = await repo2.getGoldTransactions('user-123');
+    const manualTxAfterDelete = activeGoldAfterDelete.find((g: any) => g.id === goldId);
+    expect(manualTxAfterDelete).toBeUndefined();
+
+    // 4. Verify it is listed in the /deleted response
+    const deletedRes = await request(app)
+      .get('/api/pipeline/deleted')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(deletedRes.status).toBe(200);
+    const deletedGoldTx = deletedRes.body.goldTransactions.find((g: any) => g.id === goldId);
+    expect(deletedGoldTx).toBeDefined();
+    expect(deletedGoldTx.merchant).toBe('Manual Shop');
+
+    // 5. Restore the manual transaction via /restore endpoint
+    const restoreRes = await request(app)
+      .post('/api/pipeline/restore')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ goldId });
+
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.body.status).toBe('restored');
+
+    // 6. Verify it is restored back to the Gold list
+    const activeGoldAfterRestore = await repo2.getGoldTransactions('user-123');
+    const manualTxAfterRestore = activeGoldAfterRestore.find((g: any) => g.id === goldId);
+    expect(manualTxAfterRestore).toBeDefined();
+    expect(manualTxAfterRestore?.merchant).toBe('Manual Shop');
+
+    await repo2.close();
+  });
 });

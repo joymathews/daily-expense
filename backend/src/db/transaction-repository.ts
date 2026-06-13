@@ -74,5 +74,7 @@ export interface ITransactionRepository {
   deleteBronzeInput(userId: string, bronzeId: string): Promise<void>;
   restoreBronzeInput(userId: string, bronzeId: string): Promise<void>;
   getDeletedRawInputs(userId: string): Promise<RawInput[]>;
+  restoreGoldTransaction(userId: string, goldId: string): Promise<void>;
+  getDeletedGoldTransactions(userId: string): Promise<Transaction[]>;
   close(): Promise<void>;
 }

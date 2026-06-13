@@ -404,20 +404,24 @@ router.post('/delete', async (req, res) => {
 
 /**
  * [FUNC-GMAIL-31] POST /api/pipeline/restore
- * Restores a soft-deleted Bronze raw input.
+ * Restores a soft-deleted Bronze raw input or Gold manual transaction.
  */
 router.post('/restore', async (req, res) => {
-  const { bronzeId } = req.body;
+  const { bronzeId, goldId } = req.body;
   const userId = (req as any).auth?.sub;
 
-  if (!bronzeId) {
-    return res.status(400).json({ error: 'bronzeId is required' });
+  if (!bronzeId && !goldId) {
+    return res.status(400).json({ error: 'Either bronzeId or goldId is required' });
   }
 
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    await repository.restoreBronzeInput(userId, bronzeId);
+    if (bronzeId) {
+      await repository.restoreBronzeInput(userId, bronzeId);
+    } else if (goldId) {
+      await repository.restoreGoldTransaction(userId, goldId);
+    }
     await repository.close();
     res.status(200).json({ status: 'restored' });
   } catch (error: any) {
@@ -427,7 +431,7 @@ router.post('/restore', async (req, res) => {
 
 /**
  * [FUNC-GMAIL-31] GET /api/pipeline/deleted
- * Retrieves all soft-deleted raw input records.
+ * Retrieves all soft-deleted raw input records and deleted manual gold transactions.
  */
 router.get('/deleted', async (req, res) => {
   const userId = (req as any).auth?.sub;
@@ -436,11 +440,12 @@ router.get('/deleted', async (req, res) => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
     const inputs = await repository.getDeletedRawInputs(userId);
+    const goldTx = await repository.getDeletedGoldTransactions(userId);
     await repository.close();
     res.status(200).json({
       emails: inputs,
       silverTransactions: [],
-      goldTransactions: []
+      goldTransactions: goldTx
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to fetch deleted records' });

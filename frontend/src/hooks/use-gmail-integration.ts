@@ -784,6 +784,31 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const restoreGoldTransaction = async (goldId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pipeline/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ goldId }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to restore record');
+      }
+      await loadAllLayers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const addDirectTransaction = async (tx: {
     merchant: string;
     amount: number;
@@ -870,6 +895,7 @@ export const useGmailIntegration = () => {
     loadAllLayers,
     revertOrDeleteRecord,
     restoreBronzeEmail,
+    restoreGoldTransaction,
     loadDeletedLayers,
     addDirectTransaction,
   };

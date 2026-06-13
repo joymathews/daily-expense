@@ -1866,6 +1866,123 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-31] / [NFR-USAB-7] Manual Gold Deletion & Trash Bin Restoration:
+   * Verify soft-deleting a manual Gold entry via modal and restoring it from Trash Bin.
+   */
+  it('supports soft-deleting manual Gold transactions and restoring them from the Trash Bin', async () => {
+    const mockManualTx = {
+      id: 'gold_manual_123',
+      sourceType: 'manual',
+      merchant: 'Organic Store',
+      amount: 25.50,
+      currency: 'INR',
+      transactionDate: '2023-01-15',
+      category: 'Food',
+      paymentMethod: 'UPI'
+    };
+
+    let goldList = [mockManualTx];
+    let deletedGoldList: any[] = [];
+
+    const deleteMock = vi.fn().mockImplementation(() => {
+      goldList = [];
+      deletedGoldList = [{ ...mockManualTx, deletedAt: '2023-01-15T12:00:00Z' }];
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'reverted' }) });
+    });
+
+    const restoreMock = vi.fn().mockImplementation(() => {
+      goldList = [mockManualTx];
+      deletedGoldList = [];
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'restored' }) });
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url, options) => {
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: goldList }) });
+      }
+      if (url.includes('/api/pipeline/revert-to-silver')) {
+        return deleteMock();
+      }
+      if (url.includes('/api/pipeline/restore')) {
+        return restoreMock();
+      }
+      if (url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: deletedGoldList })
+        });
+      }
+      // fallback other pipeline mocks to prevent errors
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Switch to Gold tab
+    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
+
+    // Click the manual entry merchant cell to open details
+    const merchantCell = await screen.findByText('Organic Store');
+    fireEvent.click(merchantCell);
+
+    // Modal should open
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // Verify the delete button says "Delete" (since it's a manual entry) and click it
+    const deleteBtn = within(modal).getByTestId('modal-delete-btn');
+    expect(deleteBtn).toHaveTextContent('Delete');
+    fireEvent.click(deleteBtn);
+
+    // Confirmation modal should open, showing manual deletion title
+    const confirmModal = screen.getByTestId('delete-confirmation-modal');
+    expect(confirmModal).toBeInTheDocument();
+    expect(within(confirmModal).getByText(/Delete Manual Transaction/i)).toBeInTheDocument();
+
+    // Confirm deletion
+    const confirmBtn = within(confirmModal).getByTestId('confirm-delete-btn');
+    fireEvent.click(confirmBtn);
+
+    // Verify revert endpoint was hit
+    await waitFor(() => {
+      expect(deleteMock).toHaveBeenCalled();
+    });
+
+    // Switch to Trash Bin tab
+    fireEvent.click(screen.getByRole('button', { name: /Trash Bin/i }));
+
+    // Verify manual transaction is listed in Gold: Deleted Manual Transactions table
+    expect(await screen.findByText('Gold: Deleted Manual Transactions (1)')).toBeInTheDocument();
+    const tableRowMerchant = screen.getByText('Organic Store');
+    expect(tableRowMerchant).toBeInTheDocument();
+
+    // Click the restore button next to it
+    const restoreBtn = screen.getByTestId(`restore-gold-gold_manual_123`);
+    fireEvent.click(restoreBtn);
+
+    // Verify restore endpoint was hit
+    await waitFor(() => {
+      expect(restoreMock).toHaveBeenCalled();
+    });
+
+    // Verify the table has updated (count becomes 0)
+    expect(await screen.findByText('Gold: Deleted Manual Transactions (0)')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
