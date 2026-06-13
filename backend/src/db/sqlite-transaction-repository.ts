@@ -1,7 +1,7 @@
 import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { ITransactionRepository, RawEmail, PendingTransaction, Transaction } from './transaction-repository';
+import { ITransactionRepository, RawInput, PendingTransaction, Transaction } from './transaction-repository';
 
 export class SQLiteTransactionRepository implements ITransactionRepository {
   private db: sqlite3.Database;
@@ -54,35 +54,38 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     // Enable Foreign Key support in SQLite session
     await this.run('PRAGMA foreign_keys = ON;');
 
-    // Dynamic Migration check: check if user_id and has_transaction exist in bronze_raw_emails or payment_method in silver_extracted_transactions
-    const info = await this.all<{ name: string }>("PRAGMA table_info(bronze_raw_emails);");
-    const hasUserId = info.some(col => col.name === 'user_id');
-    const hasHasTransaction = info.some(col => col.name === 'has_transaction');
-    const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
-    const hasPaymentMethod = silverInfo.some(col => col.name === 'payment_method');
-    
-    // Check if current silver table constraint contains 'error'
-    const schemaSql = await this.get<{ sql?: string }>(
-      "SELECT sql FROM sqlite_master WHERE type='table' AND name='silver_extracted_transactions'"
-    );
-    const hasErrorStatus = schemaSql?.sql?.includes("'error'") ?? false;
+    // Dynamic Migration check: check if old 'bronze_raw_emails' exists or if generic columns are missing
+    const tables = await this.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table';");
+    const hasBronzeEmails = tables.some(t => t.name === 'bronze_raw_emails');
+    const hasBronzeInputs = tables.some(t => t.name === 'bronze_raw_inputs');
 
-    if (
-      (info.length > 0 && (!hasUserId || !hasHasTransaction)) ||
-      (silverInfo.length > 0 && (!hasPaymentMethod || !hasErrorStatus))
-    ) {
+    let isLegacy = false;
+    if (hasBronzeEmails) {
+      isLegacy = true;
+    } else if (hasBronzeInputs) {
+      const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
+      const hasBronzeInputId = silverInfo.some(col => col.name === 'bronze_input_id');
+      const hasSourceType = silverInfo.some(col => col.name === 'source_type');
+      if (!hasBronzeInputId || !hasSourceType) {
+        isLegacy = true;
+      }
+    }
+
+    if (isLegacy) {
       await this.run('DROP TABLE IF EXISTS gold_transactions;');
       await this.run('DROP TABLE IF EXISTS silver_extracted_transactions;');
       await this.run('DROP TABLE IF EXISTS bronze_raw_emails;');
+      await this.run('DROP TABLE IF EXISTS bronze_raw_inputs;');
     }
 
-    // 1. Bronze table: Raw Ingestion
+    // 1. Bronze table: Raw Ingestion (Generic)
     await this.run(`
-      CREATE TABLE IF NOT EXISTS bronze_raw_emails (
+      CREATE TABLE IF NOT EXISTS bronze_raw_inputs (
         id TEXT NOT NULL,
         user_id TEXT NOT NULL,
+        source_type TEXT NOT NULL,
         sender TEXT NOT NULL,
-        subject TEXT NOT NULL,
+        title TEXT NOT NULL,
         snippet TEXT,
         raw_body TEXT NOT NULL,
         raw_payload TEXT,
@@ -94,12 +97,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       );
     `);
 
-    // 2. Silver table: Staging Area
+    // 2. Silver table: Staging Area (Generic)
     await this.run(`
       CREATE TABLE IF NOT EXISTS silver_extracted_transactions (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        bronze_email_id TEXT NOT NULL,
+        bronze_input_id TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'email',
         merchant_raw TEXT NOT NULL,
         merchant_normalized TEXT,
         amount_cents INTEGER NOT NULL,
@@ -111,18 +115,19 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         payment_method TEXT,
         deleted_at TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
-        FOREIGN KEY (user_id, bronze_email_id) REFERENCES bronze_raw_emails(user_id, id) ON DELETE CASCADE,
-        UNIQUE(user_id, bronze_email_id),
+        FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+        UNIQUE(user_id, bronze_input_id),
         UNIQUE(user_id, id)
       );
     `);
 
-    // 3. Gold table: Confirmed Ledger
+    // 3. Gold table: Confirmed Ledger (Generic with source tracking)
     await this.run(`
       CREATE TABLE IF NOT EXISTS gold_transactions (
         id TEXT PRIMARY KEY,
         silver_tx_id TEXT UNIQUE,
         user_id TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'email',
         merchant TEXT NOT NULL,
         amount_cents INTEGER NOT NULL,
         currency TEXT NOT NULL,
@@ -133,47 +138,27 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         deleted_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
         updated_at TEXT DEFAULT (datetime('now', 'utc')),
-        FOREIGN KEY (user_id, silver_tx_id) REFERENCES silver_extracted_transactions(user_id, id) ON DELETE SET NULL
+        FOREIGN KEY (user_id, silver_tx_id) REFERENCES silver_extracted_transactions(user_id, id) ON DELETE SET NULL,
+        UNIQUE(user_id, id)
       );
     `);
 
-    // Dynamic migrations for deleted_at column
-    const bronzeInfo = await this.all<{ name: string }>("PRAGMA table_info(bronze_raw_emails);");
-    if (bronzeInfo.length > 0 && !bronzeInfo.some(col => col.name === 'deleted_at')) {
-      await this.run("ALTER TABLE bronze_raw_emails ADD COLUMN deleted_at TEXT;");
-    }
-
-    const silverInfo2 = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
-    if (silverInfo2.length > 0 && !silverInfo2.some(col => col.name === 'deleted_at')) {
-      await this.run("ALTER TABLE silver_extracted_transactions ADD COLUMN deleted_at TEXT;");
-    }
-
-    const goldInfo = await this.all<{ name: string }>("PRAGMA table_info(gold_transactions);");
-    if (goldInfo.length > 0 && !goldInfo.some(col => col.name === 'deleted_at')) {
-      await this.run("ALTER TABLE gold_transactions ADD COLUMN deleted_at TEXT;");
-    }
-
     // 4. Create Indexes
-    await this.run('CREATE INDEX IF NOT EXISTS idx_bronze_emails_sender ON bronze_raw_emails(sender);');
+    await this.run('CREATE INDEX IF NOT EXISTS idx_bronze_inputs_sender ON bronze_raw_inputs(sender);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_silver_tx_status ON silver_extracted_transactions(status);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_gold_tx_user_date ON gold_transactions(user_id, transaction_date);');
   }
 
   async emailExists(gmailId: string, userId: string): Promise<boolean> {
-    const row = await this.get<{ id: string }>('SELECT id FROM bronze_raw_emails WHERE id = ? AND user_id = ?', [gmailId, userId]);
+    const row = await this.get<{ id: string }>('SELECT id FROM bronze_raw_inputs WHERE id = ? AND user_id = ?', [gmailId, userId]);
     return !!row;
   }
 
-  async saveRawEmail(email: RawEmail): Promise<void> {
-    const { EmailClassifier } = require('../services/email-classifier');
-    const hasTx = email.hasTransaction !== undefined
-      ? (email.hasTransaction ? 1 : 0)
-      : (EmailClassifier.isTransaction(email.subject) ? 1 : 0);
-
+  async saveRawInput(input: RawInput): Promise<void> {
     // Normalize date to ISO-8601 string for SQLite compatibility
-    let normalizedReceivedAt = email.receivedAt;
+    let normalizedReceivedAt = input.receivedAt;
     try {
-      const parsedDate = new Date(email.receivedAt);
+      const parsedDate = new Date(input.receivedAt);
       if (!isNaN(parsedDate.getTime())) {
         normalizedReceivedAt = parsedDate.toISOString();
       }
@@ -181,18 +166,31 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       // Fallback to original receivedAt string
     }
 
+    let hasTx = 1;
+    if (input.hasTransaction !== undefined) {
+      hasTx = input.hasTransaction ? 1 : 0;
+    } else if (!input.sourceType || input.sourceType === 'email') {
+      try {
+        const { EmailClassifier } = require('../services/email-classifier');
+        hasTx = EmailClassifier.isTransaction(input.title) ? 1 : 0;
+      } catch (e) {
+        hasTx = 1;
+      }
+    }
+
     await this.run(
-      `INSERT OR IGNORE INTO bronze_raw_emails 
-       (id, user_id, sender, subject, snippet, raw_body, raw_payload, received_at, has_transaction) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO bronze_raw_inputs 
+       (id, user_id, source_type, sender, title, snippet, raw_body, raw_payload, received_at, has_transaction) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        email.id,
-        email.userId,
-        email.sender,
-        email.subject,
-        email.snippet,
-        email.rawBody,
-        email.rawPayload,
+        input.id,
+        input.userId,
+        input.sourceType || 'email',
+        input.sender,
+        input.title,
+        input.snippet,
+        input.rawBody,
+        input.rawPayload,
         normalizedReceivedAt,
         hasTx,
       ]
@@ -212,12 +210,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
     await this.run(
       `INSERT OR IGNORE INTO silver_extracted_transactions 
-       (id, user_id, bronze_email_id, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, user_id, bronze_input_id, source_type, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tx.id,
         tx.userId,
-        tx.rawEmailId,
+        tx.bronzeInputId,
+        tx.sourceType || 'email',
         tx.merchantRaw,
         tx.merchantNormalized || null,
         amountCents,
@@ -233,23 +232,30 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
   async getPendingTransactions(userId: string): Promise<PendingTransaction[]> {
     const rows = await this.all<any>(
-      `SELECT * FROM silver_extracted_transactions WHERE status IN ('pending', 'error') AND user_id = ? AND deleted_at IS NULL`,
+      `SELECT s.*, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at 
+       FROM silver_extracted_transactions s
+       LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND s.user_id = b.user_id
+       WHERE s.status IN ('pending', 'error') AND s.user_id = ? AND s.deleted_at IS NULL`,
       [userId]
     );
 
     return rows.map(row => ({
       id: row.id,
-      rawEmailId: row.bronze_email_id,
+      bronzeInputId: row.bronze_input_id,
       userId: row.user_id,
+      sourceType: row.source_type,
       merchantRaw: row.merchant_raw,
       merchantNormalized: row.merchant_normalized || undefined,
-      amount: row.amount_cents / 100, // Convert cents to standard currency float
+      amount: row.amount_cents / 100,
       currency: row.currency,
       transactionDate: row.transaction_date,
       inferredCategory: row.inferred_category || undefined,
       confidenceScore: row.confidence_score ?? undefined,
       status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
+      sourceTitle: row.source_title || undefined,
+      sourceSender: row.source_sender || undefined,
+      sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
     }));
   }
@@ -271,7 +277,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     // Run promotions in an ACID Transaction Block
     await this.run('BEGIN TRANSACTION');
     try {
-      // 1. Update status in silver staging table only if user matches
+      // 1. Update status in silver staging table
       await this.run(
         `UPDATE silver_extracted_transactions SET status = 'approved' WHERE id = ? AND user_id = ?`,
         [pendingId, tx.userId]
@@ -280,12 +286,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       // 2. Insert validated transaction in gold ledger table
       await this.run(
         `INSERT OR IGNORE INTO gold_transactions 
-         (id, silver_tx_id, user_id, merchant, amount_cents, currency, transaction_date, category, notes, payment_method) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tx.id,
           pendingId,
           tx.userId,
+          tx.sourceType || 'email',
           tx.merchant,
           amountCents,
           tx.currency,
@@ -303,8 +310,36 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }
   }
 
-  async getRawEmails(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawEmail[]> {
-    let sql = 'SELECT * FROM bronze_raw_emails WHERE user_id = ? AND deleted_at IS NULL';
+  async addDirectGoldTransaction(tx: Transaction): Promise<void> {
+    if (!tx.merchant || !tx.transactionDate || !tx.amount || !tx.paymentMethod) {
+      throw new Error('Required transaction fields (merchant, date, amount, method) are missing');
+    }
+    if (tx.amount <= 0) {
+      throw new Error('Amount must be positive');
+    }
+
+    const amountCents = Math.round(tx.amount * 100);
+
+    await this.run(
+      `INSERT OR IGNORE INTO gold_transactions 
+       (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method) 
+       VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tx.id,
+        tx.userId,
+        tx.merchant,
+        amountCents,
+        tx.currency || 'INR',
+        tx.transactionDate,
+        tx.category,
+        tx.notes || null,
+        tx.paymentMethod,
+      ]
+    );
+  }
+
+  async getRawInputs(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawInput[]> {
+    let sql = 'SELECT * FROM bronze_raw_inputs WHERE user_id = ? AND deleted_at IS NULL';
     const params: any[] = [userId];
     if (filters?.startDate) {
       sql += ' AND date(received_at) >= date(?)';
@@ -319,8 +354,9 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     return rows.map(row => ({
       id: row.id,
       userId: row.user_id,
+      sourceType: row.source_type,
       sender: row.sender,
-      subject: row.subject,
+      title: row.title,
       snippet: row.snippet || '',
       rawBody: row.raw_body,
       rawPayload: row.raw_payload || '',
@@ -330,14 +366,15 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }));
   }
 
-  async getRawEmailById(id: string, userId: string): Promise<RawEmail | undefined> {
-    const row = await this.get<any>('SELECT * FROM bronze_raw_emails WHERE id = ? AND user_id = ?', [id, userId]);
+  async getRawInputById(id: string, userId: string): Promise<RawInput | undefined> {
+    const row = await this.get<any>('SELECT * FROM bronze_raw_inputs WHERE id = ? AND user_id = ?', [id, userId]);
     if (!row) return undefined;
     return {
       id: row.id,
       userId: row.user_id,
+      sourceType: row.source_type,
       sender: row.sender,
-      subject: row.subject,
+      title: row.title,
       snippet: row.snippet || '',
       rawBody: row.raw_body,
       rawPayload: row.raw_payload || '',
@@ -347,18 +384,18 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     };
   }
 
-  async updateRawEmailClassification(id: string, userId: string, hasTransaction: boolean): Promise<void> {
+  async updateRawInputClassification(id: string, userId: string, hasTransaction: boolean): Promise<void> {
     await this.run(
-      'UPDATE bronze_raw_emails SET has_transaction = ? WHERE id = ? AND user_id = ?',
+      'UPDATE bronze_raw_inputs SET has_transaction = ? WHERE id = ? AND user_id = ?',
       [hasTransaction ? 1 : 0, id, userId]
     );
   }
 
   async getSilverTransactions(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<PendingTransaction[]> {
     let sql = `
-      SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+      SELECT s.*, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at
       FROM silver_extracted_transactions s
-      LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
+      LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND s.user_id = b.user_id
       WHERE s.user_id = ? AND s.deleted_at IS NULL
     `;
     const params: any[] = [userId];
@@ -374,8 +411,9 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     const rows = await this.all<any>(sql, params);
     return rows.map(row => ({
       id: row.id,
-      rawEmailId: row.bronze_email_id,
+      bronzeInputId: row.bronze_input_id,
       userId: row.user_id,
+      sourceType: row.source_type,
       merchantRaw: row.merchant_raw,
       merchantNormalized: row.merchant_normalized || undefined,
       amount: row.amount_cents / 100,
@@ -385,26 +423,27 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       confidenceScore: row.confidence_score ?? undefined,
       status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
-      emailSubject: row.email_subject || undefined,
-      emailSender: row.email_sender || undefined,
-      emailReceivedAt: row.email_received_at || undefined,
+      sourceTitle: row.source_title || undefined,
+      sourceSender: row.source_sender || undefined,
+      sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
     }));
   }
 
-  async getSilverTransactionByEmailId(emailId: string, userId: string): Promise<PendingTransaction | undefined> {
+  async getSilverTransactionByInputId(inputId: string, userId: string): Promise<PendingTransaction | undefined> {
     const row = await this.get<any>(
-      `SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+      `SELECT s.*, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at
        FROM silver_extracted_transactions s
-       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
-       WHERE s.bronze_email_id = ? AND s.user_id = ? AND s.deleted_at IS NULL`,
-      [emailId, userId]
+       LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND s.user_id = b.user_id
+       WHERE s.bronze_input_id = ? AND s.user_id = ? AND s.deleted_at IS NULL`,
+      [inputId, userId]
     );
     if (!row) return undefined;
     return {
       id: row.id,
-      rawEmailId: row.bronze_email_id,
+      bronzeInputId: row.bronze_input_id,
       userId: row.user_id,
+      sourceType: row.source_type,
       merchantRaw: row.merchant_raw,
       merchantNormalized: row.merchant_normalized || undefined,
       amount: row.amount_cents / 100,
@@ -414,26 +453,27 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       confidenceScore: row.confidence_score ?? undefined,
       status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
-      emailSubject: row.email_subject || undefined,
-      emailSender: row.email_sender || undefined,
-      emailReceivedAt: row.email_received_at || undefined,
+      sourceTitle: row.source_title || undefined,
+      sourceSender: row.source_sender || undefined,
+      sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
     };
   }
 
   async getSilverTransactionById(id: string, userId: string): Promise<PendingTransaction | undefined> {
     const row = await this.get<any>(
-      `SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+      `SELECT s.*, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at
        FROM silver_extracted_transactions s
-       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
+       LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND s.user_id = b.user_id
        WHERE s.id = ? AND s.user_id = ? AND s.deleted_at IS NULL`,
       [id, userId]
     );
     if (!row) return undefined;
     return {
       id: row.id,
-      rawEmailId: row.bronze_email_id,
+      bronzeInputId: row.bronze_input_id,
       userId: row.user_id,
+      sourceType: row.source_type,
       merchantRaw: row.merchant_raw,
       merchantNormalized: row.merchant_normalized || undefined,
       amount: row.amount_cents / 100,
@@ -443,19 +483,19 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       confidenceScore: row.confidence_score ?? undefined,
       status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
-      emailSubject: row.email_subject || undefined,
-      emailSender: row.email_sender || undefined,
-      emailReceivedAt: row.email_received_at || undefined,
+      sourceTitle: row.source_title || undefined,
+      sourceSender: row.source_sender || undefined,
+      sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
     };
   }
 
   async getGoldTransactions(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<Transaction[]> {
     let sql = `
-      SELECT g.*, s.bronze_email_id, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+      SELECT g.*, s.bronze_input_id, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at
       FROM gold_transactions g
       LEFT JOIN silver_extracted_transactions s ON g.silver_tx_id = s.id AND g.user_id = s.user_id
-      LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND g.user_id = b.user_id
+      LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND g.user_id = b.user_id
       WHERE g.user_id = ? AND g.deleted_at IS NULL
     `;
     const params: any[] = [userId];
@@ -473,6 +513,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       id: row.id,
       pendingTxId: row.silver_tx_id || undefined,
       userId: row.user_id,
+      sourceType: row.source_type,
       merchant: row.merchant,
       amount: row.amount_cents / 100,
       currency: row.currency,
@@ -481,10 +522,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       notes: row.notes || undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      emailSubject: row.email_subject || undefined,
-      emailSender: row.email_sender || undefined,
-      emailReceivedAt: row.email_received_at || undefined,
-      bronzeEmailId: row.bronze_email_id || undefined,
+      sourceTitle: row.source_title || undefined,
+      sourceSender: row.source_sender || undefined,
+      sourceReceivedAt: row.source_received_at || undefined,
+      bronzeInputId: row.bronze_input_id || undefined,
       paymentMethod: row.payment_method || undefined,
     }));
   }
@@ -514,40 +555,25 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }
     if (updates.notes !== undefined) {
       sets.push('notes = ?');
-      params.push(updates.notes);
+      params.push(updates.notes || null);
     }
     if (updates.paymentMethod !== undefined) {
       sets.push('payment_method = ?');
-      params.push(updates.paymentMethod);
+      params.push(updates.paymentMethod || null);
     }
+
     if (sets.length === 0) return;
+
     sets.push("updated_at = datetime('now', 'utc')");
-    params.push(id);
-    params.push(userId);
-    await this.run(`UPDATE gold_transactions SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`, params);
+    params.push(id, userId);
+
+    await this.run(
+      `UPDATE gold_transactions SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`,
+      params
+    );
   }
 
   async updatePendingTransaction(id: string, userId: string, updates: Partial<PendingTransaction>): Promise<void> {
-    const current = await this.getSilverTransactionById(id, userId);
-    if (!current) {
-      throw new Error('Silver transaction not found or unauthorized');
-    }
-
-    const merged = {
-      ...current,
-      ...updates,
-    };
-
-    const hasMerchant = !!(merged.merchantNormalized?.trim() || merged.merchantRaw?.trim());
-    const hasDate = !!(merged.transactionDate?.trim() && merged.transactionDate !== 'N/A');
-    const hasAmount = merged.amount !== undefined && merged.amount !== null && !isNaN(merged.amount) && merged.amount !== 0;
-    const hasMethod = !!(merged.paymentMethod?.trim() && merged.paymentMethod !== 'Unknown' && merged.paymentMethod !== 'N/A');
-    
-    let newStatus = current.status;
-    if (current.status === 'pending' || current.status === 'error') {
-      newStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : 'pending';
-    }
-
     const sets: string[] = [];
     const params: any[] = [];
     if (updates.merchantRaw !== undefined) {
@@ -556,7 +582,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }
     if (updates.merchantNormalized !== undefined) {
       sets.push('merchant_normalized = ?');
-      params.push(updates.merchantNormalized);
+      params.push(updates.merchantNormalized || null);
     }
     if (updates.amount !== undefined) {
       sets.push('amount_cents = ?');
@@ -572,25 +598,61 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }
     if (updates.inferredCategory !== undefined) {
       sets.push('inferred_category = ?');
-      params.push(updates.inferredCategory);
+      params.push(updates.inferredCategory || null);
     }
     if (updates.paymentMethod !== undefined) {
       sets.push('payment_method = ?');
-      params.push(updates.paymentMethod);
+      params.push(updates.paymentMethod || null);
     }
-    
-    sets.push('status = ?');
-    params.push(newStatus);
 
-    params.push(id);
-    params.push(userId);
-    await this.run(`UPDATE silver_extracted_transactions SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`, params);
+    if (sets.length === 0) return;
+
+    // Check status check requirements
+    let checkMerchant = updates.merchantNormalized || updates.merchantRaw;
+    let checkDate = updates.transactionDate;
+    let checkAmount = updates.amount;
+    let checkMethod = updates.paymentMethod;
+
+    if (updates.merchantNormalized === undefined && updates.merchantRaw === undefined) {
+      const current = await this.getSilverTransactionById(id, userId);
+      if (current) {
+        checkMerchant = current.merchantNormalized || current.merchantRaw;
+      }
+    }
+    if (updates.transactionDate === undefined) {
+      const current = await this.getSilverTransactionById(id, userId);
+      if (current) checkDate = current.transactionDate;
+    }
+    if (updates.amount === undefined) {
+      const current = await this.getSilverTransactionById(id, userId);
+      if (current) checkAmount = current.amount;
+    }
+    if (updates.paymentMethod === undefined) {
+      const current = await this.getSilverTransactionById(id, userId);
+      if (current) checkMethod = current.paymentMethod;
+    }
+
+    const hasMerchant = !!(checkMerchant?.trim());
+    const hasDate = !!(checkDate?.trim() && checkDate !== 'N/A');
+    const hasAmount = checkAmount !== undefined && checkAmount !== null && !isNaN(checkAmount) && checkAmount !== 0;
+    const hasMethod = !!(checkMethod?.trim() && checkMethod !== 'Unknown' && checkMethod !== 'N/A');
+
+    const nextStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : 'pending';
+    sets.push('status = ?');
+    params.push(nextStatus);
+
+    params.push(id, userId);
+
+    await this.run(
+      `UPDATE silver_extracted_transactions SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`,
+      params
+    );
   }
 
   async revertGoldToSilver(userId: string, goldId: string): Promise<void> {
     await this.run('BEGIN TRANSACTION');
     try {
-      const goldTx = await this.get<any>(
+      const goldTx = await this.get<{ silver_tx_id: string }>(
         'SELECT silver_tx_id FROM gold_transactions WHERE id = ? AND user_id = ?',
         [goldId, userId]
       );
@@ -644,31 +706,32 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }
   }
 
-  async deleteBronzeEmail(userId: string, bronzeId: string): Promise<void> {
+  async deleteBronzeInput(userId: string, bronzeId: string): Promise<void> {
     const now = new Date().toISOString();
     await this.run(
-      'UPDATE bronze_raw_emails SET deleted_at = ? WHERE id = ? AND user_id = ?',
+      'UPDATE bronze_raw_inputs SET deleted_at = ? WHERE id = ? AND user_id = ?',
       [now, bronzeId, userId]
     );
   }
 
-  async restoreBronzeEmail(userId: string, bronzeId: string): Promise<void> {
+  async restoreBronzeInput(userId: string, bronzeId: string): Promise<void> {
     await this.run(
-      'UPDATE bronze_raw_emails SET deleted_at = NULL WHERE id = ? AND user_id = ?',
+      'UPDATE bronze_raw_inputs SET deleted_at = NULL WHERE id = ? AND user_id = ?',
       [bronzeId, userId]
     );
   }
 
-  async getDeletedRawEmails(userId: string): Promise<RawEmail[]> {
+  async getDeletedRawInputs(userId: string): Promise<RawInput[]> {
     const rows = await this.all<any>(
-      'SELECT * FROM bronze_raw_emails WHERE user_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC',
+      'SELECT * FROM bronze_raw_inputs WHERE user_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC',
       [userId]
     );
     return rows.map(row => ({
       id: row.id,
       userId: row.user_id,
+      sourceType: row.source_type,
       sender: row.sender,
-      subject: row.subject,
+      title: row.title,
       snippet: row.snippet || '',
       rawBody: row.raw_body,
       rawPayload: row.raw_payload || '',
@@ -681,16 +744,17 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
   async getDeletedSilverTransactions(userId: string): Promise<PendingTransaction[]> {
     const rows = await this.all<any>(
-      `SELECT s.*, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+      `SELECT s.*, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at
        FROM silver_extracted_transactions s
-       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND s.user_id = b.user_id
+       LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND s.user_id = b.user_id
        WHERE s.user_id = ? AND s.deleted_at IS NOT NULL ORDER BY s.deleted_at DESC`,
       [userId]
     );
     return rows.map(row => ({
       id: row.id,
-      rawEmailId: row.bronze_email_id,
+      bronzeInputId: row.bronze_input_id,
       userId: row.user_id,
+      sourceType: row.source_type,
       merchantRaw: row.merchant_raw,
       merchantNormalized: row.merchant_normalized || undefined,
       amount: row.amount_cents / 100,
@@ -700,9 +764,9 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       confidenceScore: row.confidence_score ?? undefined,
       status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
-      emailSubject: row.email_subject || undefined,
-      emailSender: row.email_sender || undefined,
-      emailReceivedAt: row.email_received_at || undefined,
+      sourceTitle: row.source_title || undefined,
+      sourceSender: row.source_sender || undefined,
+      sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
       deletedAt: row.deleted_at,
     }));
@@ -710,10 +774,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
   async getDeletedGoldTransactions(userId: string): Promise<Transaction[]> {
     const rows = await this.all<any>(
-      `SELECT g.*, s.bronze_email_id, b.subject AS email_subject, b.sender AS email_sender, b.received_at AS email_received_at
+      `SELECT g.*, s.bronze_input_id, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at
        FROM gold_transactions g
        LEFT JOIN silver_extracted_transactions s ON g.silver_tx_id = s.id AND g.user_id = s.user_id
-       LEFT JOIN bronze_raw_emails b ON s.bronze_email_id = b.id AND g.user_id = b.user_id
+       LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND g.user_id = b.user_id
        WHERE g.user_id = ? AND g.deleted_at IS NOT NULL ORDER BY g.deleted_at DESC`,
       [userId]
     );
@@ -721,6 +785,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       id: row.id,
       pendingTxId: row.silver_tx_id || undefined,
       userId: row.user_id,
+      sourceType: row.source_type,
       merchant: row.merchant,
       amount: row.amount_cents / 100,
       currency: row.currency,
@@ -729,10 +794,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       notes: row.notes || undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      emailSubject: row.email_subject || undefined,
-      emailSender: row.email_sender || undefined,
-      emailReceivedAt: row.email_received_at || undefined,
-      bronzeEmailId: row.bronze_email_id || undefined,
+      sourceTitle: row.source_title || undefined,
+      sourceSender: row.source_sender || undefined,
+      sourceReceivedAt: row.source_received_at || undefined,
+      bronzeInputId: row.bronze_input_id || undefined,
       paymentMethod: row.payment_method || undefined,
       deletedAt: row.deleted_at,
     }));

@@ -102,7 +102,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    */
   it('provides navigation to the Gmail service', () => {
     render(<App />);
-    const gmailLink = screen.getByRole('link', { name: /Gmail Fetch/i });
+    const gmailLink = screen.getByRole('link', { name: /Data Ingestion/i });
     fireEvent.click(gmailLink);
     expect(screen.getByText(/Fetcher/i)).toBeInTheDocument();
   });
@@ -114,7 +114,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    */
   it('supports Gmail configuration and OAuth authentication', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     expect(screen.getByPlaceholderText(/Add sender email.../i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/receipt.../i)).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    */
   it('displays transaction results table headers and tabs', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
     expect(screen.getByText(/Transactions/i)).toBeInTheDocument();
     expect(screen.getByText(/Non-Transactional \(For Review\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Sender/i).length).toBeGreaterThan(0);
@@ -147,13 +147,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
     
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: mockEmails.map(e => e.id) }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -161,19 +161,19 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: mockEmails }),
         });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
@@ -185,8 +185,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     render(<App />);
     
-    // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    // Navigate to Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -199,6 +199,9 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for the mock to resolve and check elements
     // Transactions tab should be active by default. It should contain 'Inv 123'
@@ -270,13 +273,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
     
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: mockEmails.map(e => e.id) }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -284,19 +287,19 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: mockEmails }),
         });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
@@ -308,8 +311,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     render(<App />);
     
-    // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    // Navigate to Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -322,6 +325,9 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for email to appear
     const subjectCell = await screen.findByText('Inv 123');
@@ -392,13 +398,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: mockEmails.map(e => e.id) }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -406,7 +412,19 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url === '/api/gmail/approve') {
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/approve') || url.includes('/api/gmail/approve')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ status: 'approved' }),
@@ -419,7 +437,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -432,6 +450,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for email to appear and click it
     const subjectCell = await screen.findByText('Your Ride Details');
@@ -465,18 +485,18 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Verify the approve API was called with the modified parameters
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+      expect(mockFetch).toHaveBeenCalledWith('/api/pipeline/approve', expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"merchant":"Uber Ride Co."')
       }));
     });
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+      expect(mockFetch).toHaveBeenCalledWith('/api/pipeline/approve', expect.objectContaining({
         body: expect.stringContaining('"amount":14.99')
       }));
     });
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve', expect.objectContaining({
+      expect(mockFetch).toHaveBeenCalledWith('/api/pipeline/approve', expect.objectContaining({
         body: expect.stringContaining('"category":"Travel"')
       }));
     });
@@ -508,13 +528,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
     
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: mockEmails.map(e => e.id) }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -522,19 +542,19 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: mockEmails }),
         });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockSilver }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
@@ -546,8 +566,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     render(<App />);
     
-    // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    // Navigate to Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -560,6 +580,9 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for the emails to appear
     expect(await screen.findByText('Inv 123')).toBeInTheDocument();
@@ -606,25 +629,25 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockSilver }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: [] }),
         });
       }
-      if (url.includes('/api/gmail/approve-batch')) {
+      if ((url.includes('/api/pipeline/approve-batch') || url.includes('/api/pipeline/approve-batch'))) {
         expect(init.method).toBe('POST');
         const body = JSON.parse(init.body);
         expect(body.silverIds).toEqual(['silver_1', 'silver_2']);
@@ -640,7 +663,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Click on Silver tab
     fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
@@ -668,7 +691,7 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Verify batch approval endpoint was called
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/gmail/approve-batch', expect.any(Object));
+      expect(mockFetch).toHaveBeenCalledWith('/api/pipeline/approve-batch', expect.any(Object));
     });
 
     vi.unstubAllGlobals();
@@ -690,13 +713,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: mockEmails.map(e => e.id) }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -704,19 +727,19 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockSilver }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: mockEmails }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
@@ -729,7 +752,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -742,6 +765,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for the emails to appear
     expect(await screen.findByText('Inv 123 (Processed)')).toBeInTheDocument();
@@ -789,13 +814,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: mockEmails.map(e => e.id) }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -803,25 +828,25 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: mockEmails }),
         });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockSilver }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockGold }),
         });
       }
-      if (url.includes('/api/gmail/approve')) {
+      if (url.includes('/api/pipeline/approve')) {
         const body = JSON.parse(init.body);
         expect(body.paymentMethod).toBe('UPI Edited');
         return Promise.resolve({
@@ -829,7 +854,7 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'approved' }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions/gold_1')) {
+      if (url.includes('/gold-transactions/gold_1')) {
         const body = JSON.parse(init.body);
         expect(body.paymentMethod).toBe('HDFC credit card Edited');
         return Promise.resolve({ ok: true });
@@ -840,8 +865,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     render(<App />);
     
-    // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    // Navigate to Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -854,6 +879,9 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Click Silver tab
     fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
@@ -907,13 +935,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: ['p1', 'p2'] }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -921,10 +949,10 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
       }
-      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) || (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
       }
       return Promise.reject(new Error('Unknown url'));
@@ -934,7 +962,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
     
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -947,6 +975,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // 1. Should display progress widget
     const progressWidget = await screen.findByTestId('ingestion-progress-widget');
@@ -975,13 +1005,13 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     let extractCallsCount = 0;
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/fetch-list')) {
+      if (url.includes('fetch-list')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ messageIds: ['e1', 'e2'] }),
         });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         const bodyObj = JSON.parse(init.body);
         const email = mockEmails.find(e => e.id === bodyObj.messageId);
         return Promise.resolve({
@@ -989,10 +1019,10 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ status: 'fetched', email }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
       }
-      if (url.includes('/api/gmail/extract')) {
+      if ((url.includes('/api/pipeline/extract') || url.includes('/api/pipeline/extract'))) {
         extractCallsCount++;
         const bodyObj = JSON.parse(init.body);
         const rawEmailId = bodyObj.rawEmailIds[0];
@@ -1012,7 +1042,7 @@ describe('Requirement Traceability Matrix Verification', () => {
           })
         });
       }
-      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) || (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
       }
       return Promise.reject(new Error('Unknown url: ' + url));
@@ -1021,8 +1051,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     render(<App />);
     
-    // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    // Navigate to Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
     // Input filters to pass check
     fireEvent.change(screen.getByLabelText(/Start Date/i), { target: { value: '2023-01-01' } });
@@ -1035,6 +1065,9 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Click Authorize & Fetch to load emails
     fireEvent.click(screen.getByText(/Authorize & Fetch/i));
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for the mock fetch to resolve
     expect(await screen.findByText('Uber Ride Receipt')).toBeInTheDocument();
@@ -1059,7 +1092,7 @@ describe('Requirement Traceability Matrix Verification', () => {
       expect(screen.getByText(/Extraction Completed Successfully/i)).toBeInTheDocument();
     });
     
-    expect(screen.getByText(/Successfully processed and extracted 2 email/i)).toBeInTheDocument();
+    expect(screen.getByText(/Successfully processed and extracted 2/i)).toBeInTheDocument();
     expect(extractCallsCount).toBe(2);
 
     // 3. Click dismiss
@@ -1089,19 +1122,19 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockSilver }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: [] }),
@@ -1114,7 +1147,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
     
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Click Silver tab
     fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
@@ -1170,19 +1203,19 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockGold }),
         });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: [] }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: [] }),
@@ -1195,7 +1228,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
     
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Click Gold tab
     fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
@@ -1246,27 +1279,22 @@ describe('Requirement Traceability Matrix Verification', () => {
    * [FUNC-GMAIL-29] Fetcher Filter Layout Isolation: The fetching configuration filter panel must only be displayed in the Bronze tab.
    * [NFR-USAB-5] Layout Contextual Adaptability: The UI layout must adapt contextually and hide the Fetcher Config panel on Silver and Gold tabs.
    */
-  it('displays the Fetcher Config panel only on the Bronze tab and hides it on Silver and Gold tabs', async () => {
+  it('displays the Fetcher Config panel only on the Gmail Ingestion tab and hides it on Direct Ledger Entry tab', async () => {
     render(<App />);
     
-    // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    // Navigate to Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
 
-    // By default, Bronze tab is active, so Fetcher Config should be visible
+    // By default, Gmail Ingestion tab is active, so Fetcher Config should be visible
     expect(screen.getByText(/Fetcher Config/i)).toBeInTheDocument();
     
-    // Switch to Silver tab
-    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+    // Switch to Direct Ledger Entry tab
+    fireEvent.click(screen.getByRole('button', { name: /Direct Ledger Entry/i }));
     // Fetcher Config should NOT be in the document
     expect(screen.queryByText(/Fetcher Config/i)).not.toBeInTheDocument();
 
-    // Switch to Gold tab
-    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
-    // Fetcher Config should NOT be in the document
-    expect(screen.queryByText(/Fetcher Config/i)).not.toBeInTheDocument();
-
-    // Switch back to Bronze tab
-    fireEvent.click(screen.getByRole('button', { name: /Bronze/i }));
+    // Switch back to Gmail Ingestion tab
+    fireEvent.click(screen.getByRole('button', { name: /Gmail Ingestion/i }));
     // Fetcher Config should be visible again
     expect(screen.getByText(/Fetcher Config/i)).toBeInTheDocument();
   });
@@ -1287,13 +1315,13 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url) => {
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
       }
       return Promise.reject(new Error('Unknown url'));
@@ -1303,7 +1331,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
     
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for the Bronze raw emails to load and open the first one
     const emailSubject = await screen.findByText('Inv 123');
@@ -1357,16 +1385,16 @@ describe('Requirement Traceability Matrix Verification', () => {
     const restoreMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'restored' }) });
 
     const mockFetch = vi.fn().mockImplementation((url, options) => {
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
       }
-      if (url.includes('/api/gmail/deleted')) {
+      if ((url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
@@ -1376,16 +1404,16 @@ describe('Requirement Traceability Matrix Verification', () => {
           })
         });
       }
-      if (url.includes('/api/gmail/revert-to-silver')) {
+      if ((url.includes('/api/gmail/revert-to-silver') || url.includes('/api/pipeline/revert-to-silver'))) {
         return revertGoldMock(url, options);
       }
-      if (url.includes('/api/gmail/revert-to-bronze')) {
+      if ((url.includes('/api/gmail/revert-to-bronze') || url.includes('/api/pipeline/revert-to-bronze'))) {
         return revertSilverMock(url, options);
       }
-      if (url.includes('/api/gmail/delete')) {
+      if ((url.includes('/api/gmail/delete') || url.includes('/api/pipeline/delete'))) {
         return deleteMock(url, options);
       }
-      if (url.includes('/api/gmail/restore')) {
+      if ((url.includes('/api/gmail/restore') || url.includes('/api/pipeline/restore'))) {
         return restoreMock(url, options);
       }
       return Promise.reject(new Error('Unknown url: ' + url));
@@ -1395,7 +1423,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // --- 1. Test Delete Bronze Raw Email ---
     const subjectCell = await screen.findByText('Inv Unprocessed');
@@ -1508,22 +1536,22 @@ describe('Requirement Traceability Matrix Verification', () => {
     ];
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockSilver }),
         });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ transactions: mockGold }),
         });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
       }
-      if (url.includes('/api/gmail/deleted')) {
+      if ((url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
       }
       return Promise.reject(new Error('Unknown url: ' + url));
@@ -1533,7 +1561,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Switch to Silver tab
     fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
@@ -1616,19 +1644,19 @@ describe('Requirement Traceability Matrix Verification', () => {
     });
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
-      if (url.includes('/api/gmail/silver-transactions/silver_error_1')) {
+      if (url.includes('/silver-transactions/silver_error_1')) {
         return updateMock(url, init);
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
       }
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
       }
-      if (url.includes('/api/gmail/deleted')) {
+      if ((url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
       }
-      if (url.includes('/api/gmail/fetch-detail')) {
+      if (url.includes('fetch-detail')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'fetched', email: mockEmails[0] }) });
       }
       return Promise.reject(new Error('Unknown url: ' + url));
@@ -1638,7 +1666,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Switch to Silver tab
     fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
@@ -1704,22 +1732,22 @@ describe('Requirement Traceability Matrix Verification', () => {
     const extractMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ extracted: [] }) });
 
     const mockFetch = vi.fn().mockImplementation((url, options) => {
-      if (url.includes('/api/gmail/raw-emails')) {
+      if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
       }
-      if (url.includes('/api/gmail/silver-transactions')) {
+      if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
       }
-      if (url.includes('/api/gmail/gold-transactions')) {
+      if ((url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions'))) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
       }
-      if (url.includes('/api/gmail/deleted')) {
+      if ((url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted'))) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] })
         });
       }
-      if (url.includes('/api/gmail/extract')) {
+      if ((url.includes('/api/pipeline/extract') || url.includes('/api/pipeline/extract'))) {
         return extractMock(url, options);
       }
       return Promise.reject(new Error('Unknown url: ' + url));
@@ -1729,7 +1757,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Gmail Fetch page
-    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // --- 1. Test Transactional Email ---
     const txEmailCell = await screen.findByText('Receipt 1');
@@ -1766,6 +1794,75 @@ describe('Requirement Traceability Matrix Verification', () => {
     const detailModalNonTx = screen.getByTestId('email-detail-modal');
     expect(detailModalNonTx).toBeInTheDocument();
     expect(within(detailModalNonTx).queryByTestId('modal-extract-btn')).not.toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-CORE-2] Direct Manual Transaction Entry Validation.
+   * Verify that the manual transaction form enforces validation rules and submits successfully.
+   */
+  it('validates and submits manual direct ledger entries successfully without redirecting', async () => {
+    const addMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'added' }) });
+    const mockFetch = vi.fn().mockImplementation((url, options) => {
+      if (url.includes('/api/pipeline/add-transaction')) {
+        return addMock(url, options);
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] })
+        });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Data Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
+
+    // Click on Direct Ledger Entry tab
+    fireEvent.click(screen.getByRole('button', { name: /Direct Ledger Entry/i }));
+
+    // Attempt to submit empty form -> checks validation error
+    const submitBtn = screen.getByRole('button', { name: /Save Transaction/i });
+    fireEvent.click(submitBtn);
+    expect(await screen.findByText(/Merchant name is required/i)).toBeInTheDocument();
+
+    // Enter merchant name, but invalid amount -> checks validation error
+    const merchantInput = screen.getByLabelText(/Merchant Name \*/i) as HTMLInputElement;
+    fireEvent.change(merchantInput, { target: { value: 'Test Merchant' } });
+    const amountInput = screen.getByLabelText(/Amount \*/i) as HTMLInputElement;
+    fireEvent.change(amountInput, { target: { value: '-10' } });
+    fireEvent.click(submitBtn);
+    expect(await screen.findByText(/Amount must be a positive number/i)).toBeInTheDocument();
+
+    // Fix amount and submit successfully
+    fireEvent.change(amountInput, { target: { value: '150.50' } });
+    fireEvent.click(submitBtn);
+
+    // Verify success banner is shown and input fields are cleared
+    expect(await screen.findByText(/Successfully added transaction for Test Merchant/i)).toBeInTheDocument();
+    expect(merchantInput.value).toBe('');
+    expect(amountInput.value).toBe('');
+
+    // Verify POST was called with the correct payload
+    expect(addMock).toHaveBeenCalled();
+    const addPayload = JSON.parse(addMock.mock.calls[0][1].body);
+    expect(addPayload.merchant).toBe('Test Merchant');
+    expect(addPayload.amount).toBe(150.5);
+    expect(addPayload.currency).toBe('INR');
 
     vi.unstubAllGlobals();
   });

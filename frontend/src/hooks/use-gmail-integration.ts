@@ -24,6 +24,7 @@ export interface GmailMessage {
   snippet: string;
   body: string;
   hasTransaction: boolean;
+  sourceType?: string;
   extracted?: {
     id: string;
     merchant: string;
@@ -39,7 +40,9 @@ export interface GmailMessage {
 
 export interface SilverTransaction {
   id: string;
-  rawEmailId: string;
+  bronzeInputId: string;
+  rawEmailId: string; // Compatibility
+  sourceType: string;
   merchantRaw: string;
   merchantNormalized?: string;
   amount: number;
@@ -49,9 +52,12 @@ export interface SilverTransaction {
   confidenceScore?: number;
   status: 'pending' | 'approved' | 'rejected' | 'error';
   extractedAt?: string;
-  emailSubject?: string;
-  emailSender?: string;
-  emailReceivedAt?: string;
+  sourceTitle?: string;
+  sourceSender?: string;
+  sourceReceivedAt?: string;
+  emailSubject?: string; // Compatibility
+  emailSender?: string; // Compatibility
+  emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
 }
@@ -60,6 +66,7 @@ export interface GoldTransaction {
   id: string;
   pendingTxId?: string;
   userId: string;
+  sourceType: string;
   merchant: string;
   amount: number;
   currency: string;
@@ -68,10 +75,14 @@ export interface GoldTransaction {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
-  emailSubject?: string;
-  emailSender?: string;
-  emailReceivedAt?: string;
-  bronzeEmailId?: string;
+  sourceTitle?: string;
+  sourceSender?: string;
+  sourceReceivedAt?: string;
+  bronzeInputId?: string;
+  rawEmailId?: string; // Compatibility
+  emailSubject?: string; // Compatibility
+  emailSender?: string; // Compatibility
+  emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
 }
@@ -127,7 +138,7 @@ export const useGmailIntegration = () => {
       if (start) query.append('startDate', start);
       if (end) query.append('endDate', end);
       const queryString = query.toString();
-      const url = queryString ? `/api/gmail/raw-emails?${queryString}` : '/api/gmail/raw-emails';
+      const url = queryString ? `/api/pipeline/raw-inputs?${queryString}` : '/api/pipeline/raw-inputs';
       const authHeaders = await getAuthHeaders();
       const res = await fetch(url, {
         headers: {
@@ -139,11 +150,13 @@ export const useGmailIntegration = () => {
         const mapped = (data.emails || []).map((e: any) => ({
           id: e.id,
           sender: e.sender,
-          subject: e.subject,
+          subject: e.title || e.subject,
           date: e.receivedAt || e.date,
           snippet: e.snippet,
           body: e.rawBody || e.body || '',
           hasTransaction: e.hasTransaction !== undefined ? !!e.hasTransaction : false,
+          sourceType: e.sourceType || 'email',
+          extracted: e.extracted,
         }));
         setRawEmails(mapped);
         // Backwards compatibility for tests that read "emails"
@@ -160,7 +173,7 @@ export const useGmailIntegration = () => {
       if (start) query.append('startDate', start);
       if (end) query.append('endDate', end);
       const queryString = query.toString();
-      const url = queryString ? `/api/gmail/silver-transactions?${queryString}` : '/api/gmail/silver-transactions';
+      const url = queryString ? `/api/pipeline/silver-transactions?${queryString}` : '/api/pipeline/silver-transactions';
       const authHeaders = await getAuthHeaders();
       const res = await fetch(url, {
         headers: {
@@ -169,7 +182,14 @@ export const useGmailIntegration = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setSilverTransactions(data.transactions || []);
+        const mapped = (data.transactions || []).map((tx: any) => ({
+          ...tx,
+          emailSubject: tx.sourceTitle || tx.emailSubject,
+          emailSender: tx.sourceSender || tx.emailSender,
+          emailReceivedAt: tx.sourceReceivedAt || tx.emailReceivedAt,
+          rawEmailId: tx.bronzeInputId || tx.rawEmailId,
+        }));
+        setSilverTransactions(mapped);
       }
     } catch (err) {
       console.warn('Failed to load silver transactions silently (normal in test mocks):', err);
@@ -182,7 +202,7 @@ export const useGmailIntegration = () => {
       if (start) query.append('startDate', start);
       if (end) query.append('endDate', end);
       const queryString = query.toString();
-      const url = queryString ? `/api/gmail/gold-transactions?${queryString}` : '/api/gmail/gold-transactions';
+      const url = queryString ? `/api/pipeline/gold-transactions?${queryString}` : '/api/pipeline/gold-transactions';
       const authHeaders = await getAuthHeaders();
       const res = await fetch(url, {
         headers: {
@@ -191,7 +211,15 @@ export const useGmailIntegration = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setGoldTransactions(data.transactions || []);
+        const mapped = (data.transactions || []).map((tx: any) => ({
+          ...tx,
+          emailSubject: tx.sourceTitle || tx.emailSubject,
+          emailSender: tx.sourceSender || tx.emailSender,
+          emailReceivedAt: tx.sourceReceivedAt || tx.emailReceivedAt,
+          bronzeEmailId: tx.bronzeInputId || tx.bronzeEmailId,
+          rawEmailId: tx.bronzeInputId || tx.bronzeEmailId,
+        }));
+        setGoldTransactions(mapped);
       }
     } catch (err) {
       console.warn('Failed to load gold transactions silently (normal in test mocks):', err);
@@ -201,7 +229,7 @@ export const useGmailIntegration = () => {
   const loadDeletedLayers = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/gmail/deleted', {
+      const res = await fetch('/api/pipeline/deleted', {
         headers: {
           ...authHeaders,
         },
@@ -211,16 +239,31 @@ export const useGmailIntegration = () => {
         const mapped = (data.emails || []).map((e: any) => ({
           id: e.id,
           sender: e.sender,
-          subject: e.subject,
+          subject: e.title || e.subject,
           date: e.receivedAt || e.date,
           snippet: e.snippet,
           body: e.rawBody || e.body || '',
           hasTransaction: e.hasTransaction !== undefined ? !!e.hasTransaction : false,
+          sourceType: e.sourceType || 'email',
           deletedAt: e.deletedAt,
+          extracted: e.extracted,
         }));
         setDeletedRawEmails(mapped);
-        setDeletedSilverTransactions(data.silverTransactions || []);
-        setDeletedGoldTransactions(data.goldTransactions || []);
+        setDeletedSilverTransactions((data.silverTransactions || []).map((tx: any) => ({
+          ...tx,
+          emailSubject: tx.sourceTitle || tx.emailSubject,
+          emailSender: tx.sourceSender || tx.emailSender,
+          emailReceivedAt: tx.sourceReceivedAt || tx.emailReceivedAt,
+          rawEmailId: tx.bronzeInputId || tx.rawEmailId,
+        })));
+        setDeletedGoldTransactions((data.goldTransactions || []).map((tx: any) => ({
+          ...tx,
+          emailSubject: tx.sourceTitle || tx.emailSubject,
+          emailSender: tx.sourceSender || tx.emailSender,
+          emailReceivedAt: tx.sourceReceivedAt || tx.emailReceivedAt,
+          bronzeEmailId: tx.bronzeInputId || tx.bronzeEmailId,
+          rawEmailId: tx.bronzeInputId || tx.bronzeEmailId,
+        })));
       }
     } catch (err) {
       console.warn('Failed to load deleted layers silently (normal in test mocks):', err);
@@ -274,7 +317,7 @@ export const useGmailIntegration = () => {
 
     try {
       const authHeaders = await getAuthHeaders();
-      await fetch(`/api/gmail/raw-emails/${id}`, {
+      await fetch(`/api/pipeline/raw-inputs/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -301,7 +344,7 @@ export const useGmailIntegration = () => {
 
     try {
       const authHeaders = await getAuthHeaders();
-      await fetch(`/api/gmail/raw-emails/${id}`, {
+      await fetch(`/api/pipeline/raw-inputs/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -342,7 +385,7 @@ export const useGmailIntegration = () => {
         }));
 
         try {
-          const response = await fetch('/api/gmail/extract', {
+          const response = await fetch('/api/pipeline/extract', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -363,7 +406,7 @@ export const useGmailIntegration = () => {
           // Update local rawEmails and emails state
           const updateState = (prev: GmailMessage[]) =>
             prev.map(email => {
-              const match = matches.find((e: any) => e.rawEmailId === email.id);
+              const match = matches.find((e: any) => e.bronzeInputId === email.id);
               if (match) {
                 return {
                   ...email,
@@ -417,7 +460,7 @@ export const useGmailIntegration = () => {
       setFetchProgress({ status: 'started', current: 0, total: 0 });
       try {
         const authHeaders = await getAuthHeaders();
-        const response = await fetch('/api/gmail/fetch-list', {
+        const response = await fetch('/api/ingestion/gmail/fetch-list', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -447,7 +490,7 @@ export const useGmailIntegration = () => {
         for (let i = 0; i < messageIds.length; i++) {
           const msgId = messageIds[i];
           try {
-            const detailRes = await fetch('/api/gmail/fetch-detail', {
+            const detailRes = await fetch('/api/ingestion/gmail/fetch-detail', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -508,7 +551,7 @@ export const useGmailIntegration = () => {
   const updateSilverTransaction = async (id: string, updates: Partial<SilverTransaction>) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/gmail/silver-transactions/${id}`, {
+      const response = await fetch(`/api/pipeline/silver-transactions/${id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -527,7 +570,7 @@ export const useGmailIntegration = () => {
   const updateGoldTransaction = async (id: string, updates: Partial<GoldTransaction>) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/gmail/gold-transactions/${id}`, {
+      const response = await fetch(`/api/pipeline/gold-transactions/${id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -557,7 +600,7 @@ export const useGmailIntegration = () => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/gmail/approve', {
+      const response = await fetch('/api/pipeline/approve', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -634,7 +677,7 @@ export const useGmailIntegration = () => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/gmail/approve-batch', {
+      const response = await fetch('/api/pipeline/approve-batch', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -685,13 +728,13 @@ export const useGmailIntegration = () => {
       let url = '';
       let body: any = {};
       if (stage === 'gold') {
-        url = '/api/gmail/revert-to-silver';
+        url = '/api/pipeline/revert-to-silver';
         body = { goldId: ids.goldId };
       } else if (stage === 'silver') {
-        url = '/api/gmail/revert-to-bronze';
+        url = '/api/pipeline/revert-to-bronze';
         body = { silverId: ids.silverId };
       } else {
-        url = '/api/gmail/delete';
+        url = '/api/pipeline/delete';
         body = { bronzeId: ids.bronzeId };
       }
 
@@ -721,7 +764,7 @@ export const useGmailIntegration = () => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/gmail/restore', {
+      const res = await fetch('/api/pipeline/restore', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -736,6 +779,42 @@ export const useGmailIntegration = () => {
       await loadAllLayers();
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addDirectTransaction = async (tx: {
+    merchant: string;
+    amount: number;
+    currency: string;
+    transactionDate: string;
+    category: string;
+    paymentMethod: string;
+    notes?: string;
+  }) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch('/api/pipeline/add-transaction', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify(tx),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add manual transaction');
+      }
+
+      await loadGoldTransactions();
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -792,5 +871,6 @@ export const useGmailIntegration = () => {
     revertOrDeleteRecord,
     restoreBronzeEmail,
     loadDeletedLayers,
+    addDirectTransaction,
   };
 };

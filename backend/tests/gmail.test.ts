@@ -35,7 +35,7 @@ describe('Gmail API Integration', () => {
     await repository.initializeSchema();
     await (repository as any).run("DELETE FROM gold_transactions WHERE silver_tx_id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2') OR id IN ('del_gold_1', 'validation_test_gold_1', 'approve_test_gold_1')");
     await (repository as any).run("DELETE FROM silver_extracted_transactions WHERE id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2')");
-    await (repository as any).run("DELETE FROM bronze_raw_emails WHERE id IN ('detail_msg_1', 'test_raw_tx_1', 'test_raw_otp_1', 'del_bronze_1')");
+    await (repository as any).run("DELETE FROM bronze_raw_inputs WHERE id IN ('detail_msg_1', 'test_raw_tx_1', 'test_raw_otp_1', 'del_bronze_1')");
     await repository.close();
   });
 
@@ -317,29 +317,31 @@ describe('Gmail API Integration', () => {
 
   /**
    * [BUG-002] Ingestion Status Persistence: Verify raw-emails endpoint returns hasTransaction correctly.
-   * [BUG-003] ISO Date Normalization: Verify receivedAt ISO string normalization inside saveRawEmail.
+   * [BUG-003] ISO Date Normalization: Verify receivedAt ISO string normalization inside saveRawInput.
    */
   it('should return raw emails with hasTransaction derived correctly from payload/subject', async () => {
     const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: 'test_raw_tx_1',
       userId: 'user-123',
+      sourceType: 'email',
       sender: 'store@shop.com',
-      subject: 'Order Receipt',
+      title: 'Order Receipt',
       snippet: 'Thanks for spending money',
       rawBody: 'Full email body',
       rawPayload: JSON.stringify({ id: 'test_raw_tx_1', hasTransaction: true }),
       receivedAt: '2023-01-10T10:00:00Z',
     });
 
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: 'test_raw_otp_1',
       userId: 'user-123',
+      sourceType: 'email',
       sender: 'bank@auth.com',
-      subject: 'Your OTP Code',
+      title: 'Your OTP Code',
       snippet: 'OTP is 123456',
       rawBody: 'Do not share',
       rawPayload: JSON.stringify({ id: 'test_raw_otp_1' }),
@@ -372,11 +374,12 @@ describe('Gmail API Integration', () => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: 'test_raw_tx_1',
       userId: 'user-123',
+      sourceType: 'email',
       sender: 'store@shop.com',
-      subject: 'Order Receipt',
+      title: 'Order Receipt',
       snippet: 'Thanks for spending money',
       rawBody: 'Full email body',
       rawPayload: JSON.stringify({ id: 'test_raw_tx_1', hasTransaction: true }),
@@ -412,20 +415,23 @@ describe('Gmail API Integration', () => {
     await repository.initializeSchema();
 
     // 1. Seed active records in Bronze, Silver, Gold
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: 'del_bronze_1',
       userId: 'user-123',
+      sourceType: 'email',
       sender: 'sender@del.com',
-      subject: 'Raw Del Test',
+      title: 'Raw Del Test',
       snippet: 'Raw text snippet',
       rawBody: 'Full email body',
+      rawPayload: '{}',
       receivedAt: '2023-01-10T10:00:00Z',
     });
 
     await repository.savePendingTransaction({
       id: 'del_silver_1',
-      rawEmailId: 'del_bronze_1',
+      bronzeInputId: 'del_bronze_1',
       userId: 'user-123',
+      sourceType: 'email',
       merchantRaw: 'Del Merchant',
       amount: 45.99,
       currency: 'USD',
@@ -438,6 +444,7 @@ describe('Gmail API Integration', () => {
       id: 'del_gold_1',
       pendingTxId: 'del_silver_1',
       userId: 'user-123',
+      sourceType: 'email',
       merchant: 'Del Merchant Approved',
       amount: 45.99,
       currency: 'USD',
@@ -466,7 +473,7 @@ describe('Gmail API Integration', () => {
     expect(revertGoldRes.status).toBe(200);
     expect(revertGoldRes.body.status).toBe('reverted');
 
-    // Verify Gold is gone, Silver is still active (status reset to pending/error)
+    // Verify Gold is gone, Silver is still active
     const postRevertGoldRes = await request(app).get('/api/gmail/gold-transactions').set('Authorization', 'Bearer valid-token');
     const postRevertSilverRes = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
     expect(postRevertGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(false);
@@ -525,22 +532,25 @@ describe('Gmail API Integration', () => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    // 0. Seed raw email in Bronze to satisfy FK constraint
-    await repository.saveRawEmail({
+    // 0. Seed raw input in Bronze to satisfy FK constraint
+    await repository.saveRawInput({
       id: 'test_raw_tx_1',
       userId: 'user-123',
+      sourceType: 'email',
       sender: 'sender@test.com',
-      subject: 'Test Subject',
+      title: 'Test Subject',
       snippet: 'Test Snippet',
       rawBody: 'Full email body',
+      rawPayload: '{}',
       receivedAt: '2023-01-10T10:00:00Z',
     });
 
     // 1. Save with missing amount and paymentMethod -> should get 'error' status
     await repository.savePendingTransaction({
       id: 'validation_test_silver_1',
-      rawEmailId: 'test_raw_tx_1',
+      bronzeInputId: 'test_raw_tx_1',
       userId: 'user-123',
+      sourceType: 'email',
       merchantRaw: 'Missing Fields Merchant',
       amount: 0,
       currency: 'USD',
@@ -557,6 +567,7 @@ describe('Gmail API Integration', () => {
       id: 'validation_test_gold_1',
       pendingTxId: 'validation_test_silver_1',
       userId: 'user-123',
+      sourceType: 'email',
       merchant: 'Missing Fields Merchant',
       amount: 45.99,
       currency: 'USD',
@@ -594,22 +605,25 @@ describe('Gmail API Integration', () => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    // 0. Seed raw email in Bronze to satisfy FK constraint
-    await repository.saveRawEmail({
+    // 0. Seed raw input in Bronze to satisfy FK constraint
+    await repository.saveRawInput({
       id: 'test_raw_tx_1',
       userId: 'user-123',
+      sourceType: 'email',
       sender: 'sender@test.com',
-      subject: 'Test Subject',
+      title: 'Test Subject',
       snippet: 'Test Snippet',
       rawBody: 'Full email body',
+      rawPayload: '{}',
       receivedAt: '2023-01-10T10:00:00Z',
     });
 
     // 1. Seed valid pending transaction in silver staging
     await repository.savePendingTransaction({
       id: 'approve_test_silver_1',
-      rawEmailId: 'test_raw_tx_1',
+      bronzeInputId: 'test_raw_tx_1',
       userId: 'user-123',
+      sourceType: 'email',
       merchantRaw: 'Valid Merchant',
       amount: 25.50,
       currency: 'USD',
@@ -649,8 +663,9 @@ describe('Gmail API Integration', () => {
     await repo3.initializeSchema();
     await repo3.savePendingTransaction({
       id: 'approve_test_silver_2',
-      rawEmailId: 'test_raw_tx_1',
+      bronzeInputId: 'test_raw_tx_1',
       userId: 'user-123',
+      sourceType: 'email',
       merchantRaw: 'Valid Merchant 2',
       amount: 15.00,
       currency: 'USD',

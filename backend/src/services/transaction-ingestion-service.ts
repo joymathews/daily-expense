@@ -28,12 +28,13 @@ export class TransactionIngestionService {
       return { status: 'skipped' };
     }
 
-    // 2. Save raw email to the database (Bronze / Raw)
-    await this.repo.saveRawEmail({
+    // 2. Save raw input to the database (Bronze / Raw)
+    await this.repo.saveRawInput({
       id: email.id,
       userId: email.userId,
+      sourceType: 'email',
       sender: email.sender,
-      subject: email.subject,
+      title: email.subject,
       snippet: email.snippet,
       rawBody: email.rawBody,
       rawPayload: email.rawPayload,
@@ -46,8 +47,9 @@ export class TransactionIngestionService {
       if (extracted) {
         const pendingTx = {
           id: crypto.randomUUID(),
-          rawEmailId: email.id,
+          bronzeInputId: email.id,
           userId: email.userId,
+          sourceType: 'email',
           merchantRaw: extracted.merchant,
           merchantNormalized: extracted.merchant,
           amount: extracted.amount,

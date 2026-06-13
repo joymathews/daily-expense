@@ -45,7 +45,7 @@ describe('Transaction Processing Pipeline Integration', () => {
    * Test assertions verify that new transactional emails are successfully logged in raw table
    * and parsed staging results are written to the pending staging table.
    */
-  it('should ingest raw email into raw_emails and extract transaction to pending_transactions when transactional', async () => {
+  it('should ingest raw email into raw_inputs and extract transaction to pending_transactions when transactional', async () => {
     const emailId = 'email_unique_123';
     const rawContent = 'Uber ride invoice: paid USD 14.50 for ride.';
     
@@ -66,7 +66,7 @@ describe('Transaction Processing Pipeline Integration', () => {
     expect(result.extracted.merchantRaw).toBe('Uber Inc');
     expect(result.extracted.amount).toBe(14.50);
 
-    // Verify raw email exists in Bronze raw table
+    // Verify raw input exists in Bronze raw table
     const exists = await repository.emailExists(emailId, 'testuser');
     expect(exists).toBe(true);
 
@@ -87,12 +87,13 @@ describe('Transaction Processing Pipeline Integration', () => {
   it('should skip email ingestion and extraction entirely if the Gmail ID already exists in the system', async () => {
     const emailId = 'duplicate_email_999';
     
-    // Ingest the raw email once
-    await repository.saveRawEmail({
+    // Ingest the raw input once
+    await repository.saveRawInput({
       id: emailId,
       userId: 'testuser',
+      sourceType: 'email',
       sender: 'rides@uber.com',
-      subject: 'Duplicate Test',
+      title: 'Duplicate Test',
       snippet: 'Snippet',
       rawBody: 'Content text',
       rawPayload: '{}',
@@ -131,12 +132,13 @@ describe('Transaction Processing Pipeline Integration', () => {
     const pendingId = 'pending_tx_uuid_555';
     const rawEmailId = 'email_id_555';
 
-    // 1. Setup raw email
-    await repository.saveRawEmail({
+    // 1. Setup raw input
+    await repository.saveRawInput({
       id: rawEmailId,
       userId: 'user_test_99',
+      sourceType: 'email',
       sender: 'store@market.com',
-      subject: 'Receipt',
+      title: 'Receipt',
       snippet: 'Spent 10.00',
       rawBody: 'Details',
       rawPayload: '{}',
@@ -146,8 +148,9 @@ describe('Transaction Processing Pipeline Integration', () => {
     // 2. Setup staging record (Silver)
     await repository.savePendingTransaction({
       id: pendingId,
-      rawEmailId: rawEmailId,
+      bronzeInputId: rawEmailId,
       userId: 'user_test_99',
+      sourceType: 'email',
       merchantRaw: 'Market Store',
       amount: 10.00,
       currency: 'USD',
@@ -162,6 +165,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       id: confirmTxId,
       pendingTxId: pendingId,
       userId: 'user_test_99',
+      sourceType: 'email',
       merchant: 'Market Store Co.', // edited merchant
       amount: 9.99,                 // edited amount
       currency: 'USD',
@@ -200,24 +204,25 @@ describe('Transaction Processing Pipeline Integration', () => {
     const mockRepo: ITransactionRepository = {
       initializeSchema: jest.fn().mockResolvedValue(undefined),
       emailExists: jest.fn().mockResolvedValue(false),
-      saveRawEmail: jest.fn().mockResolvedValue(undefined),
+      saveRawInput: jest.fn().mockResolvedValue(undefined),
       savePendingTransaction: jest.fn().mockResolvedValue(undefined),
       getPendingTransactions: jest.fn().mockResolvedValue([]),
       promoteToTransaction: jest.fn().mockResolvedValue(undefined),
-      getRawEmails: jest.fn().mockResolvedValue([]),
+      addDirectGoldTransaction: jest.fn().mockResolvedValue(undefined),
+      getRawInputs: jest.fn().mockResolvedValue([]),
       getSilverTransactions: jest.fn().mockResolvedValue([]),
       getGoldTransactions: jest.fn().mockResolvedValue([]),
       updateGoldTransaction: jest.fn().mockResolvedValue(undefined),
       updatePendingTransaction: jest.fn().mockResolvedValue(undefined),
-      getRawEmailById: jest.fn().mockResolvedValue(undefined),
-      updateRawEmailClassification: jest.fn().mockResolvedValue(undefined),
-      getSilverTransactionByEmailId: jest.fn().mockResolvedValue(undefined),
+      getRawInputById: jest.fn().mockResolvedValue(undefined),
+      updateRawInputClassification: jest.fn().mockResolvedValue(undefined),
+      getSilverTransactionByInputId: jest.fn().mockResolvedValue(undefined),
       getSilverTransactionById: jest.fn().mockResolvedValue(undefined),
       revertGoldToSilver: jest.fn().mockResolvedValue(undefined),
       revertSilverToBronze: jest.fn().mockResolvedValue(undefined),
-      deleteBronzeEmail: jest.fn().mockResolvedValue(undefined),
-      restoreBronzeEmail: jest.fn().mockResolvedValue(undefined),
-      getDeletedRawEmails: jest.fn().mockResolvedValue([]),
+      deleteBronzeInput: jest.fn().mockResolvedValue(undefined),
+      restoreBronzeInput: jest.fn().mockResolvedValue(undefined),
+      getDeletedRawInputs: jest.fn().mockResolvedValue([]),
       close: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -236,7 +241,7 @@ describe('Transaction Processing Pipeline Integration', () => {
 
     // Verify abstraction method was called instead of direct concrete DB operations
     expect(mockRepo.emailExists).toHaveBeenCalledWith('mock_msg_11', 'testuser');
-    expect(mockRepo.saveRawEmail).toHaveBeenCalled();
+    expect(mockRepo.saveRawInput).toHaveBeenCalled();
   });
 
   /**
@@ -250,23 +255,25 @@ describe('Transaction Processing Pipeline Integration', () => {
     const email1 = 'email_batch_1';
     const email2 = 'email_batch_2';
 
-    // Stage 1: Ingest raw emails (Bronze layer only)
-    await repository.saveRawEmail({
+    // Stage 1: Ingest raw inputs (Bronze layer only)
+    await repository.saveRawInput({
       id: email1,
       userId: 'testuser',
+      sourceType: 'email',
       sender: 'store@shop.com',
-      subject: 'Receipt 1',
+      title: 'Receipt 1',
       snippet: 'Paid $10.00',
       rawBody: 'Receipt 1 body content',
       rawPayload: '{}',
       receivedAt: '2023-01-15T12:00:00Z',
     });
 
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: email2,
       userId: 'testuser',
+      sourceType: 'email',
       sender: 'taxi@ride.com',
-      subject: 'Receipt 2',
+      title: 'Receipt 2',
       snippet: 'Paid $15.00',
       rawBody: 'Receipt 2 body content',
       rawPayload: '{}',
@@ -274,10 +281,10 @@ describe('Transaction Processing Pipeline Integration', () => {
     });
 
     // Check Bronze table contents and date filtering
-    const allRaw = await repository.getRawEmails('testuser');
+    const allRaw = await repository.getRawInputs('testuser');
     expect(allRaw).toHaveLength(2);
 
-    const filteredRaw = await repository.getRawEmails('testuser', { startDate: '2023-01-16' });
+    const filteredRaw = await repository.getRawInputs('testuser', { startDate: '2023-01-16' });
     expect(filteredRaw).toHaveLength(1);
     expect(filteredRaw[0].id).toBe(email2);
 
@@ -293,8 +300,9 @@ describe('Transaction Processing Pipeline Integration', () => {
 
     await repository.savePendingTransaction({
       id: silverId1,
-      rawEmailId: email1,
+      bronzeInputId: email1,
       userId: 'testuser',
+      sourceType: 'email',
       merchantRaw: ext1!.merchant,
       amount: ext1!.amount,
       currency: ext1!.currency,
@@ -305,8 +313,9 @@ describe('Transaction Processing Pipeline Integration', () => {
 
     await repository.savePendingTransaction({
       id: silverId2,
-      rawEmailId: email2,
+      bronzeInputId: email2,
       userId: 'testuser',
+      sourceType: 'email',
       merchantRaw: ext2!.merchant,
       amount: ext2!.amount,
       currency: ext2!.currency,
@@ -318,10 +327,10 @@ describe('Transaction Processing Pipeline Integration', () => {
     // Verify Silver layer (Staging) exists and supports lineage metadata joins
     const silverList = await repository.getSilverTransactions('testuser');
     expect(silverList).toHaveLength(2);
-    const item1 = silverList.find(s => s.rawEmailId === email1);
-    const item2 = silverList.find(s => s.rawEmailId === email2);
-    expect(item1?.emailSubject).toBe('Receipt 1'); // Lineage check
-    expect(item2?.emailSubject).toBe('Receipt 2'); // Lineage check
+    const item1 = silverList.find(s => s.bronzeInputId === email1);
+    const item2 = silverList.find(s => s.bronzeInputId === email2);
+    expect(item1?.sourceTitle).toBe('Receipt 1'); // Lineage check
+    expect(item2?.sourceTitle).toBe('Receipt 2'); // Lineage check
 
     // Stage 3: Correct and confirm a Silver transaction to Gold ledger
     const goldId = 'gold_1';
@@ -329,6 +338,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       id: goldId,
       pendingTxId: silverId1,
       userId: 'testuser',
+      sourceType: 'email',
       merchant: 'Uber Cleaned', // edited merchant
       amount: 14.99,            // edited amount
       currency: 'USD',
@@ -347,8 +357,8 @@ describe('Transaction Processing Pipeline Integration', () => {
     expect(goldList).toHaveLength(1);
     expect(goldList[0].merchant).toBe('Uber Cleaned');
     expect(goldList[0].amount).toBe(14.99);
-    expect(goldList[0].emailSubject).toBe('Receipt 1'); // Lineage trace back to Bronze
-    expect(goldList[0].bronzeEmailId).toBe(email1);
+    expect(goldList[0].sourceTitle).toBe('Receipt 1'); // Lineage trace back to Bronze
+    expect(goldList[0].bronzeInputId).toBe(email1);
 
     // Gold corrections support
     await repository.updateGoldTransaction(goldId, 'testuser', {
@@ -387,12 +397,13 @@ describe('Transaction Processing Pipeline Integration', () => {
   it('should ignore duplicate raw email imports at the database level using Gmail Message ID as unique primary key', async () => {
     const emailId = 'dedup_test_id_111';
     
-    // Insert raw email once
-    await repository.saveRawEmail({
+    // Insert raw input once
+    await repository.saveRawInput({
       id: emailId,
       userId: 'testuser',
+      sourceType: 'email',
       sender: 'test@sender.com',
-      subject: 'Subject 1',
+      title: 'Subject 1',
       snippet: 'Snippet 1',
       rawBody: 'Body 1',
       rawPayload: '{}',
@@ -400,22 +411,23 @@ describe('Transaction Processing Pipeline Integration', () => {
     });
 
     // Attempt to insert duplicate raw email with different details
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: emailId,
       userId: 'testuser',
+      sourceType: 'email',
       sender: 'different@sender.com',
-      subject: 'Different Subject',
+      title: 'Different Subject',
       snippet: 'Different Snippet',
       rawBody: 'Different Body',
       rawPayload: '{}',
       receivedAt: '2023-01-16T10:00:00Z',
     });
 
-    // Retrieve the raw email and verify that the original record was kept (duplicate ignored)
-    const email = await repository.getRawEmailById(emailId, 'testuser');
+    // Retrieve the raw input and verify that the original record was kept (duplicate ignored)
+    const email = await repository.getRawInputById(emailId, 'testuser');
     expect(email).toBeDefined();
     expect(email!.sender).toBe('test@sender.com');
-    expect(email!.subject).toBe('Subject 1');
+    expect(email!.title).toBe('Subject 1');
   });
 
   /**
@@ -429,29 +441,31 @@ describe('Transaction Processing Pipeline Integration', () => {
     const goldId = 'medallion_gold_789';
 
     // 1. Insert into Bronze (Raw Email)
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: emailId,
       userId: 'testuser',
+      sourceType: 'email',
       sender: 'merchant@store.com',
-      subject: 'Order Confirmation',
+      title: 'Order Confirmation',
       snippet: 'Order details',
       rawBody: 'Item amount: 15.00',
       rawPayload: '{}',
       receivedAt: '2023-01-17T12:00:00Z',
     });
 
-    // Verify raw email exists in Bronze but not in Silver or Gold
-    const rawExists = await repository.getRawEmailById(emailId, 'testuser');
+    // Verify raw input exists in Bronze but not in Silver or Gold
+    const rawExists = await repository.getRawInputById(emailId, 'testuser');
     expect(rawExists).toBeDefined();
     
     const silverBefore = await repository.getSilverTransactions('testuser');
-    expect(silverBefore.some(tx => tx.rawEmailId === emailId)).toBe(false);
+    expect(silverBefore.some(tx => tx.bronzeInputId === emailId)).toBe(false);
 
     // 2. Extract and save to Silver (Staging)
     await repository.savePendingTransaction({
       id: silverId,
-      rawEmailId: emailId,
+      bronzeInputId: emailId,
       userId: 'testuser',
+      sourceType: 'email',
       merchantRaw: 'Merchant Store',
       amount: 15.00,
       currency: 'USD',
@@ -464,7 +478,7 @@ describe('Transaction Processing Pipeline Integration', () => {
     const silverList = await repository.getSilverTransactions('testuser');
     const silverItem = silverList.find(s => s.id === silverId);
     expect(silverItem).toBeDefined();
-    expect(silverItem!.rawEmailId).toBe(emailId);
+    expect(silverItem!.bronzeInputId).toBe(emailId);
 
     // Verify Gold ledger does not yet contain this transaction
     const goldListBefore = await repository.getGoldTransactions('testuser');
@@ -475,6 +489,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       id: goldId,
       pendingTxId: silverId,
       userId: 'testuser',
+      sourceType: 'email',
       merchant: 'Merchant Store Inc',
       amount: 15.00,
       currency: 'USD',
@@ -483,9 +498,9 @@ describe('Transaction Processing Pipeline Integration', () => {
       paymentMethod: 'Credit Card',
     });
 
-    // Verify isolation and linkage:
-    // Raw email in Bronze still exists intact
-    const rawAfter = await repository.getRawEmailById(emailId, 'testuser');
+    // Verify isolation and lineage:
+    // Raw input in Bronze still exists intact
+    const rawAfter = await repository.getRawInputById(emailId, 'testuser');
     expect(rawAfter).toBeDefined();
 
     // Silver staging record status has transitioned to approved
@@ -499,7 +514,7 @@ describe('Transaction Processing Pipeline Integration', () => {
     const goldItem = goldListAfter.find(g => g.id === goldId);
     expect(goldItem).toBeDefined();
     expect(goldItem!.pendingTxId).toBe(silverId);
-    expect(goldItem!.bronzeEmailId).toBe(emailId);
+    expect(goldItem!.bronzeInputId).toBe(emailId);
   });
 
   /**
@@ -515,11 +530,12 @@ describe('Transaction Processing Pipeline Integration', () => {
     const userId = 'user_pm_test';
 
     // 1. Ingest Bronze layer
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: emailId,
       userId,
+      sourceType: 'email',
       sender: 'upi@bank.com',
-      subject: 'UPI Payment Alert',
+      title: 'UPI Payment Alert',
       snippet: 'Paid INR 250 via UPI',
       rawBody: 'Tx Details: Paid to Merchant X via UPI.',
       rawPayload: '{}',
@@ -534,8 +550,9 @@ describe('Transaction Processing Pipeline Integration', () => {
     // 3. Save extracted to Silver (Staging)
     await repository.savePendingTransaction({
       id: silverId,
-      rawEmailId: emailId,
+      bronzeInputId: emailId,
       userId,
+      sourceType: 'email',
       merchantRaw: extractionResult!.merchant,
       amount: extractionResult!.amount,
       currency: extractionResult!.currency,
@@ -564,6 +581,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       id: goldId,
       pendingTxId: silverId,
       userId,
+      sourceType: 'email',
       merchant: 'Uber Cleaned',
       amount: 14.50,
       currency: 'USD',

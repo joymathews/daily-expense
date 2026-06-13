@@ -150,9 +150,9 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                   className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
                 />
               </th>
-              <th className="px-4 py-3 text-left">Sender</th>
-              <th className="px-4 py-3 text-left">Subject / Details</th>
-              <th className="px-4 py-3 text-right">Received Date</th>
+              <th className="px-4 py-3 text-left">Sender / Source</th>
+              <th className="px-4 py-3 text-left">Title / Details</th>
+              <th className="px-4 py-3 text-right">Date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 bg-white">
@@ -185,6 +185,13 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                   <td onClick={() => setSelectedEmail(email)} className="px-4 py-3 cursor-pointer hover:text-indigo-650 transition-colors">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="text-xs font-semibold text-gray-900 leading-tight">{email.subject}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
+                        email.sourceType === 'manual' 
+                          ? 'bg-amber-50 text-amber-700 border border-amber-100' 
+                          : 'bg-blue-50 text-blue-750 border border-blue-100'
+                      }`}>
+                        {email.sourceType || 'email'}
+                      </span>
                       {isEmailProcessed(email) && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
                           ✓ Processed

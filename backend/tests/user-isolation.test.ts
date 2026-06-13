@@ -15,53 +15,55 @@ describe('Transaction User Isolation Integration', () => {
   });
 
   /**
-   * [FUNC-AUTH-4] Transaction User Isolation: Raw emails (Bronze) must be isolated by user.
-   * [NFR-SEC-5] Data Segregation Enforcement: Verify user A cannot see or access user B's raw emails.
+   * [FUNC-AUTH-4] Transaction User Isolation: Raw inputs (Bronze) must be isolated by user.
+   * [NFR-SEC-5] Data Segregation Enforcement: Verify user A cannot see or access user B's raw inputs.
    */
-  it('should isolate raw emails (Bronze) by user ID', async () => {
+  it('should isolate raw inputs (Bronze) by user ID', async () => {
     const emailAId = 'email_user_a';
     const emailBId = 'email_user_b';
 
-    // Save email for user A
-    await repository.saveRawEmail({
+    // Save input for user A
+    await repository.saveRawInput({
       id: emailAId,
+      userId: 'user-a',
+      sourceType: 'email',
       sender: 'store@market.com',
-      subject: 'User A Receipt',
+      title: 'User A Receipt',
       snippet: 'Spent $10',
       rawBody: 'Receipt details for User A',
       rawPayload: '{}',
       receivedAt: '2023-01-15T12:00:00Z',
-      userId: 'user-a',
-    } as any); // cast to any for TDD compilation before signature change
+    });
 
-    // Save email for user B
-    await repository.saveRawEmail({
+    // Save input for user B
+    await repository.saveRawInput({
       id: emailBId,
+      userId: 'user-b',
+      sourceType: 'email',
       sender: 'taxi@ride.com',
-      subject: 'User B Receipt',
+      title: 'User B Receipt',
       snippet: 'Spent $15',
       rawBody: 'Receipt details for User B',
       rawPayload: '{}',
       receivedAt: '2023-01-16T12:00:00Z',
-      userId: 'user-b',
-    } as any);
+    });
 
-    // Verify User A only sees User A's raw emails
-    const rawEmailsA = await repository.getRawEmails('user-a');
+    // Verify User A only sees User A's raw inputs
+    const rawEmailsA = await repository.getRawInputs('user-a');
     expect(rawEmailsA).toHaveLength(1);
     expect(rawEmailsA[0].id).toBe(emailAId);
 
-    // Verify User B only sees User B's raw emails
-    const rawEmailsB = await repository.getRawEmails('user-b');
+    // Verify User B only sees User B's raw inputs
+    const rawEmailsB = await repository.getRawInputs('user-b');
     expect(rawEmailsB).toHaveLength(1);
     expect(rawEmailsB[0].id).toBe(emailBId);
 
-    // Verify getRawEmailById is isolated
-    const emailAForA = await repository.getRawEmailById(emailAId, 'user-a');
+    // Verify getRawInputById is isolated
+    const emailAForA = await repository.getRawInputById(emailAId, 'user-a');
     expect(emailAForA).toBeDefined();
     expect(emailAForA!.id).toBe(emailAId);
 
-    const emailAForB = await repository.getRawEmailById(emailAId, 'user-b');
+    const emailAForB = await repository.getRawInputById(emailAId, 'user-b');
     expect(emailAForB).toBeUndefined();
   });
 
@@ -75,51 +77,57 @@ describe('Transaction User Isolation Integration', () => {
     const silverAId = 'silver_user_a';
     const silverBId = 'silver_user_b';
 
-    // Save raw emails
-    await repository.saveRawEmail({
+    // Save raw inputs
+    await repository.saveRawInput({
       id: emailAId,
+      userId: 'user-a',
+      sourceType: 'email',
       sender: 'store@market.com',
-      subject: 'User A Receipt',
+      title: 'User A Receipt',
       snippet: 'Spent $10',
       rawBody: 'Receipt details A',
       rawPayload: '{}',
       receivedAt: '2023-01-15T12:00:00Z',
-      userId: 'user-a',
-    } as any);
+    });
 
-    await repository.saveRawEmail({
+    await repository.saveRawInput({
       id: emailBId,
+      userId: 'user-b',
+      sourceType: 'email',
       sender: 'taxi@ride.com',
-      subject: 'User B Receipt',
+      title: 'User B Receipt',
       snippet: 'Spent $15',
       rawBody: 'Receipt details B',
       rawPayload: '{}',
       receivedAt: '2023-01-16T12:00:00Z',
-      userId: 'user-b',
-    } as any);
+    });
 
     // Save pending transactions (Silver)
     await repository.savePendingTransaction({
       id: silverAId,
-      rawEmailId: emailAId,
+      bronzeInputId: emailAId,
+      userId: 'user-a',
+      sourceType: 'email',
       merchantRaw: 'Market Store',
       amount: 10.00,
       currency: 'USD',
       transactionDate: '2023-01-15',
       status: 'pending',
-      userId: 'user-a',
-    } as any);
+      paymentMethod: 'Credit Card',
+    });
 
     await repository.savePendingTransaction({
       id: silverBId,
-      rawEmailId: emailBId,
+      bronzeInputId: emailBId,
+      userId: 'user-b',
+      sourceType: 'email',
       merchantRaw: 'Taxi Ride',
       amount: 15.00,
       currency: 'USD',
       transactionDate: '2023-01-16',
       status: 'pending',
-      userId: 'user-b',
-    } as any);
+      paymentMethod: 'Credit Card',
+    });
 
     // Verify User A only sees User A's Silver transactions
     const silverA = await repository.getSilverTransactions('user-a');
@@ -149,15 +157,15 @@ describe('Transaction User Isolation Integration', () => {
 
     // Directly insert Gold transactions for user-a and user-b
     await (repository as any).run(
-      `INSERT INTO gold_transactions (id, user_id, merchant, amount_cents, currency, transaction_date, category) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [goldAId, 'user-a', 'Uber Inc', 1450, 'USD', '2023-01-15', 'Transport']
+      `INSERT INTO gold_transactions (id, user_id, merchant, amount_cents, currency, transaction_date, category, payment_method) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [goldAId, 'user-a', 'Uber Inc', 1450, 'USD', '2023-01-15', 'Transport', 'Credit Card']
     );
 
     await (repository as any).run(
-      `INSERT INTO gold_transactions (id, user_id, merchant, amount_cents, currency, transaction_date, category) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [goldBId, 'user-b', 'Starbucks', 450, 'USD', '2023-01-16', 'Food']
+      `INSERT INTO gold_transactions (id, user_id, merchant, amount_cents, currency, transaction_date, category, payment_method) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [goldBId, 'user-b', 'Starbucks', 450, 'USD', '2023-01-16', 'Food', 'Credit Card']
     );
 
     // Verify User A only lists User A's Gold transactions

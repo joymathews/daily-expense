@@ -75,8 +75,15 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
                   <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
                     {tx.transactionDate}
                   </td>
-                  <td onClick={() => setSelectedGoldTransaction(tx)} className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px] truncate cursor-pointer hover:text-emerald-750 transition-colors" title={tx.merchant}>
-                    {tx.merchant}
+                  <td onClick={() => setSelectedGoldTransaction(tx)} className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px] cursor-pointer hover:text-emerald-750 transition-colors">
+                    <div className="truncate">{tx.merchant}</div>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                      tx.sourceType === 'manual' 
+                        ? 'bg-amber-50 text-amber-700 border border-amber-100' 
+                        : 'bg-blue-50 text-blue-750 border border-blue-100'
+                    }`}>
+                      {tx.sourceType || 'email'}
+                    </span>
                   </td>
                   <td className="px-2 py-2.5 font-extrabold text-right text-emerald-600 whitespace-nowrap">{tx.amount.toFixed(2)} {tx.currency}</td>
                   <td className="px-2 py-2.5 text-center">

@@ -1,39 +1,42 @@
-export interface RawEmail {
-  id: string; // Gmail message unique ID
+export interface RawInput {
+  id: string; // unique natural ID (e.g. Gmail Message ID or PDF hash)
   userId: string;
-  sender: string;
-  subject: string;
+  sourceType: string; // e.g. 'email', 'pdf', 'manual'
+  sender: string; // e.g. email sender or uploader
+  title: string; // e.g. email subject or file name
   snippet: string;
   rawBody: string;
-  rawPayload: string; // JSON string payload
+  rawPayload: string; // JSON string payload metadata
   receivedAt: string; // ISO UTC string
-  hasTransaction?: boolean; // Derivation cache
+  hasTransaction?: boolean; // classification cache
   ingestedAt?: string; // ISO UTC string
 }
 
 export interface PendingTransaction {
   id: string; // UUID string
-  rawEmailId: string; // Foreign key referencing raw_emails.id
+  bronzeInputId: string; // Foreign key referencing raw_inputs.id
   userId: string;
+  sourceType: string; // e.g. 'email'
   merchantRaw: string;
   merchantNormalized?: string;
-  amount: number; // Stored float value (mapping is handled in repo implementation)
+  amount: number; // Stored float value
   currency: string;
   transactionDate: string; // ISO UTC string
   inferredCategory?: string;
   confidenceScore?: number;
   status: 'pending' | 'approved' | 'rejected' | 'error';
   extractedAt?: string;
-  emailSubject?: string;
-  emailSender?: string;
-  emailReceivedAt?: string;
+  sourceTitle?: string;
+  sourceSender?: string;
+  sourceReceivedAt?: string;
   paymentMethod?: string;
 }
 
 export interface Transaction {
   id: string; // UUID string
-  pendingTxId?: string; // Foreign key referencing pending_transactions.id
+  pendingTxId?: string; // Foreign key referencing pending_transactions.id (null for direct entries)
   userId: string;
+  sourceType: string; // e.g. 'email' or 'manual'
   merchant: string;
   amount: number; // Stored float value
   currency: string;
@@ -42,33 +45,34 @@ export interface Transaction {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
-  emailSubject?: string;
-  emailSender?: string;
-  emailReceivedAt?: string;
-  bronzeEmailId?: string;
+  sourceTitle?: string;
+  sourceSender?: string;
+  sourceReceivedAt?: string;
+  bronzeInputId?: string;
   paymentMethod?: string;
 }
 
 export interface ITransactionRepository {
   initializeSchema(): Promise<void>;
   emailExists(gmailId: string, userId: string): Promise<boolean>;
-  saveRawEmail(email: RawEmail): Promise<void>;
+  saveRawInput(input: RawInput): Promise<void>;
   savePendingTransaction(tx: PendingTransaction): Promise<void>;
   getPendingTransactions(userId: string): Promise<PendingTransaction[]>;
   promoteToTransaction(pendingId: string, tx: Transaction): Promise<void>;
-  getRawEmails(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawEmail[]>;
+  addDirectGoldTransaction(tx: Transaction): Promise<void>;
+  getRawInputs(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawInput[]>;
   getSilverTransactions(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<PendingTransaction[]>;
   getGoldTransactions(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<Transaction[]>;
   updateGoldTransaction(id: string, userId: string, updates: Partial<Transaction>): Promise<void>;
   updatePendingTransaction(id: string, userId: string, updates: Partial<PendingTransaction>): Promise<void>;
-  getRawEmailById(id: string, userId: string): Promise<RawEmail | undefined>;
-  updateRawEmailClassification(id: string, userId: string, hasTransaction: boolean): Promise<void>;
-  getSilverTransactionByEmailId(emailId: string, userId: string): Promise<PendingTransaction | undefined>;
+  getRawInputById(id: string, userId: string): Promise<RawInput | undefined>;
+  updateRawInputClassification(id: string, userId: string, hasTransaction: boolean): Promise<void>;
+  getSilverTransactionByInputId(inputId: string, userId: string): Promise<PendingTransaction | undefined>;
   getSilverTransactionById(id: string, userId: string): Promise<PendingTransaction | undefined>;
   revertGoldToSilver(userId: string, goldId: string): Promise<void>;
   revertSilverToBronze(userId: string, silverId: string): Promise<void>;
-  deleteBronzeEmail(userId: string, bronzeId: string): Promise<void>;
-  restoreBronzeEmail(userId: string, bronzeId: string): Promise<void>;
-  getDeletedRawEmails(userId: string): Promise<RawEmail[]>;
+  deleteBronzeInput(userId: string, bronzeId: string): Promise<void>;
+  restoreBronzeInput(userId: string, bronzeId: string): Promise<void>;
+  getDeletedRawInputs(userId: string): Promise<RawInput[]>;
   close(): Promise<void>;
 }

@@ -63,6 +63,23 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const [showRawInGoldMode, setShowRawInGoldMode] = useState(false);
   const [rawBodyForGoldLineage, setRawBodyForGoldLineage] = useState('');
 
+  // Dynamically attach extracted silver record if selectedEmail has none, for pipeline backward-compatibility
+  if (selectedEmail && !selectedEmail.extracted && silverTransactions) {
+    const silverRecord = silverTransactions.find(tx => tx.rawEmailId === selectedEmail.id);
+    if (silverRecord) {
+      selectedEmail.extracted = {
+        id: silverRecord.id,
+        merchant: silverRecord.merchantNormalized || silverRecord.merchantRaw,
+        amount: silverRecord.amount,
+        currency: silverRecord.currency,
+        date: silverRecord.transactionDate,
+        category: silverRecord.inferredCategory || 'Other',
+        status: silverRecord.status as any,
+        paymentMethod: silverRecord.paymentMethod,
+      };
+    }
+  }
+
   const isGoldMode = !!selectedGoldTransaction;
   const isBronze = !selectedGoldTransaction && (!selectedEmail?.extracted || (selectedEmail.extracted.status !== 'approved' && selectedEmail.extracted.status !== 'pending' && selectedEmail.extracted.status !== 'error'));
   const isSilver = !selectedGoldTransaction && selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error');

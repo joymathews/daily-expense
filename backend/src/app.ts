@@ -1,13 +1,19 @@
 import express from 'express';
 import { checkJwt } from './middleware/auth-middleware';
-import gmailRoutes from './routes/gmail-routes';
+import ingestionRoutes from './routes/ingestion-routes';
+import pipelineRoutes from './routes/pipeline-routes';
 
 const app = express();
 
 app.use(express.json());
 
-// [FUNC-GMAIL-4] Register Gmail routes
-app.use('/api/gmail', checkJwt, gmailRoutes);
+// Ingestion and Pipeline routes
+app.use('/api/ingestion', checkJwt, ingestionRoutes);
+app.use('/api/pipeline', checkJwt, pipelineRoutes);
+
+// Backward compatibility routes for testing
+app.use('/api/gmail', checkJwt, ingestionRoutes);
+app.use('/api/gmail', checkJwt, pipelineRoutes);
 
 // [FUNC-SKEL-SYS-1] Health-check endpoint (Public)
 app.get('/api/health', (req, res) => {

@@ -1,228 +1,39 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { GmailService } from '../services/gmail-service';
 import { SQLiteTransactionRepository } from '../db/sqlite-transaction-repository';
 import { TransactionExtractorFactory } from '../services/transaction-extractor';
-import { EmailClassifier } from '../services/email-classifier';
 
 const router = Router();
-const gmailService = new GmailService();
 
 /**
- * [FUNC-GMAIL-4], [FUNC-GMAIL-19] POST /api/gmail/fetch
- * Stage 1: Fetches receipts from Gmail and saves raw emails to the Bronze table.
- * No Ollama extraction is run.
+ * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/pipeline/raw-inputs
+ * Retrieves raw inputs (Bronze) with optional date filtering.
  */
-router.post('/fetch', async (req, res) => {
-  const { accessToken, filters } = req.body;
-  const userId = (req as any).auth?.sub;
-
-  if (!accessToken) {
-    return res.status(400).json({ error: 'Google Access Token is required' });
-  }
-
-  // [NFR-SEC-4] Input Validation
-  if (!filters || !Array.isArray(filters.sender) || filters.sender.length === 0) {
-    return res.status(400).json({ error: 'At least one sender email is required' });
-  }
-
-  if (!filters.startDate || !filters.endDate) {
-    return res.status(400).json({ error: 'Start date and end date are required' });
-  }
-
-  try {
-    const repository = new SQLiteTransactionRepository();
-    await repository.initializeSchema();
-
-    const emails = await gmailService.fetchEmails(accessToken, filters);
-
-    // Save to raw table (Bronze Layer)
-    for (const email of emails) {
-      await repository.saveRawEmail({
-        id: email.id,
-        userId,
-        sender: email.sender,
-        subject: email.subject,
-        snippet: email.snippet || '',
-        rawBody: email.body || '',
-        rawPayload: JSON.stringify(email),
-        receivedAt: email.date,
-      });
-    }
-
-    await repository.close();
-    res.status(200).json({ emails });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch emails' });
-  }
-});
-
-/**
- * [FUNC-GMAIL-27] POST /api/gmail/fetch-list
- * Retrieves matching Gmail Message IDs.
- */
-router.post('/fetch-list', async (req, res) => {
-  const { accessToken, filters } = req.body;
-
-  if (!accessToken) {
-    return res.status(400).json({ error: 'Google Access Token is required' });
-  }
-
-  // [NFR-SEC-4] Input Validation
-  if (!filters || !Array.isArray(filters.sender) || filters.sender.length === 0) {
-    return res.status(400).json({ error: 'At least one sender email is required' });
-  }
-
-  if (!filters.startDate || !filters.endDate) {
-    return res.status(400).json({ error: 'Start date and end date are required' });
-  }
-
-  try {
-    const messageIds = await gmailService.fetchMessageIds(accessToken, filters);
-    res.status(200).json({ messageIds });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to list message IDs' });
-  }
-});
-
-/**
- * [FUNC-GMAIL-27] POST /api/gmail/fetch-detail
- * Fetches detail for a single Gmail message and processes/saves it.
- */
-router.post('/fetch-detail', async (req, res) => {
-  const { accessToken, messageId } = req.body;
-  const userId = (req as any).auth?.sub;
-
-  if (!accessToken) {
-    return res.status(400).json({ error: 'Google Access Token is required' });
-  }
-  if (!messageId) {
-    return res.status(400).json({ error: 'messageId is required' });
-  }
-
-  try {
-    const repository = new SQLiteTransactionRepository();
-    await repository.initializeSchema();
-
-    // Deduplication check
-    const exists = await repository.emailExists(messageId, userId);
-    if (exists) {
-      await repository.close();
-      // Load and return if it already exists or simply return skipped status
-      return res.status(200).json({ status: 'skipped', email: { id: messageId } });
-    }
-
-    const email = await gmailService.fetchEmailDetail(accessToken, messageId);
-
-    // Save to raw table (Bronze Layer)
-    await repository.saveRawEmail({
-      id: email.id,
-      userId,
-      sender: email.sender,
-      subject: email.subject,
-      snippet: email.snippet || '',
-      rawBody: email.body || '',
-      rawPayload: JSON.stringify(email),
-      receivedAt: email.date,
-    });
-
-    await repository.close();
-    res.status(200).json({ status: 'fetched', email });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch message details' });
-  }
-});
-
-/**
- * [FUNC-GMAIL-17] POST /api/gmail/extract
- * Stage 2: Synchronously extracts transaction details for single or batch raw emails via Ollama LLM.
- * Saves to silver_extracted_transactions (Silver Staging).
- */
-router.post('/extract', async (req, res) => {
-  const { rawEmailIds } = req.body;
-  const userId = (req as any).auth?.sub;
-
-  if (!rawEmailIds || !Array.isArray(rawEmailIds) || rawEmailIds.length === 0) {
-    return res.status(400).json({ error: 'rawEmailIds array is required' });
-  }
-
-  try {
-    const repository = new SQLiteTransactionRepository();
-    await repository.initializeSchema();
-
-    const extractor = TransactionExtractorFactory.createExtractor();
-    const results: any[] = [];
-
-    for (const id of rawEmailIds) {
-      const rawEmail = await repository.getRawEmailById(id, userId);
-      if (!rawEmail) {
-        continue;
-      }
-
-      // If already extracted and status is approved, don't run again
-      const existingSilver = await repository.getSilverTransactionByEmailId(id, userId);
-      if (existingSilver) {
-        results.push(existingSilver);
-        continue;
-      }
-
-      const extracted = await extractor.extractTransaction(rawEmail.rawBody);
-      if (extracted) {
-        const pendingTx = {
-          id: crypto.randomUUID(),
-          rawEmailId: rawEmail.id,
-          userId,
-          merchantRaw: extracted.merchant,
-          merchantNormalized: extracted.merchant,
-          amount: extracted.amount,
-          currency: extracted.currency,
-          transactionDate: extracted.date,
-          inferredCategory: extracted.category,
-          confidenceScore: 0.95,
-          status: 'pending' as const,
-          paymentMethod: extracted.paymentMethod,
-        };
-        await repository.savePendingTransaction(pendingTx);
-        results.push(pendingTx);
-      }
-    }
-
-    await repository.close();
-    res.status(200).json({ extracted: results });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Extraction failed' });
-  }
-});
-
-/**
- * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/gmail/raw-emails
- * Retrieves raw emails (Bronze) with optional date filtering.
- */
-router.get('/raw-emails', async (req, res) => {
+router.get(['/raw-inputs', '/raw-emails'], async (req, res) => {
   const { startDate, endDate } = req.query;
   const userId = (req as any).auth?.sub;
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    const emails = await repository.getRawEmails(userId, {
+    const inputs = await repository.getRawInputs(userId, {
       startDate: startDate as string,
       endDate: endDate as string,
     });
 
     await repository.close();
-    res.status(200).json({ emails });
+    res.status(200).json({ emails: inputs }); // key 'emails' kept for frontend backwards compatibility
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch raw emails' });
+    res.status(500).json({ error: error.message || 'Failed to fetch raw inputs' });
   }
 });
 
 /**
- * [FUNC-GMAIL-8], [FUNC-GMAIL-10] PUT /api/gmail/raw-emails/:id
- * Updates raw email (Bronze) transactional classification status.
+ * [FUNC-GMAIL-8], [FUNC-GMAIL-10] PUT /api/pipeline/raw-inputs/:id
+ * Updates raw input (Bronze) transactional classification status.
  */
-router.put('/raw-emails/:id', async (req, res) => {
-  const { id } = req.params;
+router.put(['/raw-inputs/:id', '/raw-emails/:id'], async (req, res) => {
+  const id = req.params.id as string;
   const { hasTransaction } = req.body;
   const userId = (req as any).auth?.sub;
 
@@ -235,13 +46,13 @@ router.put('/raw-emails/:id', async (req, res) => {
     await repository.initializeSchema();
 
     // Check ownership
-    const email = await repository.getRawEmailById(id, userId);
-    if (!email) {
+    const input = await repository.getRawInputById(id, userId);
+    if (!input) {
       await repository.close();
-      return res.status(404).json({ error: 'Raw email not found or unauthorized' });
+      return res.status(404).json({ error: 'Raw input not found or unauthorized' });
     }
 
-    await repository.updateRawEmailClassification(id, userId, hasTransaction);
+    await repository.updateRawInputClassification(id, userId, hasTransaction);
     await repository.close();
 
     res.status(200).json({ status: 'updated' });
@@ -251,7 +62,7 @@ router.put('/raw-emails/:id', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/gmail/silver-transactions
+ * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/pipeline/silver-transactions
  * Retrieves Silver staging transactions with optional date filtering.
  */
 router.get('/silver-transactions', async (req, res) => {
@@ -274,7 +85,7 @@ router.get('/silver-transactions', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/gmail/gold-transactions
+ * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/pipeline/gold-transactions
  * Retrieves Gold confirmed transactions with optional date filtering.
  */
 router.get('/gold-transactions', async (req, res) => {
@@ -297,7 +108,7 @@ router.get('/gold-transactions', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-18] PUT /api/gmail/silver-transactions/:id
+ * [FUNC-GMAIL-18] PUT /api/pipeline/silver-transactions/:id
  * Updates a pending Silver staging transaction.
  */
 router.put('/silver-transactions/:id', async (req, res) => {
@@ -318,7 +129,7 @@ router.put('/silver-transactions/:id', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-18] PUT /api/gmail/gold-transactions/:id
+ * [FUNC-GMAIL-18] PUT /api/pipeline/gold-transactions/:id
  * Updates an approved Gold transaction ledger record.
  */
 router.put('/gold-transactions/:id', async (req, res) => {
@@ -339,7 +150,7 @@ router.put('/gold-transactions/:id', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-13] POST /api/gmail/approve
+ * [FUNC-GMAIL-13] POST /api/pipeline/approve
  * Stage 3: Confirms a staging transaction and promotes it to the Gold ledger.
  */
 router.post('/approve', async (req, res) => {
@@ -358,6 +169,7 @@ router.post('/approve', async (req, res) => {
       id: crypto.randomUUID(),
       pendingTxId: silverId,
       userId,
+      sourceType: 'email',
       merchant,
       amount: parseFloat(amount),
       currency,
@@ -375,7 +187,7 @@ router.post('/approve', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-22] POST /api/gmail/approve-batch
+ * [FUNC-GMAIL-22] POST /api/pipeline/approve-batch
  * Confirms multiple pending transactions in staging and promotes them to the Gold ledger.
  */
 router.post('/approve-batch', async (req, res) => {
@@ -399,6 +211,7 @@ router.post('/approve-batch', async (req, res) => {
           id: crypto.randomUUID(),
           pendingTxId: silverId,
           userId,
+          sourceType: tx.sourceType || 'email',
           merchant: tx.merchantNormalized || tx.merchantRaw,
           amount: tx.amount,
           currency: tx.currency,
@@ -419,29 +232,109 @@ router.post('/approve-batch', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-12] Fetch pending staging transactions (legacy backup)
+ * [FUNC-GMAIL-17] POST /api/pipeline/extract
+ * Stage 2: Synchronously extracts transaction details for single or batch raw inputs via Ollama LLM.
  */
-router.get('/pending', async (req, res) => {
+router.post('/extract', async (req, res) => {
+  const { rawEmailIds } = req.body; // key rawEmailIds kept for frontend compatibility
   const userId = (req as any).auth?.sub;
+
+  if (!rawEmailIds || !Array.isArray(rawEmailIds) || rawEmailIds.length === 0) {
+    return res.status(400).json({ error: 'rawEmailIds array is required' });
+  }
+
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
-    const pending = await repository.getPendingTransactions(userId);
+    const extractor = TransactionExtractorFactory.createExtractor();
+    const results: any[] = [];
+
+    for (const id of rawEmailIds) {
+      const rawInput = await repository.getRawInputById(id, userId);
+      if (!rawInput) {
+        continue;
+      }
+
+      // Deduplication check
+      const existingSilver = await repository.getSilverTransactionByInputId(id, userId);
+      if (existingSilver) {
+        results.push(existingSilver);
+        continue;
+      }
+
+      const extracted = await extractor.extractTransaction(rawInput.rawBody);
+      if (extracted) {
+        const pendingTx = {
+          id: crypto.randomUUID(),
+          bronzeInputId: rawInput.id,
+          userId,
+          sourceType: rawInput.sourceType || 'email',
+          merchantRaw: extracted.merchant,
+          merchantNormalized: extracted.merchant,
+          amount: extracted.amount,
+          currency: extracted.currency,
+          transactionDate: extracted.date,
+          inferredCategory: extracted.category,
+          confidenceScore: 0.95,
+          status: 'pending' as const,
+          paymentMethod: extracted.paymentMethod,
+        };
+        await repository.savePendingTransaction(pendingTx);
+        results.push(pendingTx);
+      }
+    }
 
     await repository.close();
-    res.status(200).json({ pending });
+    res.status(200).json({ extracted: results });
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch pending transactions' });
+    res.status(500).json({ error: error.message || 'Extraction failed' });
   }
 });
 
 /**
- * [FUNC-GMAIL-31] POST /api/gmail/delete
- * Soft deletes records from targets list of layers (bronze, silver, gold).
+ * [FUNC-CORE-2] POST /api/pipeline/add-transaction
+ * Directly inserts manual validated transaction records into the Gold ledger.
  */
+router.post('/add-transaction', async (req, res) => {
+  const { merchant, amount, currency, transactionDate, category, paymentMethod, notes } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!merchant || amount === undefined || !transactionDate || !category || !paymentMethod) {
+    return res.status(400).json({ error: 'merchant, amount, transactionDate, category, and paymentMethod are required' });
+  }
+
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    await repository.addDirectGoldTransaction({
+      id: crypto.randomUUID(),
+      userId,
+      sourceType: 'manual',
+      merchant,
+      amount: numericAmount,
+      currency: currency || 'INR',
+      transactionDate,
+      category,
+      notes: notes || '',
+      paymentMethod,
+    });
+
+    await repository.close();
+    res.status(200).json({ status: 'added' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to add manual transaction' });
+  }
+});
+
 /**
- * [FUNC-GMAIL-31] POST /api/gmail/revert-to-silver
+ * [FUNC-GMAIL-31] POST /api/pipeline/revert-to-silver
  * Reverts a Gold transaction back to Silver staging.
  */
 router.post('/revert-to-silver', async (req, res) => {
@@ -464,8 +357,8 @@ router.post('/revert-to-silver', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-31] POST /api/gmail/revert-to-bronze
- * Reverts a Silver staging transaction back to unprocessed Bronze raw email.
+ * [FUNC-GMAIL-31] POST /api/pipeline/revert-to-bronze
+ * Reverts a Silver staging transaction back to unprocessed Bronze raw input.
  */
 router.post('/revert-to-bronze', async (req, res) => {
   const { silverId } = req.body;
@@ -487,8 +380,8 @@ router.post('/revert-to-bronze', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-31] POST /api/gmail/delete
- * Soft deletes a Bronze raw email record.
+ * [FUNC-GMAIL-31] POST /api/pipeline/delete
+ * Soft deletes a Bronze raw input record.
  */
 router.post('/delete', async (req, res) => {
   const { bronzeId } = req.body;
@@ -501,7 +394,7 @@ router.post('/delete', async (req, res) => {
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    await repository.deleteBronzeEmail(userId, bronzeId);
+    await repository.deleteBronzeInput(userId, bronzeId);
     await repository.close();
     res.status(200).json({ status: 'deleted' });
   } catch (error: any) {
@@ -510,8 +403,8 @@ router.post('/delete', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-31] POST /api/gmail/restore
- * Restores a soft-deleted Bronze raw email.
+ * [FUNC-GMAIL-31] POST /api/pipeline/restore
+ * Restores a soft-deleted Bronze raw input.
  */
 router.post('/restore', async (req, res) => {
   const { bronzeId } = req.body;
@@ -524,7 +417,7 @@ router.post('/restore', async (req, res) => {
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    await repository.restoreBronzeEmail(userId, bronzeId);
+    await repository.restoreBronzeInput(userId, bronzeId);
     await repository.close();
     res.status(200).json({ status: 'restored' });
   } catch (error: any) {
@@ -533,8 +426,8 @@ router.post('/restore', async (req, res) => {
 });
 
 /**
- * [FUNC-GMAIL-31] GET /api/gmail/deleted
- * Retrieves all soft-deleted raw email records.
+ * [FUNC-GMAIL-31] GET /api/pipeline/deleted
+ * Retrieves all soft-deleted raw input records.
  */
 router.get('/deleted', async (req, res) => {
   const userId = (req as any).auth?.sub;
@@ -542,10 +435,10 @@ router.get('/deleted', async (req, res) => {
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    const emails = await repository.getDeletedRawEmails(userId);
+    const inputs = await repository.getDeletedRawInputs(userId);
     await repository.close();
     res.status(200).json({
-      emails,
+      emails: inputs,
       silverTransactions: [],
       goldTransactions: []
     });

@@ -32,14 +32,24 @@ const Navbar: React.FC<NavbarProps> = ({ onSignOut }) => {
               Dashboard
             </Link>
             <Link
-              to="/gmail"
+              to="/ingestion"
               className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
-                isActive('/gmail') 
+                isActive('/ingestion') 
                   ? 'bg-indigo-50/70 text-indigo-700 shadow-sm' 
                   : 'text-gray-500 hover:text-gray-950 hover:bg-gray-50/50'
               }`}
             >
-              Gmail Fetch
+              Data Ingestion
+            </Link>
+            <Link
+              to="/pipeline"
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
+                isActive('/pipeline') 
+                  ? 'bg-indigo-50/70 text-indigo-700 shadow-sm' 
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-gray-50/50'
+              }`}
+            >
+              Transaction Pipeline
             </Link>
           </div>
         </div>
