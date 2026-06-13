@@ -450,36 +450,28 @@ const GmailIntegration: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
+      <div className="space-y-6">
         {isBronzeActive && (
-          <div className="xl:col-span-1 space-y-4">
-            <FilterPanel
-              senders={senders}
-              currentSender={currentSender}
-              setCurrentSender={setCurrentSender}
-              startDate={startDate}
-              setStartDate={setStartDate}
-              endDate={endDate}
-              setEndDate={setEndDate}
-              subject={subject}
-              setSubject={setSubject}
-              addSender={addSender}
-              removeSender={removeSender}
-              handleKeyDown={handleKeyDown}
-              error={error}
-            />
-            
-            <button 
-              onClick={handleFetchClick}
-              disabled={isFetching}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold py-3 rounded-xl shadow-md hover:shadow-lg transition-all uppercase tracking-wider cursor-pointer text-center"
-            >
-              {isFetching ? 'Processing...' : 'Authorize & Fetch'}
-            </button>
-          </div>
+          <FilterPanel
+            senders={senders}
+            currentSender={currentSender}
+            setCurrentSender={setCurrentSender}
+            startDate={startDate}
+            setStartDate={setStartDate}
+            endDate={endDate}
+            setEndDate={setEndDate}
+            subject={subject}
+            setSubject={setSubject}
+            addSender={addSender}
+            removeSender={removeSender}
+            handleKeyDown={handleKeyDown}
+            error={error}
+            isFetching={isFetching}
+            onFetchClick={handleFetchClick}
+          />
         )}
 
-        <div className={`${isBronzeActive ? 'xl:col-span-4' : 'xl:col-span-5 w-full'} bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm`}>
+        <div className="w-full bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {isBronzeActive && (
             <BronzeEmailList
               visibleRawEmails={visibleRawEmails}
