@@ -25,6 +25,7 @@ export interface GmailMessage {
   body: string;
   hasTransaction: boolean;
   sourceType?: string;
+  status?: 'unprocessed' | 'processed' | 'rejected';
   extracted?: {
     id: string;
     merchant: string;
@@ -566,6 +567,60 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const rejectBronzeInput = async (id: string) => {
+    setRawEmails(prev =>
+      prev.map(email =>
+        email.id === id ? { ...email, status: 'rejected' } : email
+      )
+    );
+    setEmails(prev =>
+      prev.map(email =>
+        email.id === id ? { ...email, status: 'rejected' } : email
+      )
+    );
+
+    try {
+      const authHeaders = await getAuthHeaders();
+      await fetch(`/api/pipeline/raw-inputs/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ status: 'rejected' }),
+      });
+    } catch (err) {
+      console.error('Failed to update status on server:', err);
+    }
+  };
+
+  const updateBronzeStatus = async (id: string, status: 'unprocessed' | 'processed' | 'rejected') => {
+    setRawEmails(prev =>
+      prev.map(email =>
+        email.id === id ? { ...email, status } : email
+      )
+    );
+    setEmails(prev =>
+      prev.map(email =>
+        email.id === id ? { ...email, status } : email
+      )
+    );
+
+    try {
+      const authHeaders = await getAuthHeaders();
+      await fetch(`/api/pipeline/raw-inputs/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ status }),
+      });
+    } catch (err) {
+      console.error('Failed to update status on server:', err);
+    }
+  };
+
   const extractSelectedEmails = async (emailIds: string[]) => {
     if (emailIds.length === 0) return;
 
@@ -1095,6 +1150,8 @@ export const useGmailIntegration = () => {
     handleKeyDown,
     markAsTransaction,
     markAsNonTransaction,
+    rejectBronzeInput,
+    updateBronzeStatus,
     extractSelectedEmails,
     updateSilverTransaction,
     updateGoldTransaction,

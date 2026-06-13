@@ -64,11 +64,17 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     if (hasBronzeEmails) {
       isLegacy = true;
     } else if (hasBronzeInputs) {
-      const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
-      const hasBronzeInputId = silverInfo.some(col => col.name === 'bronze_input_id');
-      const hasSourceType = silverInfo.some(col => col.name === 'source_type');
-      if (!hasBronzeInputId || !hasSourceType) {
+      const bronzeInfo = await this.all<{ name: string }>("PRAGMA table_info(bronze_raw_inputs);");
+      const hasStatusCol = bronzeInfo.some(col => col.name === 'status');
+      if (!hasStatusCol) {
         isLegacy = true;
+      } else {
+        const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
+        const hasBronzeInputId = silverInfo.some(col => col.name === 'bronze_input_id');
+        const hasSourceType = silverInfo.some(col => col.name === 'source_type');
+        if (!hasBronzeInputId || !hasSourceType) {
+          isLegacy = true;
+        }
       }
     }
 
@@ -92,6 +98,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         raw_payload TEXT,
         received_at TEXT NOT NULL,
         has_transaction INTEGER NOT NULL DEFAULT 1,
+        status TEXT DEFAULT 'unprocessed' CHECK (status IN ('unprocessed', 'processed', 'rejected')),
         ingested_at TEXT DEFAULT (datetime('now', 'utc')),
         deleted_at TEXT,
         PRIMARY KEY (user_id, id)
@@ -235,26 +242,37 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     
     const calculatedStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : tx.status;
 
-    await this.run(
-      `INSERT OR IGNORE INTO silver_extracted_transactions 
-       (id, user_id, bronze_input_id, source_type, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        tx.id,
-        tx.userId,
-        tx.bronzeInputId,
-        tx.sourceType || 'email',
-        tx.merchantRaw,
-        tx.merchantNormalized || null,
-        amountCents,
-        tx.currency,
-        tx.transactionDate,
-        tx.inferredCategory || null,
-        tx.confidenceScore ?? null,
-        calculatedStatus,
-        tx.paymentMethod || null,
-      ]
-    );
+    await this.run('BEGIN TRANSACTION');
+    try {
+      await this.run(
+        `INSERT OR IGNORE INTO silver_extracted_transactions 
+         (id, user_id, bronze_input_id, source_type, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tx.id,
+          tx.userId,
+          tx.bronzeInputId,
+          tx.sourceType || 'email',
+          tx.merchantRaw,
+          tx.merchantNormalized || null,
+          amountCents,
+          tx.currency,
+          tx.transactionDate,
+          tx.inferredCategory || null,
+          tx.confidenceScore ?? null,
+          calculatedStatus,
+          tx.paymentMethod || null,
+        ]
+      );
+      await this.run(
+        "UPDATE bronze_raw_inputs SET status = 'processed' WHERE id = ? AND user_id = ?",
+        [tx.bronzeInputId, tx.userId]
+      );
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
   }
 
   async getPendingTransactions(userId: string): Promise<PendingTransaction[]> {
@@ -389,6 +407,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       rawPayload: row.raw_payload || '',
       receivedAt: row.received_at,
       hasTransaction: row.has_transaction === 1,
+      status: row.status,
       ingestedAt: row.ingested_at,
     }));
   }
@@ -407,6 +426,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       rawPayload: row.raw_payload || '',
       receivedAt: row.received_at,
       hasTransaction: row.has_transaction === 1,
+      status: row.status,
       ingestedAt: row.ingested_at,
     };
   }
@@ -415,6 +435,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     await this.run(
       'UPDATE bronze_raw_inputs SET has_transaction = ? WHERE id = ? AND user_id = ?',
       [hasTransaction ? 1 : 0, id, userId]
+    );
+  }
+
+  async updateRawInputStatus(id: string, userId: string, status: 'unprocessed' | 'processed' | 'rejected'): Promise<void> {
+    await this.run(
+      'UPDATE bronze_raw_inputs SET status = ? WHERE id = ? AND user_id = ?',
+      [status, id, userId]
     );
   }
 
@@ -733,6 +760,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
   async revertSilverToBronze(userId: string, silverId: string): Promise<void> {
     await this.run('BEGIN TRANSACTION');
     try {
+      const silver = await this.getSilverTransactionById(silverId, userId);
       await this.run(
         'DELETE FROM gold_transactions WHERE silver_tx_id = ? AND user_id = ?',
         [silverId, userId]
@@ -741,6 +769,12 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         'DELETE FROM silver_extracted_transactions WHERE id = ? AND user_id = ?',
         [silverId, userId]
       );
+      if (silver) {
+        await this.run(
+          "UPDATE bronze_raw_inputs SET status = 'unprocessed' WHERE id = ? AND user_id = ?",
+          [silver.bronzeInputId, userId]
+        );
+      }
       await this.run('COMMIT');
     } catch (err) {
       await this.run('ROLLBACK');

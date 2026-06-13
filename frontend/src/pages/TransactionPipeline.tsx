@@ -38,6 +38,8 @@ const TransactionPipeline: React.FC = () => {
     restoreGoldTransaction,
     loadDeletedLayers,
     paymentMethods,
+    rejectBronzeInput,
+    updateBronzeStatus,
   } = useGmailIntegration();
 
   console.log('DEBUG: rawEmails length =', rawEmails.length, 'rawEmails =', rawEmails);
@@ -52,7 +54,7 @@ const TransactionPipeline: React.FC = () => {
   const [selectedGoldTransaction, setSelectedGoldTransaction] = useState<GoldTransaction | null>(null);
 
   // Ingestion status filtering for Bronze section
-  const [bronzeFilter, setBronzeFilter] = useState<'all' | 'processed' | 'unprocessed'>('all');
+  const [bronzeFilter, setBronzeFilter] = useState<'all' | 'processed' | 'unprocessed' | 'rejected'>('all');
 
   // Delete modal trigger states
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -119,6 +121,7 @@ const TransactionPipeline: React.FC = () => {
 
   // Helper to determine if an email has already been processed
   const isEmailProcessed = (email: typeof rawEmails[0]) => {
+    if (email.status === 'processed' || email.status === 'rejected') return true;
     if (email.extracted) return true;
     const inSilver = silverTransactions.some(tx => tx.rawEmailId === email.id);
     const inGold = goldTransactions.some(tx => tx.bronzeEmailId === email.id);
@@ -131,14 +134,16 @@ const TransactionPipeline: React.FC = () => {
     if (!tabMatch) return false;
     
     if (bronzeFilter === 'processed') {
-      return isEmailProcessed(email);
+      return email.status === 'processed' || (email.status !== 'rejected' && isEmailProcessed(email));
     } else if (bronzeFilter === 'unprocessed') {
-      return !isEmailProcessed(email);
+      return email.status === 'unprocessed' || (!email.status && !isEmailProcessed(email));
+    } else if (bronzeFilter === 'rejected') {
+      return email.status === 'rejected';
     }
     return true;
   });
 
-  const unprocessedEmails = visibleRawEmails.filter(e => !isEmailProcessed(e));
+  const unprocessedEmails = visibleRawEmails.filter(e => e.status === 'unprocessed' || (!e.status && !isEmailProcessed(e)));
 
   const toggleEmailCheck = (id: string) => {
     setCheckedEmailIds(prev => 
@@ -383,6 +388,7 @@ const TransactionPipeline: React.FC = () => {
             setStartDate={setStartDate}
             endDate={endDate}
             setEndDate={setEndDate}
+            rejectBronzeInput={rejectBronzeInput}
           />
         )}
 
@@ -537,6 +543,8 @@ const TransactionPipeline: React.FC = () => {
         onDeleteClick={handleDeleteClick}
         extractSelectedEmails={extractSelectedEmails}
         paymentMethods={paymentMethods}
+        rejectBronzeInput={rejectBronzeInput}
+        updateBronzeStatus={updateBronzeStatus}
       />
 
       <DeleteConfirmationModal

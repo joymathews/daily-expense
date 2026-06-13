@@ -34,6 +34,8 @@ interface EmailDetailModalProps {
   ) => void;
   extractSelectedEmails?: (ids: string[]) => Promise<void>;
   paymentMethods?: PaymentMethod[];
+  rejectBronzeInput?: (id: string) => Promise<void> | void;
+  updateBronzeStatus?: (id: string, status: 'unprocessed' | 'processed' | 'rejected') => Promise<void> | void;
 }
 
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
@@ -52,6 +54,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   onDeleteClick,
   extractSelectedEmails,
   paymentMethods = [],
+  rejectBronzeInput,
+  updateBronzeStatus,
 }) => {
   // Staging / Gold shared inputs state
   const [merchant, setMerchant] = useState('');
@@ -526,9 +530,13 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     ? 'bg-rose-50 text-rose-700 border-rose-200/50'
                     : selectedEmail?.extracted?.status === 'pending'
                       ? 'bg-indigo-50 text-indigo-750 border-indigo-200/50'
-                      : selectedEmail?.hasTransaction 
-                        ? 'bg-indigo-50 text-indigo-750 border-indigo-200/50' 
-                        : 'bg-amber-50 text-amber-700 border-amber-200/50'
+                      : selectedEmail?.status === 'rejected'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200/50'
+                        : selectedEmail?.status === 'processed'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50'
+                          : selectedEmail?.hasTransaction 
+                            ? 'bg-indigo-50 text-indigo-750 border-indigo-200/50' 
+                            : 'bg-amber-50 text-amber-700 border-amber-200/50'
             }`}>
               {isGoldMode || selectedEmail?.extracted?.status === 'approved'
                 ? 'Approved Ledger'
@@ -538,9 +546,13 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     ? 'Error (Missing Fields)'
                     : selectedEmail?.extracted?.status === 'pending'
                       ? 'Staging Review'
-                      : selectedEmail?.hasTransaction
-                        ? 'Transactional'
-                        : 'Non-Transactional'}
+                      : selectedEmail?.status === 'rejected'
+                        ? 'Rejected'
+                        : selectedEmail?.status === 'processed'
+                          ? 'Processed'
+                          : selectedEmail?.hasTransaction
+                            ? 'Transactional'
+                            : 'Non-Transactional'}
             </span>
           </div>
           
@@ -577,43 +589,74 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               </>
             ) : selectedEmail && !selectedEmail.extracted && !resolvedLineage.silverRecord && !resolvedLineage.goldRecord ? (
               // Raw non-extracted email operations
-              selectedEmail.hasTransaction ? (
+              selectedEmail.status === 'rejected' ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (updateBronzeStatus) {
+                      await updateBronzeStatus(selectedEmail.id, 'unprocessed');
+                      setSelectedEmail({ ...selectedEmail, status: 'unprocessed' });
+                    }
+                  }}
+                  className="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors border border-amber-200/50 uppercase tracking-wider cursor-pointer shadow-sm animate-fade-in"
+                  data-testid="modal-restore-btn"
+                >
+                  Restore to Unprocessed
+                </button>
+              ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      markAsNonTransaction(selectedEmail.id);
-                      setSelectedEmail({ ...selectedEmail, hasTransaction: false });
-                    }}
-                    className="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors border border-amber-200/50 uppercase tracking-wider cursor-pointer shadow-sm"
-                  >
-                    Unmark Tx
-                  </button>
-                  {extractSelectedEmails && (
+                  {selectedEmail.hasTransaction ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          markAsNonTransaction(selectedEmail.id);
+                          setSelectedEmail({ ...selectedEmail, hasTransaction: false });
+                        }}
+                        className="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors border border-amber-200/50 uppercase tracking-wider cursor-pointer shadow-sm"
+                      >
+                        Unmark Tx
+                      </button>
+                      {extractSelectedEmails && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await extractSelectedEmails([selectedEmail.id]);
+                            handleClose();
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
+                          data-testid="modal-extract-btn"
+                        >
+                          Extract
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        markAsTransaction(selectedEmail.id);
+                        setSelectedEmail({ ...selectedEmail, hasTransaction: true });
+                      }}
+                      className="bg-indigo-55 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors border border-indigo-200/50 uppercase tracking-wider cursor-pointer shadow-sm"
+                    >
+                      Mark Tx
+                    </button>
+                  )}
+                  {rejectBronzeInput && (
                     <button
                       type="button"
                       onClick={async () => {
-                        await extractSelectedEmails([selectedEmail.id]);
-                        handleClose();
+                        await rejectBronzeInput(selectedEmail.id);
+                        setSelectedEmail({ ...selectedEmail, status: 'rejected' });
                       }}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
-                      data-testid="modal-extract-btn"
+                      className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
+                      data-testid="modal-bronze-reject-btn"
                     >
-                      Extract
+                      Reject
                     </button>
                   )}
                 </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    markAsTransaction(selectedEmail.id);
-                    setSelectedEmail({ ...selectedEmail, hasTransaction: true });
-                  }}
-                  className="bg-indigo-55 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors border border-indigo-200/50 uppercase tracking-wider cursor-pointer shadow-sm"
-                >
-                  Mark Tx
-                </button>
               )
             ) : null}
             

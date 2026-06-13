@@ -34,11 +34,11 @@ router.get(['/raw-inputs', '/raw-emails'], async (req, res) => {
  */
 router.put(['/raw-inputs/:id', '/raw-emails/:id'], async (req, res) => {
   const id = req.params.id as string;
-  const { hasTransaction } = req.body;
+  const { hasTransaction, status } = req.body;
   const userId = (req as any).auth?.sub;
 
-  if (typeof hasTransaction !== 'boolean') {
-    return res.status(400).json({ error: 'hasTransaction (boolean) is required' });
+  if (hasTransaction === undefined && status === undefined) {
+    return res.status(400).json({ error: 'hasTransaction (boolean) or status (string) is required' });
   }
 
   try {
@@ -52,12 +52,26 @@ router.put(['/raw-inputs/:id', '/raw-emails/:id'], async (req, res) => {
       return res.status(404).json({ error: 'Raw input not found or unauthorized' });
     }
 
-    await repository.updateRawInputClassification(id, userId, hasTransaction);
-    await repository.close();
+    if (hasTransaction !== undefined) {
+      if (typeof hasTransaction !== 'boolean') {
+        await repository.close();
+        return res.status(400).json({ error: 'hasTransaction must be a boolean' });
+      }
+      await repository.updateRawInputClassification(id, userId, hasTransaction);
+    }
 
+    if (status !== undefined) {
+      if (!['unprocessed', 'processed', 'rejected'].includes(status)) {
+        await repository.close();
+        return res.status(400).json({ error: "status must be 'unprocessed', 'processed', or 'rejected'" });
+      }
+      await repository.updateRawInputStatus(id, userId, status);
+    }
+
+    await repository.close();
     res.status(200).json({ status: 'updated' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to update classification' });
+    res.status(500).json({ error: error.message || 'Failed to update raw input' });
   }
 });
 

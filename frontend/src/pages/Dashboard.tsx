@@ -9,6 +9,9 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [metrics, setMetrics] = useState({
     bronzeCount: 0,
+    bronzeProcessedCount: 0,
+    bronzeUnprocessedCount: 0,
+    bronzeRejectedCount: 0,
     silverCount: 0,
     silverRejectedCount: 0,
     goldCount: 0,
@@ -37,11 +40,39 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         .then(([raw, silver, gold]) => {
           const goldTxs = gold.transactions || [];
           const silverTxs = silver.transactions || [];
+          const rawEmails = raw.emails || [];
+          
+          let bronzeProcessed = 0;
+          let bronzeRejected = 0;
+          let bronzeUnprocessed = 0;
+
+          rawEmails.forEach((email: any) => {
+            if (email.status === 'processed') {
+              bronzeProcessed++;
+            } else if (email.status === 'rejected') {
+              bronzeRejected++;
+            } else if (email.status === 'unprocessed') {
+              bronzeUnprocessed++;
+            } else {
+              // Fallback check for legacy/mock data
+              const inSilver = silverTxs.some((tx: any) => tx.rawEmailId === email.id || tx.bronzeInputId === email.id);
+              const inGold = goldTxs.some((tx: any) => tx.rawEmailId === email.id || tx.bronzeInputId === email.id);
+              if (inSilver || inGold) {
+                bronzeProcessed++;
+              } else {
+                bronzeUnprocessed++;
+              }
+            }
+          });
+
           const pendingStaging = silverTxs.filter((tx: any) => tx.status === 'pending' || tx.status === 'error');
           const rejectedStaging = silverTxs.filter((tx: any) => tx.status === 'rejected');
           const total = goldTxs.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
           setMetrics({
-            bronzeCount: (raw.emails || []).length,
+            bronzeCount: rawEmails.length,
+            bronzeProcessedCount: bronzeProcessed,
+            bronzeUnprocessedCount: bronzeUnprocessed,
+            bronzeRejectedCount: bronzeRejected,
             silverCount: pendingStaging.length,
             silverRejectedCount: rejectedStaging.length,
             goldCount: goldTxs.length,
@@ -110,6 +141,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             </span>
             <span className="text-sm font-bold text-gray-400 uppercase">Emails</span>
           </div>
+          {!isLoading && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-2 py-0.5 rounded-full uppercase tracking-wider" data-testid="dashboard-bronze-processed">
+                {metrics.bronzeProcessedCount} Processed
+              </span>
+              <span className="text-[9px] font-bold text-amber-750 bg-amber-50 border border-amber-200/50 px-2 py-0.5 rounded-full uppercase tracking-wider" data-testid="dashboard-bronze-unprocessed">
+                {metrics.bronzeUnprocessedCount} Unprocessed
+              </span>
+              <span className="text-[9px] font-bold text-rose-700 bg-rose-50 border border-rose-200/50 px-2 py-0.5 rounded-full uppercase tracking-wider" data-testid="dashboard-bronze-rejected">
+                {metrics.bronzeRejectedCount} Rejected
+              </span>
+            </div>
+          )}
           <div className="mt-4 border-t border-gray-50 pt-4 text-xs font-semibold text-gray-500 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
             Fetched from Google API

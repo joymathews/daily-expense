@@ -9,6 +9,7 @@ export interface RawInput {
   rawPayload: string; // JSON string payload metadata
   receivedAt: string; // ISO UTC string
   hasTransaction?: boolean; // classification cache
+  status?: 'unprocessed' | 'processed' | 'rejected';
   ingestedAt?: string; // ISO UTC string
 }
 
@@ -67,6 +68,7 @@ export interface ITransactionRepository {
   updatePendingTransaction(id: string, userId: string, updates: Partial<PendingTransaction>): Promise<void>;
   getRawInputById(id: string, userId: string): Promise<RawInput | undefined>;
   updateRawInputClassification(id: string, userId: string, hasTransaction: boolean): Promise<void>;
+  updateRawInputStatus(id: string, userId: string, status: 'unprocessed' | 'processed' | 'rejected'): Promise<void>;
   getSilverTransactionByInputId(inputId: string, userId: string): Promise<PendingTransaction | undefined>;
   getSilverTransactionById(id: string, userId: string): Promise<PendingTransaction | undefined>;
   revertGoldToSilver(userId: string, goldId: string): Promise<void>;

@@ -17,13 +17,14 @@ interface BronzeEmailListProps {
   bronzeSubTab: 'transaction' | 'non-transaction';
   setActiveTab: (tab: 'bronze' | 'silver' | 'gold' | 'transaction' | 'non-transaction') => void;
   rawEmails: GmailMessage[];
-  bronzeFilter: 'all' | 'processed' | 'unprocessed';
-  setBronzeFilter: (filter: 'all' | 'processed' | 'unprocessed') => void;
+  bronzeFilter: 'all' | 'processed' | 'unprocessed' | 'rejected';
+  setBronzeFilter: (filter: 'all' | 'processed' | 'unprocessed' | 'rejected') => void;
   onDeleteClick: (email: GmailMessage) => void;
   startDate: string;
   setStartDate: (val: string) => void;
   endDate: string;
   setEndDate: (val: string) => void;
+  rejectBronzeInput?: (id: string) => Promise<void> | void;
 }
 
 export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
@@ -49,6 +50,7 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
   setStartDate,
   endDate,
   setEndDate,
+  rejectBronzeInput,
 }) => {
   return (
     <div>
@@ -125,12 +127,13 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
             <select
               id="bronze-status-filter"
               value={bronzeFilter}
-              onChange={(e) => setBronzeFilter(e.target.value as 'all' | 'processed' | 'unprocessed')}
+              onChange={(e) => setBronzeFilter(e.target.value as 'all' | 'processed' | 'unprocessed' | 'rejected')}
               className="bg-white border border-gray-200 text-xs font-bold text-gray-750 px-2.5 py-1 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
             >
               <option value="all">All</option>
               <option value="processed">Processed</option>
               <option value="unprocessed">Unprocessed</option>
+              <option value="rejected">Rejected</option>
             </select>
             <span className="text-xs font-bold text-gray-400 uppercase whitespace-nowrap pl-1">{visibleRawEmails.length} Items</span>
           </div>
@@ -172,9 +175,9 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                       type="checkbox" 
                       checked={checkedEmailIds.includes(email.id)}
                       onChange={() => toggleEmailCheck(email.id)}
-                      disabled={isEmailProcessed(email)}
+                      disabled={isEmailProcessed(email) || email.status === 'rejected'}
                       className={`rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 ${
-                        isEmailProcessed(email) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+                        isEmailProcessed(email) || email.status === 'rejected' ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
                       }`}
                     />
                   </td>
@@ -192,9 +195,17 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
                       }`}>
                         {email.sourceType || 'email'}
                       </span>
-                      {isEmailProcessed(email) && (
+                      {email.status === 'rejected' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-105">
+                          ✗ Rejected
+                        </span>
+                      ) : (email.status === 'processed' || isEmailProcessed(email)) ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
                           ✓ Processed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-gray-50 text-gray-500 border border-gray-200">
+                          Unprocessed
                         </span>
                       )}
                     </div>

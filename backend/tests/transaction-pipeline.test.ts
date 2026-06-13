@@ -216,6 +216,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       updatePendingTransaction: jest.fn().mockResolvedValue(undefined),
       getRawInputById: jest.fn().mockResolvedValue(undefined),
       updateRawInputClassification: jest.fn().mockResolvedValue(undefined),
+      updateRawInputStatus: jest.fn().mockResolvedValue(undefined),
       getSilverTransactionByInputId: jest.fn().mockResolvedValue(undefined),
       getSilverTransactionById: jest.fn().mockResolvedValue(undefined),
       revertGoldToSilver: jest.fn().mockResolvedValue(undefined),

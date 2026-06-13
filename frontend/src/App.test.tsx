@@ -2454,6 +2454,154 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-37] Bronze Pipeline Statuses: processed, unprocessed, rejected. Reject raw input, updates database.
+   * [NFR-USAB-14] Bronze Rejection Action Responsiveness: updates instantly in details modal and list.
+   */
+  it('allows the user to reject and restore a raw Bronze input and updates dashboard counts', async () => {
+    const mockEmail = {
+      id: 'bronze-raw-1',
+      sender: 'test@sender.com',
+      subject: 'Bronze Raw Receipt',
+      date: '2026-06-12T10:00:00Z',
+      snippet: 'Raw snippet text here',
+      body: 'Raw email body content here',
+      hasTransaction: true,
+      status: 'unprocessed' as const,
+    };
+
+    const updateMock = vi.fn().mockImplementation((url, init) => {
+      try {
+        const body = JSON.parse(init.body);
+        if (body.status) {
+          mockEmail.status = body.status;
+        }
+      } catch (e) {}
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: 'updated' })
+      });
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/raw-inputs/bronze-raw-1')) {
+        return updateMock(url, init);
+      }
+      if (url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [mockEmail] }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [{ id: 'pm-1', name: 'Credit Card' }] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Verify initial dashboard status breakdown counts
+    const bronzeCountEl = await screen.findByTestId('dashboard-bronze-count');
+    expect(bronzeCountEl).toHaveTextContent('1');
+    expect(screen.getByTestId('dashboard-bronze-unprocessed')).toHaveTextContent('1 Unprocessed');
+    expect(screen.getByTestId('dashboard-bronze-processed')).toHaveTextContent('0 Processed');
+    expect(screen.getByTestId('dashboard-bronze-rejected')).toHaveTextContent('0 Rejected');
+
+    // Navigate to Pipeline page
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Click on the raw email row to open detail modal
+    const emailCell = await screen.findByText('Bronze Raw Receipt');
+    fireEvent.click(emailCell);
+
+    // Modal should open, check if Reject button is present and status is Transactional
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText('Transactional')).toBeInTheDocument();
+
+    const rejectBtn = within(modal).getByTestId('modal-bronze-reject-btn');
+    expect(rejectBtn).toBeInTheDocument();
+
+    // Click reject button
+    fireEvent.click(rejectBtn);
+
+    // Verify API called with status 'rejected'
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/pipeline/raw-inputs/bronze-raw-1'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.stringContaining('"status":"rejected"')
+        })
+      );
+    });
+
+    // Modal status badge updates to 'Rejected' and displays 'Restore to Unprocessed' button
+    expect(within(modal).getByText('Rejected')).toBeInTheDocument();
+    const restoreBtn = within(modal).getByTestId('modal-restore-btn');
+    expect(restoreBtn).toBeInTheDocument();
+
+    // Close detail modal
+    fireEvent.click(within(modal).getByRole('button', { name: /Dismiss/i }));
+
+    // Back on the list view, verify status badge in the row shows 'Rejected'
+    expect(screen.getByText('✗ Rejected')).toBeInTheDocument();
+
+    // Check filter functionality: filter by unprocessed should hide the rejected email
+    const filterSelect = screen.getByLabelText(/Filter:/i);
+    fireEvent.change(filterSelect, { target: { value: 'unprocessed' } });
+    expect(screen.queryByText('Bronze Raw Receipt')).not.toBeInTheDocument();
+
+    // Filter by rejected should show the rejected email
+    fireEvent.change(filterSelect, { target: { value: 'rejected' } });
+    expect(screen.getByText('Bronze Raw Receipt')).toBeInTheDocument();
+
+    // Re-open detail modal and restore
+    fireEvent.click(screen.getByText('Bronze Raw Receipt'));
+    const modal2 = screen.getByTestId('email-detail-modal');
+    const restoreBtn2 = within(modal2).getByTestId('modal-restore-btn');
+    fireEvent.click(restoreBtn2);
+
+    // Verify API called with status 'unprocessed'
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/pipeline/raw-inputs/bronze-raw-1'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.stringContaining('"status":"unprocessed"')
+        })
+      );
+    });
+
+    // Close detail modal
+    fireEvent.click(within(modal2).getByRole('button', { name: /Dismiss/i }));
+
+    // Row status badge updates to 'Unprocessed'
+    expect(screen.getByText('Unprocessed')).toBeInTheDocument();
+
+    // Navigate back to Dashboard and verify metrics
+    fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
+
+    // Dashboard should show 1 Unprocessed item again
+    const updatedUnprocessedEl = await screen.findByTestId('dashboard-bronze-unprocessed');
+    expect(updatedUnprocessedEl).toHaveTextContent('1 Unprocessed');
+    expect(screen.getByTestId('dashboard-bronze-rejected')).toHaveTextContent('0 Rejected');
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
