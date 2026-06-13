@@ -6,14 +6,18 @@
 ## 2. Mandatory Development Workflow
 For ALL future changes, feature implementations, and code modifications, you must strictly adhere to this sequential workflow:
 
-1. **Plan Mode First:** Formulate a comprehensive implementation plan in Plan Mode(As per the architectural and Design Policies (SOLID & Clean Code Reference)) before making any modifications.
+1. **Plan Mode First:** Formulate a comprehensive implementation plan in Plan Mode before making any modifications. This plan must:
+   - Extract requirements from the user's prompt.
+   - Design the solution in alignment with the [Architectural and Design Policies](#7-architectural-and-design-policies-solid--clean-code-reference) in Section 7.
+   - Account for existing functional `FUNCTIONAL_DOCUMENTATION.md` and non-functional requirements `NON_FUNCTIONAL_REQUIREMENTS.md`, as well as current bugs/defects `BUG_REGISTRY.md`.
+   - Outline how the solution will be tested, including validation strategies for edge-case scenarios.
 2. **Functional Requirements:** Explicitly define functional requirements and update `FUNCTIONAL_DOCUMENTATION.md` FIRST.
 3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with system qualities (Security, Performance, Availability, Scalability, Usability, etc.).
 4. **Tech Stack & Standards:** Document all technical stack choices, library additions, and engineering standards in Section 3 of this `GEMINI.md` file. NEVER add these to requirement documents.
 5. **Requirements Hygiene:** NEVER include technical noise, shell command outputs, or implementation logs in documentation.
 6. **Defect Resolution Workflow (Bug Fixing):** When fixing a reported bug or edge-case defect, you MUST log the issue in `BUG_REGISTRY.md` with a unique ID `[BUG-XXXX]`, write regression tests mapping to this ID, and record the resolution details in the registry.
 7. **Test-Driven Development (TDD):** Update or create test cases based *only* on the newly updated documentation/defect log. Every test MUST use the Test Justification Framework mapping to a `[FUNC-*]`, `[NFR-*]`, or `[BUG-*]` ID.
-8. **Implementation:** Write or modify code specifically to make the new and existing tests pass.
+8. **Implementation:** Write or modify code specifically to make the new and existing tests pass, ensuring that all code strictly adheres to the [Clean Code Execution Rules](#2-clean-code-execution-rules) in Section 7.
 9. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
 
 ## 3. Tech Stack & Engineering Standards
