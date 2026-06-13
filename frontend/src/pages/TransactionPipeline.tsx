@@ -169,7 +169,7 @@ const TransactionPipeline: React.FC = () => {
   };
 
   const toggleSelectAllSilver = () => {
-    const selectables = silverTransactions.filter(t => t.status !== 'error');
+    const selectables = silverTransactions.filter(t => t.status !== 'error' && t.status !== 'approved' && t.status !== 'rejected');
     if (checkedSilverIds.length === selectables.length) {
       setCheckedSilverIds([]);
     } else {

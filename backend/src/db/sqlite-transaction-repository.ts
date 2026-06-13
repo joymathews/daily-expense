@@ -631,42 +631,49 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       sets.push('payment_method = ?');
       params.push(updates.paymentMethod || null);
     }
+    if (updates.status !== undefined) {
+      sets.push('status = ?');
+      params.push(updates.status);
+    }
 
     if (sets.length === 0) return;
 
-    // Check status check requirements
-    let checkMerchant = updates.merchantNormalized || updates.merchantRaw;
-    let checkDate = updates.transactionDate;
-    let checkAmount = updates.amount;
-    let checkMethod = updates.paymentMethod;
+    if (updates.status === undefined) {
+      // Check status check requirements
+      let checkMerchant = updates.merchantNormalized || updates.merchantRaw;
+      let checkDate = updates.transactionDate;
+      let checkAmount = updates.amount;
+      let checkMethod = updates.paymentMethod;
 
-    if (updates.merchantNormalized === undefined && updates.merchantRaw === undefined) {
-      const current = await this.getSilverTransactionById(id, userId);
-      if (current) {
-        checkMerchant = current.merchantNormalized || current.merchantRaw;
+      if (updates.merchantNormalized === undefined && updates.merchantRaw === undefined) {
+        const current = await this.getSilverTransactionById(id, userId);
+        if (current) {
+          checkMerchant = current.merchantNormalized || current.merchantRaw;
+        }
       }
-    }
-    if (updates.transactionDate === undefined) {
-      const current = await this.getSilverTransactionById(id, userId);
-      if (current) checkDate = current.transactionDate;
-    }
-    if (updates.amount === undefined) {
-      const current = await this.getSilverTransactionById(id, userId);
-      if (current) checkAmount = current.amount;
-    }
-    if (updates.paymentMethod === undefined) {
-      const current = await this.getSilverTransactionById(id, userId);
-      if (current) checkMethod = current.paymentMethod;
+      if (updates.transactionDate === undefined) {
+        const current = await this.getSilverTransactionById(id, userId);
+        if (current) checkDate = current.transactionDate;
+      }
+      if (updates.amount === undefined) {
+        const current = await this.getSilverTransactionById(id, userId);
+        if (current) checkAmount = current.amount;
+      }
+      if (updates.paymentMethod === undefined) {
+        const current = await this.getSilverTransactionById(id, userId);
+        if (current) checkMethod = current.paymentMethod;
+      }
+
+      const hasMerchant = !!(checkMerchant?.trim());
+      const hasDate = !!(checkDate?.trim() && checkDate !== 'N/A');
+      const hasAmount = checkAmount !== undefined && checkAmount !== null && !isNaN(checkAmount) && checkAmount !== 0;
+      const hasMethod = !!(checkMethod?.trim() && checkMethod !== 'Unknown' && checkMethod !== 'N/A');
+
+      const nextStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : 'pending';
+      sets.push('status = ?');
+      params.push(nextStatus);
     }
 
-    const hasMerchant = !!(checkMerchant?.trim());
-    const hasDate = !!(checkDate?.trim() && checkDate !== 'N/A');
-    const hasAmount = checkAmount !== undefined && checkAmount !== null && !isNaN(checkAmount) && checkAmount !== 0;
-    const hasMethod = !!(checkMethod?.trim() && checkMethod !== 'Unknown' && checkMethod !== 'N/A');
-
-    const nextStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : 'pending';
-    sets.push('status = ?');
-    params.push(nextStatus);
 
     params.push(id, userId);
 

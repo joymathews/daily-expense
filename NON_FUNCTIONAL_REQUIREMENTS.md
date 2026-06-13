@@ -42,3 +42,5 @@
 - [NFR-USAB-10] Payment Standardization Usability: Standardized payment method dropdowns and inline management must respond to modifications immediately (within 100ms), and auto-mapping rules must standardize payment names instantly during LLM extraction and manual entries.
 - [NFR-USAB-11] Client-side Filtering Performance: Searching, filtering, and sorting operations on the Gold Transactions page must refresh the displayed list instantly (within 100ms) to ensure smooth interface responsiveness.
 - [NFR-USAB-12] Consistent Premium Styling: The user interface components on the Gold Transactions page must adhere strictly to the Outfit font typography, custom HSL palette, and glassmorphic designs of the core application layout.
+- [NFR-USAB-13] Rejection Action Responsiveness: When a user rejects a staging transaction, the status badge in the details modal and the staging list table must update instantly (within 100ms) without requiring page reload.
+

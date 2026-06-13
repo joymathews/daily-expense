@@ -2294,6 +2294,166 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-36] / [BUG-007]:
+   * Verify that rejecting a staging transaction updates its status to 'rejected',
+   * excludes it from the pending count, displays it as rejected, and updates the dashboard.
+   */
+  it('allows the user to reject a staging transaction from the detail view modal and updates counts', async () => {
+    const mockEmail = {
+      id: 'raw-1',
+      sender: 'test@sender.com',
+      subject: 'Staging Receipt',
+      date: '2026-06-12',
+      snippet: 'Amount is 45.00 USD',
+      body: 'Body text here',
+      hasTransaction: true,
+      extracted: {
+        id: 'silver-1',
+        merchant: 'Staging Merchant',
+        amount: 45.00,
+        currency: 'USD',
+        date: '2026-06-12',
+        category: 'Shopping',
+        status: 'pending' as const,
+        paymentMethod: 'Credit Card',
+      }
+    };
+
+    const mockSilver = [
+      {
+        id: 'silver-1',
+        rawEmailId: 'raw-1',
+        bronzeInputId: 'raw-1',
+        sourceType: 'email',
+        merchantRaw: 'Staging Merchant',
+        merchantNormalized: 'Staging Merchant',
+        amount: 45.00,
+        currency: 'USD',
+        transactionDate: '2026-06-12',
+        inferredCategory: 'Shopping',
+        status: 'pending' as const,
+        paymentMethod: 'Credit Card',
+        emailSubject: 'Staging Receipt',
+        emailSender: 'test@sender.com',
+        emailReceivedAt: '2026-06-12',
+      }
+    ];
+
+    const updateMock = vi.fn().mockImplementation((url, init) => {
+      try {
+        const body = JSON.parse(init.body);
+        if (body.status) {
+          mockSilver[0].status = body.status;
+          mockEmail.extracted.status = body.status;
+        }
+      } catch (e) {}
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: 'updated' })
+      });
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/silver-transactions/silver-1') || url.includes('/api/gmail/silver-transactions/silver-1')) {
+        return updateMock(url, init);
+      }
+      if (url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [mockEmail] }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [{ id: 'pm-1', name: 'Credit Card' }] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // First, verify dashboard pending and rejected state initially
+    // Since mockSilver has 1 pending, silverCount should be 1
+    const silverCountEl = await screen.findByTestId('dashboard-silver-count');
+    expect(silverCountEl).toHaveTextContent('1');
+    expect(screen.queryByTestId('dashboard-rejected-badge')).not.toBeInTheDocument();
+
+    // Navigate to Pipeline page
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Click Silver tab button to switch to the Silver staging table
+    const silverTabBtn = await screen.findByRole('button', { name: /Silver/i });
+    fireEvent.click(silverTabBtn);
+
+    // Wait for silver transaction table to render and check the count display in the header
+    const pendingItemsCountHeader = await screen.findByText(/1 Pending Items/i);
+    expect(pendingItemsCountHeader).toBeInTheDocument();
+
+    // Click on the Merchant field in the Silver table to open the detail modal
+    const merchantCell = await screen.findByText('Staging Merchant');
+    fireEvent.click(merchantCell);
+
+    // Modal should open, check if Reject button is present
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+    
+    const rejectBtn = within(modal).getByTestId('modal-reject-btn');
+    expect(rejectBtn).toBeInTheDocument();
+
+    // Click reject button
+    fireEvent.click(rejectBtn);
+
+    // Verify update silver transaction endpoint was called with status 'rejected'
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/pipeline/silver-transactions/silver-1'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.stringContaining('"status":"rejected"')
+        })
+      );
+    });
+
+
+
+    // Click Dismiss or close button in modal to close it (if not auto-closed)
+    const dismissBtn = within(modal).getByRole('button', { name: /Dismiss/i });
+    fireEvent.click(dismissBtn);
+
+    // Wait for the visible counts in the header to update: 0 Pending Items | 1 Rejected
+    await waitFor(() => {
+      expect(screen.getByText(/0 Pending Items/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 Rejected/i)).toBeInTheDocument();
+    });
+
+    // Check that the status badge of the row is now "rejected"
+    expect(screen.getByText('rejected')).toBeInTheDocument();
+
+    // Navigate back to Dashboard and verify metrics
+    fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
+
+    // Dashboard should now show 0 Pending staging items, and "1 Rejected" badge
+    const updatedSilverCountEl = await screen.findByTestId('dashboard-silver-count');
+    expect(updatedSilverCountEl).toHaveTextContent('0');
+
+    const rejectedBadge = screen.getByTestId('dashboard-rejected-badge');
+    expect(rejectedBadge).toBeInTheDocument();
+    expect(rejectedBadge).toHaveTextContent('1 Rejected');
+
+    vi.unstubAllGlobals();
+  });
 });
 
 

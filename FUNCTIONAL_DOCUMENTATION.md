@@ -62,3 +62,5 @@
 - [FUNC-GOLD-PAGE-5] Sorting: The user must be able to sort the transactions dynamically by Date, Merchant name, and Amount.
 - [FUNC-GOLD-PAGE-6] Total Sum Widget: The page must render a responsive totals summary widget showing sum totals of transactions grouped by currency.
 - [FUNC-GOLD-PAGE-7] Ledger Corrections & Reversion: The user must be able to click on the Merchant field in the Gold Transactions table to open the details/corrections modal. Inside this modal, they must be able to modify transaction fields, soft-delete manual transactions, delete email-sourced records, or revert the transaction back to the Silver staging stage.
+- [FUNC-GMAIL-36] Staging Rejection: The user must be able to reject a staging transaction (Silver layer) from the detail view modal. Marking a transaction as rejected updates its status to `rejected` in the database, updates the visible staging list table row status badge to "Rejected" immediately, and excludes the record from both the "Pending" count in the Silver layer and the "Pending" staging metric card on the dashboard.
+

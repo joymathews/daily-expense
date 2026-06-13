@@ -930,5 +930,61 @@ describe('Gmail API Integration', () => {
 
     await repository.close();
   });
+
+  /**
+   * [BUG-007] / [FUNC-GMAIL-36] Staging Rejection: Verify that updates with status 'rejected' are persisted.
+   */
+  it('should support updating a pending transaction to rejected status and persisting it', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    const rawId = 'reject_test_raw_1';
+    const silverId = 'reject_test_silver_1';
+
+    await repository.saveRawInput({
+      id: rawId,
+      userId: 'user-123',
+      sourceType: 'email',
+      sender: 'reject@test.com',
+      title: 'Reject test raw',
+      snippet: 'amount 12.00',
+      rawBody: 'Raw content for reject test',
+      rawPayload: '{}',
+      receivedAt: new Date().toISOString(),
+    });
+
+    await repository.savePendingTransaction({
+      id: silverId,
+      bronzeInputId: rawId,
+      userId: 'user-123',
+      sourceType: 'email',
+      merchantRaw: 'Supermarket',
+      merchantNormalized: 'Supermarket',
+      amount: 10.00,
+      currency: 'INR',
+      transactionDate: '2026-06-01',
+      status: 'pending',
+      paymentMethod: 'UPI',
+    });
+
+    // 1. Call API PUT route to change status to rejected
+    const response = await request(app)
+      .put(`/api/pipeline/silver-transactions/${silverId}`)
+      .set('Authorization', 'Bearer valid-token')
+      .send({ status: 'rejected' });
+
+    expect(response.status).toBe(200);
+
+    // 2. Fetch the transaction from the repository to verify the status
+    const tx = await repository.getSilverTransactionById(silverId, 'user-123');
+    expect(tx?.status).toBe('rejected');
+
+    // Clean up
+    await (repository as any).run('DELETE FROM silver_extracted_transactions WHERE id = ?', [silverId]);
+    await (repository as any).run('DELETE FROM bronze_raw_inputs WHERE id = ?', [rawId]);
+    await repository.close();
+  });
 });
+
 

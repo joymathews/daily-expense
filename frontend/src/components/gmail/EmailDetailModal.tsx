@@ -83,8 +83,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   }
 
   const isGoldMode = !!selectedGoldTransaction;
-  const isBronze = !selectedGoldTransaction && (!selectedEmail?.extracted || (selectedEmail.extracted.status !== 'approved' && selectedEmail.extracted.status !== 'pending' && selectedEmail.extracted.status !== 'error'));
-  const isSilver = !selectedGoldTransaction && selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error');
+  const isBronze = !selectedGoldTransaction && (!selectedEmail?.extracted || (selectedEmail.extracted.status !== 'approved' && selectedEmail.extracted.status !== 'pending' && selectedEmail.extracted.status !== 'error' && selectedEmail.extracted.status !== 'rejected'));
+  const isSilver = !selectedGoldTransaction && selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error' || selectedEmail.extracted.status === 'rejected');
   const isGold = isGoldMode || (selectedEmail?.extracted && selectedEmail.extracted.status === 'approved');
 
   const isMerchantInvalid = isSilver && !merchant.trim();
@@ -117,6 +117,21 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
           category,
           paymentMethod,
           status: updatedStatus,
+        }
+      });
+    }
+  };
+
+  const handleRejectSilver = async () => {
+    if (selectedEmail?.extracted && updateSilverTransaction) {
+      await updateSilverTransaction(selectedEmail.extracted.id, {
+        status: 'rejected',
+      });
+      setSelectedEmail({
+        ...selectedEmail,
+        extracted: {
+          ...selectedEmail.extracted,
+          status: 'rejected',
         }
       });
     }
@@ -364,7 +379,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
           </div>
 
           {/* Main Edit Form for Gold Corrections or Silver Pending/Error */}
-          {(isGoldMode || (selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error'))) ? (
+          {(isGoldMode || (selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error' || selectedEmail.extracted.status === 'rejected'))) ? (
             <div className="border border-indigo-100/50 rounded-2xl bg-indigo-50/15 p-5 space-y-4">
               <div className="text-xs font-bold text-indigo-700 uppercase tracking-wider border-b border-indigo-100/35 pb-2">
                 {isGoldMode ? 'Ledger Corrections (Gold Table)' : 'Staging Area (LLM Extracted Details)'}
@@ -505,28 +520,32 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
             <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase border ${
               isGoldMode || selectedEmail?.extracted?.status === 'approved'
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50'
-                : selectedEmail?.extracted?.status === 'error'
+                : selectedEmail?.extracted?.status === 'rejected'
                   ? 'bg-rose-50 text-rose-700 border-rose-200/50'
-                  : selectedEmail?.extracted?.status === 'pending'
-                    ? 'bg-indigo-50 text-indigo-750 border-indigo-200/50'
-                    : selectedEmail?.hasTransaction 
-                      ? 'bg-indigo-50 text-indigo-750 border-indigo-200/50' 
-                      : 'bg-amber-50 text-amber-700 border-amber-200/50'
+                  : selectedEmail?.extracted?.status === 'error'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200/50'
+                    : selectedEmail?.extracted?.status === 'pending'
+                      ? 'bg-indigo-50 text-indigo-750 border-indigo-200/50'
+                      : selectedEmail?.hasTransaction 
+                        ? 'bg-indigo-50 text-indigo-750 border-indigo-200/50' 
+                        : 'bg-amber-50 text-amber-700 border-amber-200/50'
             }`}>
               {isGoldMode || selectedEmail?.extracted?.status === 'approved'
                 ? 'Approved Ledger'
-                : selectedEmail?.extracted?.status === 'error'
-                  ? 'Error (Missing Fields)'
-                  : selectedEmail?.extracted?.status === 'pending'
-                    ? 'Staging Review'
-                    : selectedEmail?.hasTransaction
-                      ? 'Transactional'
-                      : 'Non-Transactional'}
+                : selectedEmail?.extracted?.status === 'rejected'
+                  ? 'Rejected'
+                  : selectedEmail?.extracted?.status === 'error'
+                    ? 'Error (Missing Fields)'
+                    : selectedEmail?.extracted?.status === 'pending'
+                      ? 'Staging Review'
+                      : selectedEmail?.hasTransaction
+                        ? 'Transactional'
+                        : 'Non-Transactional'}
             </span>
           </div>
           
-          <div className="flex space-x-3 w-full sm:w-auto justify-end">
-            {(isGoldMode || (selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error'))) ? (
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+            {(isGoldMode || (selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error' || selectedEmail.extracted.status === 'rejected'))) ? (
               <>
                 {isSilver && (
                   <button
@@ -535,6 +554,16 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
                   >
                     Save Updates
+                  </button>
+                )}
+                {isSilver && selectedEmail?.extracted?.status !== 'rejected' && (
+                  <button
+                    type="button"
+                    onClick={handleRejectSilver}
+                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
+                    data-testid="modal-reject-btn"
+                  >
+                    Reject
                   </button>
                 )}
                 <button

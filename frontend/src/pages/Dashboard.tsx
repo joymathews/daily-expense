@@ -10,6 +10,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [metrics, setMetrics] = useState({
     bronzeCount: 0,
     silverCount: 0,
+    silverRejectedCount: 0,
     goldCount: 0,
     goldTotalAmount: 0,
   });
@@ -35,10 +36,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
       ])
         .then(([raw, silver, gold]) => {
           const goldTxs = gold.transactions || [];
+          const silverTxs = silver.transactions || [];
+          const pendingStaging = silverTxs.filter((tx: any) => tx.status === 'pending' || tx.status === 'error');
+          const rejectedStaging = silverTxs.filter((tx: any) => tx.status === 'rejected');
           const total = goldTxs.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
           setMetrics({
             bronzeCount: (raw.emails || []).length,
-            silverCount: (silver.transactions || []).length,
+            silverCount: pendingStaging.length,
+            silverRejectedCount: rejectedStaging.length,
             goldCount: goldTxs.length,
             goldTotalAmount: total,
           });
@@ -100,7 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             <span className="text-xs text-gray-400 font-bold uppercase">Raw Inbox</span>
           </div>
           <div className="mt-6 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-gray-900 leading-none">
+            <span className="text-3xl font-extrabold text-gray-900 leading-none" data-testid="dashboard-bronze-count">
               {isLoading ? '...' : metrics.bronzeCount}
             </span>
             <span className="text-sm font-bold text-gray-400 uppercase">Emails</span>
@@ -119,11 +124,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             </span>
             <span className="text-xs text-gray-400 font-bold uppercase">Staging</span>
           </div>
-          <div className="mt-6 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-gray-900 leading-none">
-              {isLoading ? '...' : metrics.silverCount}
-            </span>
-            <span className="text-sm font-bold text-gray-400 uppercase">Pending</span>
+          <div className="mt-6 flex items-baseline justify-between">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-extrabold text-gray-900 leading-none" data-testid="dashboard-silver-count">
+                {isLoading ? '...' : metrics.silverCount}
+              </span>
+              <span className="text-sm font-bold text-gray-400 uppercase">Pending</span>
+            </div>
+            {!isLoading && metrics.silverRejectedCount > 0 && (
+              <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200/50 px-2.5 py-0.5 rounded-full uppercase tracking-wider" data-testid="dashboard-rejected-badge">
+                {metrics.silverRejectedCount} Rejected
+              </span>
+            )}
           </div>
           <div className="mt-4 border-t border-gray-50 pt-4 text-xs font-semibold text-gray-500 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></span>
@@ -140,7 +152,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             <span className="text-xs text-gray-400 font-bold uppercase">Ledger</span>
           </div>
           <div className="mt-6 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-gray-900 leading-none">
+            <span className="text-3xl font-extrabold text-gray-900 leading-none" data-testid="dashboard-gold-count">
               {isLoading ? '...' : metrics.goldCount}
             </span>
             <span className="text-sm font-bold text-gray-400 uppercase">Approved</span>

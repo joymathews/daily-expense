@@ -28,6 +28,10 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
   endDate,
   setEndDate,
 }) => {
+  const visibleTransactions = silverTransactions.filter(tx => tx.status !== 'approved');
+  const pendingCount = silverTransactions.filter(t => t.status === 'pending' || t.status === 'error').length;
+  const rejectedCount = silverTransactions.filter(t => t.status === 'rejected').length;
+
   return (
     <div>
       <div className="border-b border-gray-100 bg-gray-50/70 flex flex-col sm:flex-row justify-between items-stretch sm:items-center px-4 py-3 gap-3">
@@ -42,7 +46,9 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
             </button>
           )}
         </div>
-        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider self-start sm:self-auto">{silverTransactions.length} Pending Items</span>
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider self-start sm:self-auto">
+          {pendingCount} Pending Items {rejectedCount > 0 && `| ${rejectedCount} Rejected`}
+        </span>
       </div>
       
       {/* Date Filter Bar */}
@@ -77,8 +83,8 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                 <input 
                   type="checkbox" 
                   checked={
-                    silverTransactions.filter(t => t.status !== 'error').length > 0 && 
-                    checkedSilverIds.length === silverTransactions.filter(t => t.status !== 'error').length
+                    visibleTransactions.filter(t => t.status !== 'error' && t.status !== 'rejected').length > 0 && 
+                    checkedSilverIds.length === visibleTransactions.filter(t => t.status !== 'error' && t.status !== 'rejected').length
                   }
                   onChange={toggleSelectAllSilver}
                   className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
@@ -93,20 +99,20 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 bg-white">
-            {silverTransactions.length === 0 ? (
+            {visibleTransactions.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-2 py-12 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No pending transactions in staging</p>
                 </td>
               </tr>
             ) : (
-              silverTransactions.map(tx => (
-                <tr key={tx.id} className={`hover:bg-gray-50/50 transition-colors text-xs ${tx.status === 'error' ? 'bg-rose-50/30' : ''}`}>
+              visibleTransactions.map(tx => (
+                <tr key={tx.id} className={`hover:bg-gray-50/50 transition-colors text-xs ${tx.status === 'error' ? 'bg-rose-50/30' : tx.status === 'rejected' ? 'bg-rose-50/10' : ''}`}>
                   <td className="px-2 py-2.5 text-center">
                     <input 
                       type="checkbox" 
                       checked={checkedSilverIds.includes(tx.id)}
-                      disabled={tx.status === 'error'}
+                      disabled={tx.status === 'error' || tx.status === 'rejected'}
                       onChange={() => toggleSilverCheck(tx.id)}
                       className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     />
@@ -135,6 +141,7 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                     <div className="flex flex-col items-center">
                       <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] border whitespace-nowrap ${
                         tx.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                        tx.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-100' :
                         tx.status === 'error' ? 'bg-rose-50 text-rose-700 border-rose-100' :
                         'bg-amber-50 text-amber-700 border-amber-100'
                       }`}>

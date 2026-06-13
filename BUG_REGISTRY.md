@@ -95,6 +95,30 @@ Wrapped the `<FilterPanel>` block inside a conditional statement matching `isBro
 * **Test Case**: `frontend/src/App.test.tsx`
   - *displays the Fetcher Config panel only on the Bronze tab and hides it on Silver and Gold tabs*
 
+---
+
+## [BUG-007] Silver Pipeline Status Discrepancy & Missing Staging Rejection Option
+
+### Description
+In the Medallion Pipeline, when a user approves Silver staging transactions to the Gold ledger, the status badge and counts in the staging list still display them as pending. Additionally, the dashboard displays approved and rejected transactions as pending, and there is no user option to reject staging transactions.
+
+### Root Cause
+1. The backend endpoint `/api/pipeline/silver-transactions` returns all extracted transactions (including approved ones). The staging list and the dashboard pending counts do not filter out the approved status.
+2. The `updatePendingTransaction` SQL update method in the repository did not accept or update the `status` column directly when provided in the updates payload, instead dynamically computing it as 'pending' or 'error' and overriding user-rejections.
+3. The details view modal (`EmailDetailModal.tsx`) did not render a "Reject" button or handle the rejected status.
+
+### Resolution
+1. Modified the repository to allow updating `status` directly to `'rejected'`.
+2. Filtered out `'approved'` transactions in the visible list, and corrected the dashboard to only count `'pending'` or `'error'` statuses.
+3. Added a "Reject" button inside `EmailDetailModal.tsx` and updated the UI layout to display rejected items with status badges cleanly.
+
+### Verification Test
+* **Test Case**: `backend/tests/gmail.test.ts`
+  - *should support updating a pending transaction to rejected status and persisting it*
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *allows the user to reject a staging transaction from the detail view modal and updates counts*
+
+
 
 
 
