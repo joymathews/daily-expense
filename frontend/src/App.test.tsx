@@ -2602,6 +2602,141 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-38] Bronze Batch Rejection: select multiple unprocessed inputs, click Reject Selected, updates status.
+   * [NFR-USAB-15] Bronze Batch Rejection Responsiveness: updates instantly in list and dashboard.
+   */
+  it('allows the user to reject multiple raw Bronze inputs in a batch operation', async () => {
+    const mockEmails = [
+      {
+        id: 'bronze-raw-10',
+        sender: 'test1@sender.com',
+        subject: 'Bronze Raw 10',
+        date: '2026-06-12T10:00:00Z',
+        snippet: 'Snippet 10',
+        body: 'Body 10',
+        hasTransaction: true,
+        status: 'unprocessed' as const,
+      },
+      {
+        id: 'bronze-raw-20',
+        sender: 'test2@sender.com',
+        subject: 'Bronze Raw 20',
+        date: '2026-06-12T11:00:00Z',
+        snippet: 'Snippet 20',
+        body: 'Body 20',
+        hasTransaction: true,
+        status: 'unprocessed' as const,
+      }
+    ];
+
+    const rejectBatchMock = vi.fn().mockImplementation((url, init) => {
+      try {
+        const body = JSON.parse(init.body);
+        if (body.rawEmailIds) {
+          body.rawEmailIds.forEach((id: string) => {
+            const match = mockEmails.find(e => e.id === id);
+            if (match) {
+              match.status = 'rejected';
+            }
+          });
+        }
+      } catch (e) {}
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: 'rejected', rejectedIds: ['bronze-raw-10', 'bronze-raw-20'] })
+      });
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/reject-batch')) {
+        return rejectBatchMock(url, init);
+      }
+      if (url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Verify initial dashboard counts
+    const bronzeCountEl = await screen.findByTestId('dashboard-bronze-count');
+    expect(bronzeCountEl).toHaveTextContent('2');
+    expect(screen.getByTestId('dashboard-bronze-unprocessed')).toHaveTextContent('2 Unprocessed');
+
+    // Navigate to Pipeline page
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Wait for the emails to load in the list
+    expect(await screen.findByText('Bronze Raw 10')).toBeInTheDocument();
+    expect(screen.getByText('Bronze Raw 20')).toBeInTheDocument();
+
+    // Select both checkboxes
+    const row1 = screen.getByText('Bronze Raw 10').closest('tr')!;
+    const row2 = screen.getByText('Bronze Raw 20').closest('tr')!;
+    const checkbox1 = within(row1).getByRole('checkbox');
+    const checkbox2 = within(row2).getByRole('checkbox');
+
+    fireEvent.click(checkbox1);
+    fireEvent.click(checkbox2);
+
+    // Verify Reject Selected button is visible
+    const rejectBtn = screen.getByTestId('batch-reject-btn');
+    expect(rejectBtn).toBeInTheDocument();
+    expect(rejectBtn).toHaveTextContent('Reject Selected (2)');
+
+    // Click batch reject button
+    fireEvent.click(rejectBtn);
+
+    // Verify reject-batch API was called
+    await waitFor(() => {
+      expect(rejectBatchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/pipeline/reject-batch'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"rawEmailIds":["bronze-raw-10","bronze-raw-20"]')
+        })
+      );
+    });
+
+    // Verify row status badges update to '✗ Rejected'
+    await waitFor(() => {
+      expect(screen.getAllByText('✗ Rejected').length).toBe(2);
+    });
+
+    // Checkboxes should now be disabled
+    expect(checkbox1).toBeDisabled();
+    expect(checkbox2).toBeDisabled();
+
+    // Navigate back to Dashboard and verify metrics
+    fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
+
+    // Dashboard should now show 0 Unprocessed and 2 Rejected
+    const updatedUnprocessedEl = await screen.findByTestId('dashboard-bronze-unprocessed');
+    expect(updatedUnprocessedEl).toHaveTextContent('0 Unprocessed');
+    expect(screen.getByTestId('dashboard-bronze-rejected')).toHaveTextContent('2 Rejected');
+
+    vi.unstubAllGlobals();
+  });
 });
 
 

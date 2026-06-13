@@ -10,6 +10,7 @@ interface BronzeEmailListProps {
   toggleEmailCheck: (id: string) => void;
   toggleSelectAll: () => void;
   handleBatchExtract: () => void;
+  handleBatchReject: () => void;
   setSelectedEmail: (email: GmailMessage) => void;
   markAsTransaction: (id: string) => void;
   markAsNonTransaction: (id: string) => void;
@@ -36,6 +37,7 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
   toggleEmailCheck,
   toggleSelectAll,
   handleBatchExtract,
+  handleBatchReject,
   setSelectedEmail,
   markAsTransaction,
   markAsNonTransaction,
@@ -92,12 +94,21 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
         
         <div className="flex flex-wrap items-center justify-between md:justify-end gap-3">
           {checkedEmailIds.length > 0 && (
-            <button
-              onClick={handleBatchExtract}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all uppercase tracking-wider cursor-pointer"
-            >
-              🚀 Extract Selected ({checkedEmailIds.length})
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={handleBatchExtract}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all uppercase tracking-wider cursor-pointer"
+              >
+                🚀 Extract Selected ({checkedEmailIds.length})
+              </button>
+              <button
+                onClick={handleBatchReject}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all uppercase tracking-wider cursor-pointer"
+                data-testid="batch-reject-btn"
+              >
+                Reject Selected ({checkedEmailIds.length})
+              </button>
+            </div>
           )}
           <div className="flex items-center space-x-3 bg-gray-50/50 border border-gray-200/50 rounded-xl px-3 py-1">
             <div className="flex items-center space-x-1.5">

@@ -39,6 +39,7 @@ const TransactionPipeline: React.FC = () => {
     loadDeletedLayers,
     paymentMethods,
     rejectBronzeInput,
+    rejectBronzeInputsBatch,
     updateBronzeStatus,
   } = useGmailIntegration();
 
@@ -164,6 +165,12 @@ const TransactionPipeline: React.FC = () => {
   const handleBatchExtract = async () => {
     if (checkedEmailIds.length === 0) return;
     await extractSelectedEmails(checkedEmailIds);
+    setCheckedEmailIds([]);
+  };
+
+  const handleBatchReject = async () => {
+    if (checkedEmailIds.length === 0) return;
+    await rejectBronzeInputsBatch(checkedEmailIds);
     setCheckedEmailIds([]);
   };
 
@@ -374,6 +381,7 @@ const TransactionPipeline: React.FC = () => {
             toggleEmailCheck={toggleEmailCheck}
             toggleSelectAll={toggleSelectAll}
             handleBatchExtract={handleBatchExtract}
+            handleBatchReject={handleBatchReject}
             setSelectedEmail={setSelectedEmail}
             markAsTransaction={markAsTransaction}
             markAsNonTransaction={markAsNonTransaction}

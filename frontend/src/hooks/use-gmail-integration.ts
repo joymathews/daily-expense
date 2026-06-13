@@ -594,6 +594,35 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const rejectBronzeInputsBatch = async (ids: string[]) => {
+    if (ids.length === 0) return;
+
+    setRawEmails(prev =>
+      prev.map(email =>
+        ids.includes(email.id) ? { ...email, status: 'rejected' } : email
+      )
+    );
+    setEmails(prev =>
+      prev.map(email =>
+        ids.includes(email.id) ? { ...email, status: 'rejected' } : email
+      )
+    );
+
+    try {
+      const authHeaders = await getAuthHeaders();
+      await fetch('/api/pipeline/reject-batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ rawEmailIds: ids }),
+      });
+    } catch (err) {
+      console.error('Failed to batch reject raw inputs on server:', err);
+    }
+  };
+
   const updateBronzeStatus = async (id: string, status: 'unprocessed' | 'processed' | 'rejected') => {
     setRawEmails(prev =>
       prev.map(email =>
@@ -1151,6 +1180,7 @@ export const useGmailIntegration = () => {
     markAsTransaction,
     markAsNonTransaction,
     rejectBronzeInput,
+    rejectBronzeInputsBatch,
     updateBronzeStatus,
     extractSelectedEmails,
     updateSilverTransaction,

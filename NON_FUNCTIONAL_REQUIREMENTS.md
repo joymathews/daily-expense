@@ -44,4 +44,5 @@
 - [NFR-USAB-12] Consistent Premium Styling: The user interface components on the Gold Transactions page must adhere strictly to the Outfit font typography, custom HSL palette, and glassmorphic designs of the core application layout.
 - [NFR-USAB-13] Rejection Action Responsiveness: When a user rejects a staging transaction, the status badge in the details modal and the staging list table must update instantly (within 100ms) without requiring page reload.
 - [NFR-USAB-14] Bronze Rejection Action Responsiveness: When a user rejects or restores a Bronze raw input, the status badge in the details modal and the raw inputs list table must update instantly (within 100ms) without requiring page reload.
+- [NFR-USAB-15] Bronze Batch Rejection Responsiveness: When a user batch-rejects multiple raw inputs, the status badges in the list table and count indicators must update instantly (within 150ms) without requiring page reload.
 

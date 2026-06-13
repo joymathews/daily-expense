@@ -246,6 +246,37 @@ router.post('/approve-batch', async (req, res) => {
 });
 
 /**
+ * [FUNC-GMAIL-38] POST /api/pipeline/reject-batch
+ * Rejects multiple raw inputs in a single batch operation.
+ */
+router.post('/reject-batch', async (req, res) => {
+  const { rawEmailIds } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!rawEmailIds || !Array.isArray(rawEmailIds) || rawEmailIds.length === 0) {
+    return res.status(400).json({ error: 'rawEmailIds array is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    for (const id of rawEmailIds) {
+      const input = await repository.getRawInputById(id, userId);
+      if (input) {
+        await repository.updateRawInputStatus(id, userId, 'rejected');
+      }
+    }
+
+    await repository.close();
+    res.status(200).json({ status: 'rejected', rejectedIds: rawEmailIds });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to reject raw inputs in batch' });
+  }
+});
+
+
+/**
  * [FUNC-GMAIL-17] POST /api/pipeline/extract
  * Stage 2: Synchronously extracts transaction details for single or batch raw inputs via Ollama LLM.
  */
