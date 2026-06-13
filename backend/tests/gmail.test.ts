@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { app } from '../src/app';
 import { google } from 'googleapis';
+import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
 
 // Mock googleapis
 jest.mock('googleapis', () => {
@@ -36,6 +37,8 @@ describe('Gmail API Integration', () => {
     await (repository as any).run("DELETE FROM gold_transactions WHERE silver_tx_id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2') OR id IN ('del_gold_1', 'validation_test_gold_1', 'approve_test_gold_1')");
     await (repository as any).run("DELETE FROM silver_extracted_transactions WHERE id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2')");
     await (repository as any).run("DELETE FROM bronze_raw_inputs WHERE id IN ('detail_msg_1', 'test_raw_tx_1', 'test_raw_otp_1', 'del_bronze_1')");
+    await (repository as any).run("DELETE FROM payment_mapping_rules");
+    await (repository as any).run("DELETE FROM payment_methods");
     await repository.close();
   });
 
@@ -767,4 +770,165 @@ describe('Gmail API Integration', () => {
 
     await repo2.close();
   });
+
+  /**
+   * [FUNC-GMAIL-33] Payment Standardization Config endpoints: GET, POST, PUT, DELETE.
+   * [NFR-USAB-10] Payment Standardization Usability.
+   */
+  it('should manage payment methods and mapping rules and support CRUD', async () => {
+    // 1. Get seeded payment methods (dynamic seeding check)
+    const getMethodsRes = await request(app)
+      .get('/api/ingestion/payment-methods')
+      .set('Authorization', 'Bearer valid-token');
+    expect(getMethodsRes.status).toBe(200);
+    expect(getMethodsRes.body.paymentMethods).toBeDefined();
+    // Default seeded methods length should be 4
+    expect(getMethodsRes.body.paymentMethods.length).toBe(4);
+    const upiMethod = getMethodsRes.body.paymentMethods.find((m: any) => m.name === 'UPI');
+    expect(upiMethod).toBeDefined();
+
+    // 2. Post new payment method
+    const postMethodRes = await request(app)
+      .post('/api/ingestion/payment-methods')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ name: 'PayPal' });
+    expect(postMethodRes.status).toBe(201);
+    const newMethodId = postMethodRes.body.paymentMethod.id;
+    expect(postMethodRes.body.paymentMethod.name).toBe('PayPal');
+
+    // 3. Put update payment method
+    const putMethodRes = await request(app)
+      .put(`/api/ingestion/payment-methods/${newMethodId}`)
+      .set('Authorization', 'Bearer valid-token')
+      .send({ name: 'PayPal Standard' });
+    expect(putMethodRes.status).toBe(200);
+
+    // 4. Get payment mapping rules (dynamic seeding check)
+    const getRulesRes = await request(app)
+      .get('/api/ingestion/payment-rules')
+      .set('Authorization', 'Bearer valid-token');
+    expect(getRulesRes.status).toBe(200);
+    expect(getRulesRes.body.paymentRules.length).toBe(4); // default rules
+
+    // 5. Post new mapping rule
+    const postRuleRes = await request(app)
+      .post('/api/ingestion/payment-rules')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ aliasPattern: 'ppal', paymentMethodId: newMethodId });
+    expect(postRuleRes.status).toBe(201);
+    const newRuleId = postRuleRes.body.paymentRule.id;
+
+    // 6. Put update mapping rule
+    const putRuleRes = await request(app)
+      .put(`/api/ingestion/payment-rules/${newRuleId}`)
+      .set('Authorization', 'Bearer valid-token')
+      .send({ aliasPattern: 'paypal-pay', paymentMethodId: newMethodId });
+    expect(putRuleRes.status).toBe(200);
+
+    // 7. Delete mapping rule
+    const deleteRuleRes = await request(app)
+      .delete(`/api/ingestion/payment-rules/${newRuleId}`)
+      .set('Authorization', 'Bearer valid-token');
+    expect(deleteRuleRes.status).toBe(200);
+
+    // 8. Delete payment method
+    const deleteMethodRes = await request(app)
+      .delete(`/api/ingestion/payment-methods/${newMethodId}`)
+      .set('Authorization', 'Bearer valid-token');
+    expect(deleteMethodRes.status).toBe(200);
+  });
+
+  /**
+   * [FUNC-GMAIL-34] Auto-Standardization on Ingestion.
+   * Checks that raw payment methods (e.g. "hdfc bank card") are auto-standardized to "HDFC Credit Card" based on mapping rules.
+   */
+  it('should auto-standardize payment methods using rules during ingestion/matching', async () => {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    
+    // Seed and verify rule
+    const standardized = await repository.standardizePaymentMethod('user-multi-and-test', 'hdfc card');
+    expect(standardized).toBe('HDFC Credit Card');
+
+    const standardizedUpi = await repository.standardizePaymentMethod('user-multi-and-test', 'My UPI Payment');
+    expect(standardizedUpi).toBe('UPI');
+
+    const unknownMethod = await repository.standardizePaymentMethod('user-multi-and-test', 'Unknown Method');
+    expect(unknownMethod).toBe('Unknown Method'); // fallback to raw
+
+    // Test multi-alias AND combination rule
+    const methodId = crypto.randomUUID();
+    await repository.savePaymentMethod({ id: methodId, userId: 'user-multi-and-test', name: 'ICICI Credit Card Custom' });
+    await repository.savePaymentMappingRule({ id: crypto.randomUUID(), userId: 'user-multi-and-test', aliasPattern: 'icici + credit', paymentMethodId: methodId });
+
+    const matchedAnd = await repository.standardizePaymentMethod('user-multi-and-test', 'icici bank credit card');
+    expect(matchedAnd).toBe('ICICI Credit Card Custom');
+
+    const unmatchedAnd = await repository.standardizePaymentMethod('user-multi-and-test', 'icici bank debit card');
+    expect(unmatchedAnd).toBe('icici bank debit card'); // doesn't match since it lacks "credit"
+
+    await repository.close();
+  });
+
+  /**
+   * [FUNC-GMAIL-34] Retroactive standardization.
+   * [NFR-USAB-10] Payment Standardization Usability.
+   */
+  it('should retroactively standardize payment methods for existing silver and gold records', async () => {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    // 1. Prepare raw input, silver staging record with non-standard payment method
+    const rawId = 'retro_raw_1';
+    const silverId = 'retro_silver_1';
+    
+    // Cleanup any remnants
+    await (repository as any).run('DELETE FROM gold_transactions WHERE silver_tx_id = ?', [silverId]);
+    await (repository as any).run('DELETE FROM silver_extracted_transactions WHERE id = ?', [silverId]);
+    await (repository as any).run('DELETE FROM bronze_raw_inputs WHERE id = ?', [rawId]);
+
+    await repository.saveRawInput({
+      id: rawId,
+      userId: 'user-123',
+      sourceType: 'email',
+      sender: 'store@shop.com',
+      title: 'Receipt for order',
+      snippet: 'amount 10.00',
+      rawBody: 'Payment by HDFC Card.',
+      rawPayload: '{}',
+      receivedAt: new Date().toISOString(),
+    });
+
+    await repository.savePendingTransaction({
+      id: silverId,
+      bronzeInputId: rawId,
+      userId: 'user-123',
+      sourceType: 'email',
+      merchantRaw: 'Supermarket',
+      merchantNormalized: 'Supermarket',
+      amount: 10.00,
+      currency: 'INR',
+      transactionDate: '2026-06-01',
+      status: 'pending',
+      paymentMethod: 'hdfc card', // non-standard
+    });
+
+    // 2. Trigger retroactive standardization endpoint
+    const response = await request(app)
+      .post('/api/ingestion/standardize-retroactive')
+      .set('Authorization', 'Bearer valid-token');
+    expect(response.status).toBe(200);
+    expect(response.body.updatedSilverCount).toBeGreaterThanOrEqual(1);
+
+    // 3. Verify silver record was updated
+    const silverTx = await repository.getSilverTransactionById(silverId, 'user-123');
+    expect(silverTx?.paymentMethod).toBe('HDFC Credit Card');
+
+    // Clean up
+    await (repository as any).run('DELETE FROM silver_extracted_transactions WHERE id = ?', [silverId]);
+    await (repository as any).run('DELETE FROM bronze_raw_inputs WHERE id = ?', [rawId]);
+
+    await repository.close();
+  });
 });
+

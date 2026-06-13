@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { GmailService } from '../services/gmail-service';
 import { SQLiteTransactionRepository } from '../db/sqlite-transaction-repository';
 
@@ -130,4 +131,203 @@ router.post(['/gmail/fetch-detail', '/fetch-detail'], async (req, res) => {
   }
 });
 
+/**
+ * GET /api/ingestion/payment-methods
+ */
+router.get('/payment-methods', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const methods = await repository.getPaymentMethods(userId);
+    await repository.close();
+    res.status(200).json({ paymentMethods: methods });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch payment methods' });
+  }
+});
+
+/**
+ * POST /api/ingestion/payment-methods
+ */
+router.post('/payment-methods', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { name } = req.body;
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'Payment method name is required' });
+  }
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const id = crypto.randomUUID();
+    await repository.savePaymentMethod({ id, userId, name: name.trim() });
+    await repository.close();
+    res.status(201).json({ paymentMethod: { id, userId, name: name.trim() } });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to save payment method' });
+  }
+});
+
+/**
+ * PUT /api/ingestion/payment-methods/:id
+ */
+router.put('/payment-methods/:id', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { id } = req.params;
+  const { name } = req.body;
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'Payment method name is required' });
+  }
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.updatePaymentMethod(id, userId, name.trim());
+    await repository.close();
+    res.status(200).json({ message: 'Payment method updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update payment method' });
+  }
+});
+
+/**
+ * DELETE /api/ingestion/payment-methods/:id
+ */
+router.delete('/payment-methods/:id', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { id } = req.params;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.deletePaymentMethod(id, userId);
+    await repository.close();
+    res.status(200).json({ message: 'Payment method deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to delete payment method' });
+  }
+});
+
+/**
+ * GET /api/ingestion/payment-rules
+ */
+router.get('/payment-rules', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const rules = await repository.getPaymentMappingRules(userId);
+    await repository.close();
+    res.status(200).json({ paymentRules: rules });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch payment rules' });
+  }
+});
+
+/**
+ * POST /api/ingestion/payment-rules
+ */
+router.post('/payment-rules', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { aliasPattern, paymentMethodId } = req.body;
+  if (!aliasPattern || aliasPattern.trim() === '') {
+    return res.status(400).json({ error: 'Alias pattern is required' });
+  }
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: 'Payment method ID is required' });
+  }
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const id = crypto.randomUUID();
+    await repository.savePaymentMappingRule({ id, userId, aliasPattern: aliasPattern.trim(), paymentMethodId });
+    await repository.close();
+    res.status(201).json({ paymentRule: { id, userId, aliasPattern: aliasPattern.trim(), paymentMethodId } });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to save payment rule' });
+  }
+});
+
+/**
+ * PUT /api/ingestion/payment-rules/:id
+ */
+router.put('/payment-rules/:id', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { id } = req.params;
+  const { aliasPattern, paymentMethodId } = req.body;
+  if (!aliasPattern || aliasPattern.trim() === '') {
+    return res.status(400).json({ error: 'Alias pattern is required' });
+  }
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: 'Payment method ID is required' });
+  }
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.updatePaymentMappingRule(id, userId, aliasPattern.trim(), paymentMethodId);
+    await repository.close();
+    res.status(200).json({ message: 'Payment rule updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update payment rule' });
+  }
+});
+
+/**
+ * DELETE /api/ingestion/payment-rules/:id
+ */
+router.delete('/payment-rules/:id', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { id } = req.params;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.deletePaymentMappingRule(id, userId);
+    await repository.close();
+    res.status(200).json({ message: 'Payment rule deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to delete payment rule' });
+  }
+});
+
+/**
+ * POST /api/ingestion/standardize-retroactive
+ */
+router.post('/standardize-retroactive', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    // 1. Fetch Silver (pending + error)
+    const silverTxList = await repository.getSilverTransactions(userId);
+    let updatedSilverCount = 0;
+    for (const tx of silverTxList) {
+      const standardized = await repository.standardizePaymentMethod(userId, tx.paymentMethod);
+      if (standardized !== tx.paymentMethod) {
+        await repository.updatePendingTransaction(tx.id, userId, { paymentMethod: standardized });
+        updatedSilverCount++;
+      }
+    }
+
+    // 2. Fetch Gold (confirmed)
+    const goldTxList = await repository.getGoldTransactions(userId);
+    let updatedGoldCount = 0;
+    for (const tx of goldTxList) {
+      const standardized = await repository.standardizePaymentMethod(userId, tx.paymentMethod);
+      if (standardized !== tx.paymentMethod) {
+        await repository.updateGoldTransaction(tx.id, userId, { paymentMethod: standardized });
+        updatedGoldCount++;
+      }
+    }
+
+    await repository.close();
+    res.status(200).json({
+      message: 'Retroactive standardization completed successfully',
+      updatedSilverCount,
+      updatedGoldCount,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed retroactive standardization' });
+  }
+});
+
 export default router;
+

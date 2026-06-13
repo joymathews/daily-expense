@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { ITransactionRepository, RawInput, PendingTransaction, Transaction } from './transaction-repository';
 
 export class SQLiteTransactionRepository implements ITransactionRepository {
@@ -147,6 +148,32 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     await this.run('CREATE INDEX IF NOT EXISTS idx_bronze_inputs_sender ON bronze_raw_inputs(sender);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_silver_tx_status ON silver_extracted_transactions(status);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_gold_tx_user_date ON gold_transactions(user_id, transaction_date);');
+
+    // 5. Payment Standardization tables
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS payment_methods (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'utc')),
+        UNIQUE(user_id, name)
+      );
+    `);
+
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS payment_mapping_rules (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        alias_pattern TEXT NOT NULL,
+        payment_method_id TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'utc')),
+        FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE CASCADE,
+        UNIQUE(user_id, alias_pattern)
+      );
+    `);
+
+    await this.run('CREATE INDEX IF NOT EXISTS idx_payment_methods_user ON payment_methods(user_id);');
+    await this.run('CREATE INDEX IF NOT EXISTS idx_payment_rules_user ON payment_mapping_rules(user_id);');
   }
 
   async emailExists(gmailId: string, userId: string): Promise<boolean> {
@@ -816,6 +843,171 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       paymentMethod: row.payment_method || undefined,
       deletedAt: row.deleted_at,
     }));
+  }
+
+  async getPaymentMethods(userId: string): Promise<any[]> {
+    const rows = await this.all<any>(
+      'SELECT * FROM payment_methods WHERE user_id = ? ORDER BY name ASC',
+      [userId]
+    );
+    if (rows.length === 0) {
+      await this.seedDefaultPaymentMethodsAndRules(userId);
+      const newRows = await this.all<any>(
+        'SELECT * FROM payment_methods WHERE user_id = ? ORDER BY name ASC',
+        [userId]
+      );
+      return newRows.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        name: r.name,
+      }));
+    }
+    return rows.map(r => ({
+      id: r.id,
+      userId: r.user_id,
+      name: r.name,
+    }));
+  }
+
+  async savePaymentMethod(method: any): Promise<void> {
+    await this.run(
+      'INSERT INTO payment_methods (id, user_id, name) VALUES (?, ?, ?)',
+      [method.id, method.userId, method.name]
+    );
+  }
+
+  async updatePaymentMethod(id: string, userId: string, name: string): Promise<void> {
+    await this.run(
+      'UPDATE payment_methods SET name = ? WHERE id = ? AND user_id = ?',
+      [name, id, userId]
+    );
+  }
+
+  async deletePaymentMethod(id: string, userId: string): Promise<void> {
+    await this.run(
+      'DELETE FROM payment_methods WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+  }
+
+  async getPaymentMappingRules(userId: string): Promise<any[]> {
+    // Ensure default methods and rules are seeded first by calling getPaymentMethods
+    await this.getPaymentMethods(userId);
+
+    const rows = await this.all<any>(
+      `SELECT r.*, m.name AS payment_method_name 
+       FROM payment_mapping_rules r
+       JOIN payment_methods m ON r.payment_method_id = m.id
+       WHERE r.user_id = ?
+       ORDER BY r.created_at ASC`,
+      [userId]
+    );
+    return rows.map(r => ({
+      id: r.id,
+      userId: r.user_id,
+      aliasPattern: r.alias_pattern,
+      paymentMethodId: r.payment_method_id,
+      paymentMethodName: r.payment_method_name,
+    }));
+  }
+
+  async savePaymentMappingRule(rule: any): Promise<void> {
+    await this.run(
+      'INSERT INTO payment_mapping_rules (id, user_id, alias_pattern, payment_method_id) VALUES (?, ?, ?, ?)',
+      [rule.id, rule.userId, rule.aliasPattern, rule.paymentMethodId]
+    );
+  }
+
+  async updatePaymentMappingRule(id: string, userId: string, aliasPattern: string, methodId: string): Promise<void> {
+    await this.run(
+      'UPDATE payment_mapping_rules SET alias_pattern = ?, payment_method_id = ? WHERE id = ? AND user_id = ?',
+      [aliasPattern, methodId, id, userId]
+    );
+  }
+
+  async deletePaymentMappingRule(id: string, userId: string): Promise<void> {
+    await this.run(
+      'DELETE FROM payment_mapping_rules WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+  }
+
+  async standardizePaymentMethod(userId: string, rawPaymentMethod: string | undefined): Promise<string> {
+    if (!rawPaymentMethod || rawPaymentMethod.trim() === '' || rawPaymentMethod === 'Unknown' || rawPaymentMethod === 'N/A') {
+      return 'Unknown';
+    }
+
+    const trimmedRaw = rawPaymentMethod.trim();
+    const lowerRaw = trimmedRaw.toLowerCase();
+
+    // 1. Fetch rules (supports +, & or , for AND combinations)
+    const rules = await this.getPaymentMappingRules(userId);
+    for (const rule of rules) {
+      if (rule.aliasPattern) {
+        const parts = rule.aliasPattern.split(/[+&,]/).map((p: string) => p.trim().toLowerCase()).filter(Boolean);
+        if (parts.length > 0) {
+          const allMatch = parts.every((part: string) => lowerRaw.includes(part));
+          if (allMatch) {
+            return rule.paymentMethodName || 'Unknown';
+          }
+        }
+      }
+    }
+
+    // 2. If no rule matches, check if it matches any standardized method name exactly (case-insensitive)
+    const methods = await this.getPaymentMethods(userId);
+    const exactMatch = methods.find(m => m.name.toLowerCase() === lowerRaw);
+    if (exactMatch) {
+      return exactMatch.name;
+    }
+
+    // 3. Fallback: check if any standardized method name is contained in the raw string
+    const partialMatch = methods.find(m => lowerRaw.includes(m.name.toLowerCase()));
+    if (partialMatch) {
+      return partialMatch.name;
+    }
+
+    return trimmedRaw; // Fallback to raw if no match
+  }
+
+  private async seedDefaultPaymentMethodsAndRules(userId: string): Promise<void> {
+    const pmUpiId = crypto.randomUUID();
+    const pmCashId = crypto.randomUUID();
+    const pmHdfcId = crypto.randomUUID();
+    const pmSbiId = crypto.randomUUID();
+
+    const defaultMethods = [
+      { id: pmUpiId, name: 'UPI' },
+      { id: pmCashId, name: 'Cash' },
+      { id: pmHdfcId, name: 'HDFC Credit Card' },
+      { id: pmSbiId, name: 'SBI Debit Card' },
+    ];
+    const defaultRules = [
+      { id: crypto.randomUUID(), pattern: 'upi', methodId: pmUpiId },
+      { id: crypto.randomUUID(), pattern: 'cash', methodId: pmCashId },
+      { id: crypto.randomUUID(), pattern: 'hdfc', methodId: pmHdfcId },
+      { id: crypto.randomUUID(), pattern: 'sbi', methodId: pmSbiId },
+    ];
+
+    await this.run('BEGIN TRANSACTION');
+    try {
+      for (const m of defaultMethods) {
+        await this.run(
+          'INSERT OR IGNORE INTO payment_methods (id, user_id, name) VALUES (?, ?, ?)',
+          [m.id, userId, m.name]
+        );
+      }
+      for (const r of defaultRules) {
+        await this.run(
+          'INSERT OR IGNORE INTO payment_mapping_rules (id, user_id, alias_pattern, payment_method_id) VALUES (?, ?, ?, ?)',
+          [r.id, userId, r.pattern, r.methodId]
+        );
+      }
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
   }
 
   close(): Promise<void> {

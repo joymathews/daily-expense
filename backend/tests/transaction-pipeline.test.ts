@@ -226,6 +226,15 @@ describe('Transaction Processing Pipeline Integration', () => {
       restoreGoldTransaction: jest.fn().mockResolvedValue(undefined),
       getDeletedGoldTransactions: jest.fn().mockResolvedValue([]),
       close: jest.fn().mockResolvedValue(undefined),
+      getPaymentMethods: jest.fn().mockResolvedValue([]),
+      savePaymentMethod: jest.fn().mockResolvedValue(undefined),
+      updatePaymentMethod: jest.fn().mockResolvedValue(undefined),
+      deletePaymentMethod: jest.fn().mockResolvedValue(undefined),
+      getPaymentMappingRules: jest.fn().mockResolvedValue([]),
+      savePaymentMappingRule: jest.fn().mockResolvedValue(undefined),
+      updatePaymentMappingRule: jest.fn().mockResolvedValue(undefined),
+      deletePaymentMappingRule: jest.fn().mockResolvedValue(undefined),
+      standardizePaymentMethod: jest.fn().mockImplementation((userId, raw) => Promise.resolve(raw || 'Unknown')),
     };
 
     const ingestion = new TransactionIngestionService(mockRepo, extractor);

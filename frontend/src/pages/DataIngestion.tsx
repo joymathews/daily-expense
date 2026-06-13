@@ -22,9 +22,19 @@ const DataIngestion: React.FC = () => {
     fetchProgress,
     setFetchProgress,
     addDirectTransaction,
+    paymentMethods,
+    paymentRules,
+    addPaymentMethod,
+    updatePaymentMethod,
+    deletePaymentMethod,
+    addPaymentRule,
+    updatePaymentRule,
+    deletePaymentRule,
+    applyRetroactiveStandardization,
+    isLoading,
   } = useGmailIntegration();
 
-  const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual'>('gmail');
+  const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization'>('gmail');
 
   // Manual Transaction Form state
   const [merchant, setMerchant] = useState('');
@@ -32,13 +42,31 @@ const DataIngestion: React.FC = () => {
   const [currency, setCurrency] = useState('INR');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('Food');
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Payment Standardization state
+  const [newMethodName, setNewMethodName] = useState('');
+  const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
+  const [editingMethodName, setEditingMethodName] = useState('');
+
+  const [newRulePattern, setNewRulePattern] = useState('');
+  const [newRuleMethodId, setNewRuleMethodId] = useState('');
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editingRulePattern, setEditingRulePattern] = useState('');
+  const [editingRuleMethodId, setEditingRuleMethodId] = useState('');
 
   // Form validation/submit states
   const [validationError, setValidationError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync newRuleMethodId with first payment method
+  React.useEffect(() => {
+    if (paymentMethods.length > 0 && !newRuleMethodId) {
+      setNewRuleMethodId(paymentMethods[0].id);
+    }
+  }, [paymentMethods, newRuleMethodId]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +133,7 @@ const DataIngestion: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border border-gray-150/60 bg-white rounded-2xl p-1.5 shadow-sm max-w-md mx-auto">
+      <div className="flex border border-gray-150/60 bg-white rounded-2xl p-1.5 shadow-sm w-full">
         <button
           onClick={() => {
             setActiveSubTab('gmail');
@@ -133,6 +161,20 @@ const DataIngestion: React.FC = () => {
           }`}
         >
           ✍️ Direct Ledger Entry
+        </button>
+        <button
+          onClick={() => {
+            setActiveSubTab('standardization');
+            setValidationError(null);
+            setSuccessMessage(null);
+          }}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+            activeSubTab === 'standardization'
+              ? 'bg-indigo-50 text-indigo-750 shadow-sm'
+              : 'text-gray-500 hover:text-gray-950'
+          }`}
+        >
+          ⚙️ Payment Standardization
         </button>
       </div>
 
@@ -334,11 +376,10 @@ const DataIngestion: React.FC = () => {
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   className="border border-gray-250 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 outline-none transition-all font-semibold bg-white cursor-pointer"
                 >
-                  <option value="UPI">UPI</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="Net Banking">Net Banking</option>
-                  <option value="Cash">Cash</option>
+                  <option value="">Select Payment Method</option>
+                  {paymentMethods.map(m => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -366,6 +407,308 @@ const DataIngestion: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {activeSubTab === 'standardization' && (
+          <div className="space-y-8 animate-fade-in text-left">
+            {/* Retroactive Standardization Panel */}
+            <div className="bg-gradient-to-r from-indigo-50/40 to-blue-50/40 border border-indigo-100/50 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-extrabold text-indigo-955 uppercase tracking-wider">
+                  Retroactive Standardization
+                </h4>
+                <p className="text-xs text-gray-500 max-w-lg font-medium">
+                  Apply all active mapping rules to existing transactions in the Silver staging queue and Gold ledger to normalize historical data.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await applyRetroactiveStandardization();
+                    setSuccessMessage('Standardization rules applied retroactively to all transaction stages!');
+                  } catch (err: any) {
+                    setValidationError(err.message || 'Failed retroactive standardization');
+                  }
+                }}
+                disabled={isLoading}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-md transition-all cursor-pointer whitespace-nowrap"
+              >
+                🔄 Apply Rules Retroactively
+              </button>
+            </div>
+
+            {/* Config Grids */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Payment Methods Panel */}
+              <div className="bg-white border border-gray-150/70 shadow-sm rounded-2xl p-6 space-y-6">
+                <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-3">
+                  Standardized Payment Methods
+                </h3>
+                
+                {/* Inline add form */}
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!newMethodName.trim()) return;
+                    try {
+                      await addPaymentMethod(newMethodName.trim());
+                      setNewMethodName('');
+                    } catch (err: any) {
+                      setValidationError(err.message || 'Failed to add method');
+                    }
+                  }}
+                  className="flex gap-2"
+                >
+                  <input
+                    type="text"
+                    placeholder="New Payment Method name"
+                    value={newMethodName}
+                    onChange={(e) => setNewMethodName(e.target.value)}
+                    className="flex-1 border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer font-bold"
+                  >
+                    Add
+                  </button>
+                </form>
+
+                {/* List of methods */}
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {paymentMethods.map((m) => (
+                    <div 
+                      key={m.id} 
+                      className="flex items-center justify-between bg-gray-50/50 hover:bg-gray-50 border border-gray-100 rounded-xl p-3 transition-all"
+                    >
+                      {editingMethodId === m.id ? (
+                        <div className="flex items-center gap-2 w-full">
+                          <input
+                            type="text"
+                            value={editingMethodName}
+                            onChange={(e) => setEditingMethodName(e.target.value)}
+                            className="flex-1 border border-gray-250 rounded-lg px-2 py-1 text-xs font-semibold outline-none"
+                          />
+                          <button
+                            onClick={async () => {
+                              if (!editingMethodName.trim()) return;
+                              try {
+                                await updatePaymentMethod(m.id, editingMethodName.trim());
+                                setEditingMethodId(null);
+                              } catch (err: any) {
+                                setValidationError(err.message || 'Failed to update method');
+                              }
+                            }}
+                            className="text-[10px] font-bold uppercase text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingMethodId(null)}
+                            className="text-[10px] font-bold uppercase text-gray-500 hover:text-gray-600 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-xs font-bold text-gray-800">{m.name}</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => {
+                                setEditingMethodId(m.id);
+                                setEditingMethodName(m.name);
+                              }}
+                              className="text-[10px] font-bold uppercase text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (confirm('Are you sure you want to delete this payment method? This will also remove any mapping rules linked to it.')) {
+                                  try {
+                                    await deletePaymentMethod(m.id);
+                                  } catch (err: any) {
+                                    setValidationError(err.message || 'Failed to delete method');
+                                  }
+                                }
+                              }}
+                              className="text-[10px] font-bold uppercase text-red-500 hover:text-red-700 cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {paymentMethods.length === 0 && (
+                    <div className="text-center py-4 text-xs font-medium text-gray-400">
+                      No payment methods configured.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Alias Mapping Rules Panel */}
+              <div className="bg-white border border-gray-150/70 shadow-sm rounded-2xl p-6 space-y-6">
+                <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-3">
+                  Alias Mapping Rules
+                </h3>
+
+                {/* Inline add rule form */}
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!newRulePattern.trim() || !newRuleMethodId) return;
+                    try {
+                      await addPaymentRule(newRulePattern.trim(), newRuleMethodId);
+                      setNewRulePattern('');
+                    } catch (err: any) {
+                      setValidationError(err.message || 'Failed to add rule');
+                    }
+                  }}
+                  className="space-y-4 bg-gray-50/50 border border-gray-100 rounded-2xl p-4"
+                >
+                  <div className="space-y-1">
+                    <label htmlFor="new-rule-pattern" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Raw Alias Pattern</label>
+                    <input
+                      id="new-rule-pattern"
+                      type="text"
+                      placeholder="Pattern (e.g. hdfc, icici)"
+                      value={newRulePattern}
+                      onChange={(e) => setNewRulePattern(e.target.value)}
+                      className="w-full border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 outline-none transition-all bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="new-rule-method" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Map to Standard Method</label>
+                    <select
+                      id="new-rule-method"
+                      value={newRuleMethodId}
+                      onChange={(e) => setNewRuleMethodId(e.target.value)}
+                      className="w-full border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 transition-all bg-white cursor-pointer"
+                    >
+                      <option value="">Select Standard Method...</option>
+                      {paymentMethods.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-all shadow-sm hover:shadow-md font-bold"
+                  >
+                    Add Mapping Rule
+                  </button>
+                </form>
+
+                {/* List of rules */}
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {paymentRules.map((r) => (
+                    <div 
+                      key={r.id} 
+                      className="flex flex-col bg-gray-50/50 hover:bg-gray-50 border border-gray-100 rounded-xl p-3 gap-2 transition-all"
+                    >
+                      {editingRuleId === r.id ? (
+                        <div className="flex flex-col gap-3 w-full bg-indigo-50/20 border border-indigo-100 rounded-xl p-3 text-left">
+                          <div className="space-y-2">
+                            <div>
+                              <label htmlFor={`edit-pattern-${r.id}`} className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Pattern</label>
+                              <input
+                                id={`edit-pattern-${r.id}`}
+                                type="text"
+                                value={editingRulePattern}
+                                onChange={(e) => setEditingRulePattern(e.target.value)}
+                                className="w-full border border-gray-250 rounded-lg px-2 py-1 text-xs font-semibold outline-none focus:ring-1 focus:ring-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor={`edit-method-${r.id}`} className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Maps to</label>
+                              <select
+                                id={`edit-method-${r.id}`}
+                                value={editingRuleMethodId}
+                                onChange={(e) => setEditingRuleMethodId(e.target.value)}
+                                className="w-full border border-gray-250 rounded-lg px-2 py-1 text-xs font-semibold outline-none bg-white focus:ring-1 focus:ring-indigo-500"
+                              >
+                                {paymentMethods.map(m => (
+                                  <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-3 pt-2 border-t border-indigo-100/50">
+                            <button
+                              onClick={async () => {
+                                if (!editingRulePattern.trim() || !editingRuleMethodId) return;
+                                try {
+                                  await updatePaymentRule(r.id, editingRulePattern.trim(), editingRuleMethodId);
+                                  setEditingRuleId(null);
+                                } catch (err: any) {
+                                  setValidationError(err.message || 'Failed to update rule');
+                                }
+                              }}
+                              className="text-[10px] font-bold uppercase text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingRuleId(null)}
+                              className="text-[10px] font-bold uppercase text-gray-500 hover:text-gray-600 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex flex-col text-left">
+                            <span className="text-xs font-extrabold text-gray-800">
+                              Pattern: <code className="bg-indigo-50/60 px-1 py-0.5 rounded text-indigo-750 font-mono">"{r.aliasPattern}"</code>
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
+                              Maps to: <span className="text-indigo-650">{r.paymentMethodName || 'Unknown'}</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => {
+                                setEditingRuleId(r.id);
+                                setEditingRulePattern(r.aliasPattern);
+                                setEditingRuleMethodId(r.paymentMethodId);
+                              }}
+                              className="text-[10px] font-bold uppercase text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (confirm('Are you sure you want to delete this mapping rule?')) {
+                                  try {
+                                    await deletePaymentRule(r.id);
+                                  } catch (err: any) {
+                                    setValidationError(err.message || 'Failed to delete rule');
+                                  }
+                                }
+                              }}
+                              className="text-[10px] font-bold uppercase text-red-500 hover:text-red-700 cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {paymentRules.length === 0 && (
+                    <div className="text-center py-4 text-xs font-medium text-gray-400">
+                      No mapping rules configured.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -37,6 +37,7 @@ const TransactionPipeline: React.FC = () => {
     restoreBronzeEmail,
     restoreGoldTransaction,
     loadDeletedLayers,
+    paymentMethods,
   } = useGmailIntegration();
 
   console.log('DEBUG: rawEmails length =', rawEmails.length, 'rawEmails =', rawEmails);
@@ -535,6 +536,7 @@ const TransactionPipeline: React.FC = () => {
         goldTransactions={goldTransactions}
         onDeleteClick={handleDeleteClick}
         extractSelectedEmails={extractSelectedEmails}
+        paymentMethods={paymentMethods}
       />
 
       <DeleteConfirmationModal

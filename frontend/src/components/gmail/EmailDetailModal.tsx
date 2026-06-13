@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { GmailMessage, GoldTransaction, SilverTransaction } from '../../hooks/use-gmail-integration';
+import type { GmailMessage, GoldTransaction, SilverTransaction, PaymentMethod } from '../../hooks/use-gmail-integration';
 import { fetchAuthSession } from 'aws-amplify/auth';
 
 interface EmailDetailModalProps {
@@ -33,6 +33,7 @@ interface EmailDetailModalProps {
     lineage: { bronzeId?: string; silverId?: string; goldId?: string }
   ) => void;
   extractSelectedEmails?: (ids: string[]) => Promise<void>;
+  paymentMethods?: PaymentMethod[];
 }
 
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
@@ -50,6 +51,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   goldTransactions,
   onDeleteClick,
   extractSelectedEmails,
+  paymentMethods = [],
 }) => {
   // Staging / Gold shared inputs state
   const [merchant, setMerchant] = useState('');
@@ -427,16 +429,22 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                 </div>
                 <div>
                   <label htmlFor="modal-payment-method" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Payment Method</label>
-                  <input 
+                  <select 
                     id="modal-payment-method"
-                    type="text" 
-                    placeholder="e.g. UPI, HDFC credit card"
-                    className={`w-full px-3 py-2 bg-white border focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all shadow-sm ${
+                    className={`w-full px-3 py-2 bg-white border focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all shadow-sm cursor-pointer ${
                       isMethodInvalid ? 'border-rose-300 bg-rose-50/5' : 'border-gray-200'
                     }`}
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                  />
+                  >
+                    <option value="">Select Payment Method</option>
+                    {paymentMethods.map(m => (
+                      <option key={m.id} value={m.name}>{m.name}</option>
+                    ))}
+                    {paymentMethod && !paymentMethods.some(m => m.name === paymentMethod) && (
+                      <option value={paymentMethod}>{paymentMethod}</option>
+                    )}
+                  </select>
                   {isMethodInvalid && <span className="text-[10px] text-rose-600 font-bold mt-1 block">Payment method is required</span>}
                 </div>
                 <div className="col-span-1 md:col-span-2">

@@ -1644,6 +1644,12 @@ describe('Requirement Traceability Matrix Verification', () => {
     });
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [{ id: 'm1', name: 'Credit Card' }, { id: 'm2', name: 'UPI' }] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
       if (url.includes('/silver-transactions/silver_error_1')) {
         return updateMock(url, init);
       }
@@ -1805,6 +1811,12 @@ describe('Requirement Traceability Matrix Verification', () => {
   it('validates and submits manual direct ledger entries successfully without redirecting', async () => {
     const addMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'added' }) });
     const mockFetch = vi.fn().mockImplementation((url, options) => {
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [{ id: 'm1', name: 'UPI' }] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
       if (url.includes('/api/pipeline/add-transaction')) {
         return addMock(url, options);
       }
@@ -1848,7 +1860,9 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(submitBtn);
     expect(await screen.findByText(/Amount must be a positive number/i)).toBeInTheDocument();
 
-    // Fix amount and submit successfully
+    // Fix amount, select payment method and submit successfully
+    const paymentMethodSelect = screen.getByLabelText(/Payment Method \*/i);
+    fireEvent.change(paymentMethodSelect, { target: { value: 'UPI' } });
     fireEvent.change(amountInput, { target: { value: '150.50' } });
     fireEvent.click(submitBtn);
 
@@ -1863,6 +1877,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(addPayload.merchant).toBe('Test Merchant');
     expect(addPayload.amount).toBe(150.5);
     expect(addPayload.currency).toBe('INR');
+    expect(addPayload.paymentMethod).toBe('UPI');
 
     vi.unstubAllGlobals();
   });
@@ -1983,6 +1998,98 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-33] / [FUNC-GMAIL-35] / [NFR-USAB-10] Payment Standardization Tab and Dropdown:
+   * Verify rendering the Payment Standardization tab, adding methods/rules, and dynamic select dropdown inside Direct entry form.
+   */
+  it('supports managing payment methods & rules under standardization tab and dynamic manual entry dropdown selection', async () => {
+    const mockMethods = [
+      { id: 'm-1', name: 'UPI' },
+      { id: 'm-2', name: 'HDFC Credit Card' }
+    ];
+    const mockRules = [
+      { id: 'r-1', aliasPattern: 'upi', paymentMethodId: 'm-1', paymentMethodName: 'UPI' }
+    ];
+
+    const addMethodMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ paymentMethod: { id: 'm-3', name: 'PayPal' } })
+    });
+    const addRuleMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ paymentRule: { id: 'r-2', aliasPattern: 'paypal', paymentMethodId: 'm-3' } })
+    });
+    const retroactiveMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ message: 'Success', updatedSilverCount: 1, updatedGoldCount: 0 })
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url, options) => {
+      if (url.includes('/api/ingestion/payment-methods')) {
+        if (options && options.method === 'POST') {
+          return addMethodMock(url, options);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: mockMethods }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        if (options && options.method === 'POST') {
+          return addRuleMock(url, options);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: mockRules }) });
+      }
+      if (url.includes('/api/ingestion/standardize-retroactive')) {
+        return retroactiveMock(url, options);
+      }
+      // other fallback mocks
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // 1. Navigate to Ingestion control page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
+
+    // 2. Select Payment Standardization tab
+    fireEvent.click(screen.getByRole('button', { name: /Payment Standardization/i }));
+
+    // 3. Verify page renders seeded payment methods and rules
+    expect((await screen.findAllByText('UPI')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('HDFC Credit Card').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pattern:').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/"upi"/i).length).toBeGreaterThan(0);
+
+    // 4. Click Apply Rules Retroactively and check trigger
+    const applyBtn = screen.getByRole('button', { name: /Apply Rules Retroactively/i });
+    fireEvent.click(applyBtn);
+    await waitFor(() => {
+      expect(retroactiveMock).toHaveBeenCalled();
+    });
+
+    // 5. Select Direct Ledger Entry tab and check that payment method dropdown option list matches
+    fireEvent.click(screen.getByRole('button', { name: /Direct Ledger Entry/i }));
+    const selectDropdown = screen.getByLabelText(/Payment Method \*/i);
+    expect(selectDropdown).toBeInTheDocument();
+    expect(within(selectDropdown).getByText('Select Payment Method')).toBeInTheDocument();
+    expect(within(selectDropdown).getByText('UPI')).toBeInTheDocument();
+    expect(within(selectDropdown).getByText('HDFC Credit Card')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
+
 
 

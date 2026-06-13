@@ -87,9 +87,25 @@ export interface GoldTransaction {
   deletedAt?: string;
 }
 
+export interface PaymentMethod {
+  id: string;
+  userId: string;
+  name: string;
+}
+
+export interface PaymentMappingRule {
+  id: string;
+  userId: string;
+  aliasPattern: string;
+  paymentMethodId: string;
+  paymentMethodName?: string;
+}
+
 export const useGmailIntegration = () => {
   const [senders, setSenders] = useState<string[]>([]);
   const [currentSender, setCurrentSender] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [paymentRules, setPaymentRules] = useState<PaymentMappingRule[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [subject, setSubject] = useState('');
@@ -270,6 +286,36 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const loadPaymentMethods = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/ingestion/payment-methods', {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentMethods(data.paymentMethods || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load payment methods:', err);
+    }
+  };
+
+  const loadPaymentRules = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/ingestion/payment-rules', {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentRules(data.paymentRules || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load payment rules:', err);
+    }
+  };
+
   const loadAllLayers = async (start = startDate, end = endDate) => {
     setIsLoading(true);
     await Promise.all([
@@ -277,6 +323,8 @@ export const useGmailIntegration = () => {
       loadSilverTransactions(start, end),
       loadGoldTransactions(start, end),
       loadDeletedLayers(),
+      loadPaymentMethods(),
+      loadPaymentRules(),
     ]);
     setIsLoading(false);
   };
@@ -284,6 +332,167 @@ export const useGmailIntegration = () => {
   useEffect(() => {
     loadAllLayers(startDate, endDate);
   }, [startDate, endDate]);
+
+  useEffect(() => {
+    loadPaymentMethods();
+    loadPaymentRules();
+  }, []);
+
+  const addPaymentMethod = async (name: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/ingestion/payment-methods', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) {
+        await loadPaymentMethods();
+        await loadPaymentRules();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to add payment method');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const updatePaymentMethod = async (id: string, name: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/ingestion/payment-methods/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) {
+        await loadPaymentMethods();
+        await loadPaymentRules();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update payment method');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const deletePaymentMethod = async (id: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/ingestion/payment-methods/${id}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        await loadPaymentMethods();
+        await loadPaymentRules();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete payment method');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const addPaymentRule = async (aliasPattern: string, paymentMethodId: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/ingestion/payment-rules', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ aliasPattern, paymentMethodId })
+      });
+      if (res.ok) {
+        await loadPaymentRules();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to add payment rule');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const updatePaymentRule = async (id: string, aliasPattern: string, paymentMethodId: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/ingestion/payment-rules/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ aliasPattern, paymentMethodId })
+      });
+      if (res.ok) {
+        await loadPaymentRules();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update payment rule');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const deletePaymentRule = async (id: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/ingestion/payment-rules/${id}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        await loadPaymentRules();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete payment rule');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const applyRetroactiveStandardization = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/ingestion/standardize-retroactive', {
+        method: 'POST',
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        await loadAllLayers();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed retroactive standardization');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const addSender = () => {
     if (currentSender && !senders.includes(currentSender)) {
@@ -898,5 +1107,16 @@ export const useGmailIntegration = () => {
     restoreGoldTransaction,
     loadDeletedLayers,
     addDirectTransaction,
+    paymentMethods,
+    paymentRules,
+    loadPaymentMethods,
+    loadPaymentRules,
+    addPaymentMethod,
+    updatePaymentMethod,
+    deletePaymentMethod,
+    addPaymentRule,
+    updatePaymentRule,
+    deletePaymentRule,
+    applyRetroactiveStandardization,
   };
 };

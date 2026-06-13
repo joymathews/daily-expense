@@ -39,5 +39,4 @@
 - [NFR-USAB-7] Soft-Delete and Data Integrity: Reverting and deleting records must never cause database referential integrity failures. Active Bronze records (raw inputs) and direct manual Gold transactions can be soft-deleted. Reverting a Silver transaction or email-source Gold transaction must safely hard-delete those records without leaving orphaned records or breaking constraints. The Trash Bin must display deleted Bronze raw inputs and soft-deleted manual Gold transactions, and allow restoring them to their active states.
 - [NFR-USAB-8] Date Range Filtering Responsiveness: Changing the date range filters on any tab must automatically refresh the respective data lists from the database within 150ms, ensuring consistent and real-time data views across all pipeline stages.
 - [NFR-USAB-9] Validation Feedback Responsiveness: When a user corrects staging transaction errors, the visual indicator highlighting the row as an error must update instantly (within 100ms) upon saving the updates, and the option to approve must be enabled immediately.
-
-
+- [NFR-USAB-10] Payment Standardization Usability: Standardized payment method dropdowns and inline management must respond to modifications immediately (within 100ms), and auto-mapping rules must standardize payment names instantly during LLM extraction and manual entries.

@@ -265,6 +265,7 @@ router.post('/extract', async (req, res) => {
 
       const extracted = await extractor.extractTransaction(rawInput.rawBody);
       if (extracted) {
+        const standardizedMethod = await repository.standardizePaymentMethod(userId, extracted.paymentMethod);
         const pendingTx = {
           id: crypto.randomUUID(),
           bronzeInputId: rawInput.id,
@@ -278,7 +279,7 @@ router.post('/extract', async (req, res) => {
           inferredCategory: extracted.category,
           confidenceScore: 0.95,
           status: 'pending' as const,
-          paymentMethod: extracted.paymentMethod,
+          paymentMethod: standardizedMethod,
         };
         await repository.savePendingTransaction(pendingTx);
         results.push(pendingTx);

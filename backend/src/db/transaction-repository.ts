@@ -77,4 +77,29 @@ export interface ITransactionRepository {
   restoreGoldTransaction(userId: string, goldId: string): Promise<void>;
   getDeletedGoldTransactions(userId: string): Promise<Transaction[]>;
   close(): Promise<void>;
+
+  // Payment method standardization
+  getPaymentMethods(userId: string): Promise<PaymentMethod[]>;
+  savePaymentMethod(method: PaymentMethod): Promise<void>;
+  updatePaymentMethod(id: string, userId: string, name: string): Promise<void>;
+  deletePaymentMethod(id: string, userId: string): Promise<void>;
+  getPaymentMappingRules(userId: string): Promise<PaymentMappingRule[]>;
+  savePaymentMappingRule(rule: PaymentMappingRule): Promise<void>;
+  updatePaymentMappingRule(id: string, userId: string, aliasPattern: string, methodId: string): Promise<void>;
+  deletePaymentMappingRule(id: string, userId: string): Promise<void>;
+  standardizePaymentMethod(userId: string, rawPaymentMethod: string | undefined): Promise<string>;
+}
+
+export interface PaymentMethod {
+  id: string;
+  userId: string;
+  name: string;
+}
+
+export interface PaymentMappingRule {
+  id: string;
+  userId: string;
+  aliasPattern: string;
+  paymentMethodId: string;
+  paymentMethodName?: string;
 }

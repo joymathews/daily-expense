@@ -45,6 +45,7 @@ export class TransactionIngestionService {
     if (email.isTransactional) {
       const extracted = await this.extractor.extractTransaction(email.rawBody);
       if (extracted) {
+        const standardizedMethod = await this.repo.standardizePaymentMethod(email.userId, extracted.paymentMethod);
         const pendingTx = {
           id: crypto.randomUUID(),
           bronzeInputId: email.id,
@@ -58,7 +59,7 @@ export class TransactionIngestionService {
           inferredCategory: extracted.category,
           confidenceScore: 0.95,
           status: 'pending' as const,
-          paymentMethod: extracted.paymentMethod,
+          paymentMethod: standardizedMethod,
         };
         await this.repo.savePendingTransaction(pendingTx);
         return { status: 'extracted', extracted: pendingTx };
