@@ -1,14 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (targets: string[]) => void;
-  lineage: {
-    bronzeId?: string;
-    silverId?: string;
-    goldId?: string;
-  };
+  onConfirm: () => void;
   sourceStage: 'bronze' | 'silver' | 'gold';
 }
 
@@ -16,126 +11,71 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   isOpen,
   onClose,
   onConfirm,
-  lineage,
   sourceStage,
 }) => {
-  const [selectedStages, setSelectedStages] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedStages([sourceStage]);
-    }
-  }, [isOpen, sourceStage]);
-
   if (!isOpen) return null;
 
-  const handleCheckboxChange = (stage: string) => {
-    setSelectedStages((prev) =>
-      prev.includes(stage) ? prev.filter((s) => s !== stage) : [...prev, stage]
-    );
-  };
+  let title = 'Confirm Deletion';
+  let description = 'Are you sure you want to delete this record?';
+  let confirmText = 'Delete';
+  let buttonBgColor = 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500';
 
-  const handleConfirm = () => {
-    if (selectedStages.length === 0) return;
-    onConfirm(selectedStages);
-  };
-
-  // Determine which stages exist in lineage
-  const hasBronze = !!lineage.bronzeId;
-  const hasSilver = !!lineage.silverId;
-  const hasGold = !!lineage.goldId;
+  if (sourceStage === 'gold') {
+    title = 'Revert to Staging';
+    description = 'Are you sure you want to revert this Gold transaction to Silver staging? This will delete the confirmed Gold ledger record and return the staging transaction to pending or error status.';
+    confirmText = 'Revert to Staging';
+    buttonBgColor = 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500';
+  } else if (sourceStage === 'silver') {
+    title = 'Revert to Raw Email';
+    description = 'Are you sure you want to revert this Silver staging transaction to a raw unprocessed Bronze email? This will delete the Silver staging transaction and mark the raw email as unprocessed.';
+    confirmText = 'Revert to Raw';
+    buttonBgColor = 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500';
+  } else {
+    title = 'Delete Raw Email';
+    description = 'Are you sure you want to soft-delete this raw email? It will be moved to the Trash Bin, where you can restore it later if needed.';
+    confirmText = 'Delete Email';
+  }
 
   return (
     <div
       data-testid="delete-confirmation-modal"
-      className="fixed inset-0 bg-gray-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in"
     >
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-w-md w-full overflow-hidden flex flex-col font-sans">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-            Confirm Deletion
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+          <h3 className="text-sm font-bold text-gray-950 uppercase tracking-wider">
+            {title}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+            className="text-gray-400 hover:text-gray-600 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
           >
             Cancel
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-5 space-y-4 text-xs">
-          <p className="text-gray-600 font-medium">
-            You are initiating deletion of this record. Please select which stages of the Medallion pipeline you would like to delete the data from:
+        <div className="p-6 space-y-4">
+          <p className="text-gray-600 text-sm leading-relaxed">
+            {description}
           </p>
-
-          <div className="space-y-3 pt-2">
-            {hasBronze && (
-              <label className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={selectedStages.includes('bronze')}
-                  onChange={() => handleCheckboxChange('bronze')}
-                  className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500 cursor-pointer"
-                  data-testid="delete-stage-bronze"
-                />
-                <div>
-                  <span className="font-bold text-gray-900 block">Bronze Stage (Raw Email)</span>
-                  <span className="text-gray-500 text-[10px]">Soft-delete the ingested raw email from your history.</span>
-                </div>
-              </label>
-            )}
-
-            {hasSilver && (
-              <label className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={selectedStages.includes('silver')}
-                  onChange={() => handleCheckboxChange('silver')}
-                  className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500 cursor-pointer"
-                  data-testid="delete-stage-silver"
-                />
-                <div>
-                  <span className="font-bold text-gray-900 block">Silver Stage (Staging Transaction)</span>
-                  <span className="text-gray-500 text-[10px]">Soft-delete the pending extracted transaction from review queue.</span>
-                </div>
-              </label>
-            )}
-
-            {hasGold && (
-              <label className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={selectedStages.includes('gold')}
-                  onChange={() => handleCheckboxChange('gold')}
-                  className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500 cursor-pointer"
-                  data-testid="delete-stage-gold"
-                />
-                <div>
-                  <span className="font-bold text-gray-900 block">Gold Stage (Verified Ledger)</span>
-                  <span className="text-gray-500 text-[10px]">Soft-delete the double-entry validated ledger transaction.</span>
-                </div>
-              </label>
-            )}
-          </div>
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-xl font-bold uppercase tracking-wider text-[10px] cursor-pointer transition-colors"
+            className="px-4 py-2.5 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl font-semibold text-xs cursor-pointer transition-colors"
           >
             Cancel
           </button>
           <button
-            onClick={handleConfirm}
-            disabled={selectedStages.length === 0}
-            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold uppercase tracking-wider text-[10px] cursor-pointer transition-colors shadow-sm"
+            onClick={onConfirm}
+            className={`px-4 py-2.5 ${buttonBgColor} text-white rounded-xl font-semibold text-xs cursor-pointer transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             data-testid="confirm-delete-btn"
           >
-            Delete Selected
+            {confirmText}
           </button>
         </div>
       </div>

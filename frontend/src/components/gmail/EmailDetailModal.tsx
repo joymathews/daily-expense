@@ -32,6 +32,7 @@ interface EmailDetailModalProps {
     sourceStage: 'bronze' | 'silver' | 'gold',
     lineage: { bronzeId?: string; silverId?: string; goldId?: string }
   ) => void;
+  extractSelectedEmails?: (ids: string[]) => Promise<void>;
 }
 
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
@@ -48,6 +49,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   silverTransactions,
   goldTransactions,
   onDeleteClick,
+  extractSelectedEmails,
 }) => {
   // Staging / Gold shared inputs state
   const [merchant, setMerchant] = useState('');
@@ -522,16 +524,31 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
             ) : selectedEmail && !selectedEmail.extracted && !resolvedLineage.silverRecord && !resolvedLineage.goldRecord ? (
               // Raw non-extracted email operations
               selectedEmail.hasTransaction ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    markAsNonTransaction(selectedEmail.id);
-                    setSelectedEmail({ ...selectedEmail, hasTransaction: false });
-                  }}
-                  className="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors border border-amber-200/50 uppercase tracking-wider cursor-pointer shadow-sm"
-                >
-                  Unmark Tx
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markAsNonTransaction(selectedEmail.id);
+                      setSelectedEmail({ ...selectedEmail, hasTransaction: false });
+                    }}
+                    className="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors border border-amber-200/50 uppercase tracking-wider cursor-pointer shadow-sm"
+                  >
+                    Unmark Tx
+                  </button>
+                  {extractSelectedEmails && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await extractSelectedEmails([selectedEmail.id]);
+                        handleClose();
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
+                      data-testid="modal-extract-btn"
+                    >
+                      Extract
+                    </button>
+                  )}
+                </>
               ) : (
                 <button
                   type="button"
@@ -554,15 +571,17 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   silverId: resolvedLineage.silverRecord?.id,
                   goldId: resolvedLineage.goldRecord?.id,
                 };
-                const currentStage = selectedGoldTransaction 
+                const currentStage = resolvedLineage.goldRecord 
                   ? 'gold' 
-                  : (selectedEmail?.extracted && (selectedEmail.extracted.status === 'pending' || selectedEmail.extracted.status === 'error') ? 'silver' : 'bronze');
+                  : (resolvedLineage.silverRecord ? 'silver' : 'bronze');
                 onDeleteClick(currentStage, lineage);
               }}
               className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-4 py-2 rounded-xl border border-rose-200/50 uppercase tracking-wider cursor-pointer transition-colors shadow-sm"
               data-testid="modal-delete-btn"
             >
-              Delete
+              {resolvedLineage.goldRecord 
+                ? 'Revert to Staging' 
+                : (resolvedLineage.silverRecord ? 'Revert to Raw' : 'Delete')}
             </button>
 
             <button

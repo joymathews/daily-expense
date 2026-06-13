@@ -1330,15 +1330,18 @@ describe('Requirement Traceability Matrix Verification', () => {
   });
 
   /**
-   * [FUNC-GMAIL-31] Multi-Stage Delete & Trash Bin: Verify soft-delete modal prompts target checkbox selections and restoration.
-   * [NFR-USAB-7] Soft-Delete and Data Integrity: Deleting and restoring maintains data linkages and Recycle Bin visibility.
+   * [FUNC-GMAIL-31] Pipeline Reversion & Raw Email Deletion: Verify revert-to-silver, revert-to-bronze, delete/restore Bronze.
+   * [NFR-USAB-7] Soft-Delete and Data Integrity: Reverting and deleting records must never cause database referential integrity failures.
    */
-  it('supports soft-deleting records from selected stages and restoring them via Trash Bin', async () => {
+  it('supports reverting Gold, reverting Silver, and soft-deleting/restoring Bronze raw emails', async () => {
     const mockEmails = [
-      { id: 'email_1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content', hasTransaction: true }
+      { id: 'email_1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content', hasTransaction: true },
+      { id: 'email_2', sender: 'sender@test.com', subject: 'Inv 456', date: '2023-01-01', snippet: 'Paid Rs. 200', body: 'Billing content 2', hasTransaction: true },
+      { id: 'email_unprocessed', sender: 'sender@test.com', subject: 'Inv Unprocessed', date: '2023-01-02', snippet: 'Snippet', body: 'Body content', hasTransaction: true }
     ];
     const mockSilver = [
-      { id: 'silver_1', rawEmailId: 'email_1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'approved', paymentMethod: 'UPI' }
+      { id: 'silver_1', rawEmailId: 'email_1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'pending', paymentMethod: 'UPI' },
+      { id: 'silver_2', rawEmailId: 'email_2', merchantRaw: 'Merchant B', amount: 200, currency: 'INR', transactionDate: '2023-01-01', status: 'pending', paymentMethod: 'UPI' }
     ];
     const mockGold = [
       { id: 'gold_1', pendingTxId: 'silver_1', userId: 'user1', merchant: 'Merchant A Confirmed', amount: 100, currency: 'INR', transactionDate: '2023-01-01', category: 'Food', paymentMethod: 'UPI', bronzeEmailId: 'email_1' }
@@ -1347,13 +1350,9 @@ describe('Requirement Traceability Matrix Verification', () => {
     const deletedEmails = [
       { id: 'email_deleted', sender: 'deleted@test.com', subject: 'Deleted Inv', date: '2023-01-01', snippet: 'Snippet', body: 'Body', hasTransaction: true, deletedAt: '2023-01-01T00:00:00.000Z' }
     ];
-    const deletedSilver = [
-      { id: 'silver_deleted', rawEmailId: 'email_deleted', merchantRaw: 'Deleted Staging', amount: 50, currency: 'INR', transactionDate: '2023-01-01', status: 'pending', paymentMethod: 'Cash', deletedAt: '2023-01-01T00:00:00.000Z' }
-    ];
-    const deletedGold = [
-      { id: 'gold_deleted', pendingTxId: 'silver_deleted', userId: 'user1', merchant: 'Deleted Confirmed', amount: 50, currency: 'INR', transactionDate: '2023-01-01', category: 'Travel', paymentMethod: 'Cash', bronzeEmailId: 'email_deleted', deletedAt: '2023-01-01T00:00:00.000Z' }
-    ];
 
+    const revertGoldMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'reverted' }) });
+    const revertSilverMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'reverted' }) });
     const deleteMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'deleted' }) });
     const restoreMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'restored' }) });
 
@@ -1372,10 +1371,16 @@ describe('Requirement Traceability Matrix Verification', () => {
           ok: true,
           json: () => Promise.resolve({
             emails: deletedEmails,
-            silverTransactions: deletedSilver,
-            goldTransactions: deletedGold
+            silverTransactions: [],
+            goldTransactions: []
           })
         });
+      }
+      if (url.includes('/api/gmail/revert-to-silver')) {
+        return revertGoldMock(url, options);
+      }
+      if (url.includes('/api/gmail/revert-to-bronze')) {
+        return revertSilverMock(url, options);
       }
       if (url.includes('/api/gmail/delete')) {
         return deleteMock(url, options);
@@ -1392,74 +1397,100 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Navigate to Gmail Fetch page
     fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
 
-    // Open detail modal via raw email subject cell
-    const subjectCell = await screen.findByText('Inv 123');
+    // --- 1. Test Delete Bronze Raw Email ---
+    const subjectCell = await screen.findByText('Inv Unprocessed');
     expect(subjectCell).toBeInTheDocument();
     fireEvent.click(subjectCell);
 
-    // Verify modal is open and has delete button
+    // Verify modal is open and has delete button showing 'Delete'
     const detailModal = screen.getByTestId('email-detail-modal');
     expect(detailModal).toBeInTheDocument();
     const deleteBtn = screen.getByTestId('modal-delete-btn');
-    expect(deleteBtn).toBeInTheDocument();
+    expect(deleteBtn).toHaveTextContent('Delete');
 
-    // Click delete button inside modal
+    // Click delete
     fireEvent.click(deleteBtn);
 
-    // Delete confirmation modal should open
-    const modal = screen.getByTestId('delete-confirmation-modal');
-    expect(modal).toBeInTheDocument();
+    // Confirmation modal should show "Delete Raw Email"
+    expect(screen.getByTestId('delete-confirmation-modal')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Delete Raw Email/i })).toBeInTheDocument();
 
-    // The initiating tab/stage (Bronze) checkbox should be checked by default
-    const bronzeCheckbox = screen.getByTestId('delete-stage-bronze') as HTMLInputElement;
-    expect(bronzeCheckbox.checked).toBe(true);
+    // Confirm delete
+    fireEvent.click(screen.getByTestId('confirm-delete-btn'));
 
-    // Since the record has a corresponding Silver and Gold record in its lineage, those checkboxes must be rendered
-    const silverCheckbox = screen.getByTestId('delete-stage-silver') as HTMLInputElement;
-    const goldCheckbox = screen.getByTestId('delete-stage-gold') as HTMLInputElement;
-    expect(silverCheckbox).toBeInTheDocument();
-    expect(goldCheckbox).toBeInTheDocument();
-
-    // Check them all to verify multi-stage deletion selection
-    if (!silverCheckbox.checked) fireEvent.click(silverCheckbox);
-    if (!goldCheckbox.checked) fireEvent.click(goldCheckbox);
-
-    // Confirm deletion
-    const confirmBtn = screen.getByTestId('confirm-delete-btn');
-    fireEvent.click(confirmBtn);
-
-    // Verify deletion request was triggered with proper targets
     await waitFor(() => {
       expect(deleteMock).toHaveBeenCalled();
     });
     const deletePayload = JSON.parse(deleteMock.mock.calls[0][1].body);
-    expect(deletePayload.bronzeId).toBe('email_1');
-    expect(deletePayload.silverId).toBe('silver_1');
-    expect(deletePayload.goldId).toBe('gold_1');
-    expect(deletePayload.targets).toContain('bronze');
-    expect(deletePayload.targets).toContain('silver');
-    expect(deletePayload.targets).toContain('gold');
+    expect(deletePayload.bronzeId).toBe('email_unprocessed');
 
+    // --- 2. Test Revert Silver Staging ---
+    // Switch to Silver tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+    const merchantSilver = await screen.findByText('Merchant B');
+    fireEvent.click(merchantSilver);
+
+    // Detail modal opens for Silver. Verify delete button shows 'Revert to Raw'
+    const deleteBtnSilver = screen.getByTestId('modal-delete-btn');
+    expect(deleteBtnSilver).toHaveTextContent('Revert to Raw');
+
+    // Click revert
+    fireEvent.click(deleteBtnSilver);
+
+    // Confirmation modal should show "Revert to Raw Email"
+    expect(screen.getByRole('heading', { name: /Revert to Raw Email/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('confirm-delete-btn'));
+
+    await waitFor(() => {
+      expect(revertSilverMock).toHaveBeenCalled();
+    });
+    const revertSilverPayload = JSON.parse(revertSilverMock.mock.calls[0][1].body);
+    expect(revertSilverPayload.silverId).toBe('silver_2');
+
+    // --- 3. Test Revert Gold Ledger ---
+    // Switch to Gold tab
+    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
+    const merchantGold = await screen.findByText('Merchant A Confirmed');
+    fireEvent.click(merchantGold);
+
+    // Detail modal opens for Gold. Verify delete button shows 'Revert to Staging'
+    const deleteBtnGold = screen.getByTestId('modal-delete-btn');
+    expect(deleteBtnGold).toHaveTextContent('Revert to Staging');
+
+    // Click revert
+    fireEvent.click(deleteBtnGold);
+
+    // Confirmation modal should show "Revert to Staging"
+    expect(screen.getByRole('heading', { name: /Revert to Staging/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('confirm-delete-btn'));
+
+    await waitFor(() => {
+      expect(revertGoldMock).toHaveBeenCalled();
+    });
+    const revertGoldPayload = JSON.parse(revertGoldMock.mock.calls[0][1].body);
+    expect(revertGoldPayload.goldId).toBe('gold_1');
+
+    // --- 4. Test Trash Bin ---
     // Switch to Trash Bin Tab
     const trashTabBtn = screen.getByTestId('trash-tab-btn');
     fireEvent.click(trashTabBtn);
 
-    // Verify deleted items are listed in their respective tables
+    // Verify only deleted Bronze email is listed
     expect(screen.getByText('Deleted Inv')).toBeInTheDocument();
-    expect(screen.getByText('Deleted Staging')).toBeInTheDocument();
-    expect(screen.getByText('Deleted Confirmed')).toBeInTheDocument();
+    // Silver and Gold deleted tables are removed, so these should NOT be present
+    expect(screen.queryByText('Deleted Staging')).not.toBeInTheDocument();
+    expect(screen.queryByText('Deleted Confirmed')).not.toBeInTheDocument();
 
-    // Click restore action on Gold record
-    const restoreGoldBtn = screen.getByTestId('restore-gold-gold_deleted');
-    fireEvent.click(restoreGoldBtn);
+    // Click restore action on Bronze record
+    const restoreBronzeBtn = screen.getByTestId('restore-bronze-email_deleted');
+    fireEvent.click(restoreBronzeBtn);
 
     // Verify restore request was triggered
     await waitFor(() => {
       expect(restoreMock).toHaveBeenCalled();
     });
     const restorePayload = JSON.parse(restoreMock.mock.calls[0][1].body);
-    expect(restorePayload.goldId).toBe('gold_deleted');
-    expect(restorePayload.targets).toContain('gold');
+    expect(restorePayload.bronzeId).toBe('email_deleted');
 
     vi.unstubAllGlobals();
   });
@@ -1656,6 +1687,85 @@ describe('Requirement Traceability Matrix Verification', () => {
     const updateBody = JSON.parse(updateMock.mock.calls[0][1].body);
     expect(updateBody.amount).toBe(45.5);
     expect(updateBody.paymentMethod).toBe('Credit Card');
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-17] On-Demand Ingestion & Batch Extraction
+   * Verify single-email on-demand extraction option in detail modal (for transactional raw emails, and hidden for non-transactional ones).
+   */
+  it('displays the Extract button in the details modal only for unprocessed transactional raw emails', async () => {
+    const mockEmails = [
+      { id: 'email_tx', sender: 'tx@test.com', subject: 'Receipt 1', date: '2023-01-01', snippet: 'Snippet 1', body: 'Body 1', hasTransaction: true },
+      { id: 'email_nontx', sender: 'nontx@test.com', subject: 'Spam 1', date: '2023-01-02', snippet: 'Snippet 2', body: 'Body 2', hasTransaction: false }
+    ];
+
+    const extractMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ extracted: [] }) });
+
+    const mockFetch = vi.fn().mockImplementation((url, options) => {
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] })
+        });
+      }
+      if (url.includes('/api/gmail/extract')) {
+        return extractMock(url, options);
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // --- 1. Test Transactional Email ---
+    const txEmailCell = await screen.findByText('Receipt 1');
+    expect(txEmailCell).toBeInTheDocument();
+    fireEvent.click(txEmailCell);
+
+    // Verify modal is open and has "Extract" button
+    const detailModal = screen.getByTestId('email-detail-modal');
+    expect(detailModal).toBeInTheDocument();
+    const extractBtn = within(detailModal).getByTestId('modal-extract-btn');
+    expect(extractBtn).toBeInTheDocument();
+
+    // Click extract
+    fireEvent.click(extractBtn);
+
+    // Verify API is called with the correct rawEmailId
+    await waitFor(() => {
+      expect(extractMock).toHaveBeenCalled();
+    });
+    const extractPayload = JSON.parse(extractMock.mock.calls[0][1].body);
+    expect(extractPayload.rawEmailIds).toEqual(['email_tx']);
+
+    // Verify modal closed
+    expect(screen.queryByTestId('email-detail-modal')).not.toBeInTheDocument();
+
+    // --- 2. Test Non-Transactional Email ---
+    // Switch sub-tab to non-transaction
+    fireEvent.click(screen.getByRole('button', { name: /Non-Transactional/i }));
+    const nonTxEmailCell = await screen.findByText('Spam 1');
+    expect(nonTxEmailCell).toBeInTheDocument();
+    fireEvent.click(nonTxEmailCell);
+
+    // Verify modal is open but does NOT have "Extract" button
+    const detailModalNonTx = screen.getByTestId('email-detail-modal');
+    expect(detailModalNonTx).toBeInTheDocument();
+    expect(within(detailModalNonTx).queryByTestId('modal-extract-btn')).not.toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });

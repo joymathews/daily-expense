@@ -440,18 +440,68 @@ router.get('/pending', async (req, res) => {
  * [FUNC-GMAIL-31] POST /api/gmail/delete
  * Soft deletes records from targets list of layers (bronze, silver, gold).
  */
-router.post('/delete', async (req, res) => {
-  const { bronzeId, silverId, goldId, targets } = req.body;
+/**
+ * [FUNC-GMAIL-31] POST /api/gmail/revert-to-silver
+ * Reverts a Gold transaction back to Silver staging.
+ */
+router.post('/revert-to-silver', async (req, res) => {
+  const { goldId } = req.body;
   const userId = (req as any).auth?.sub;
 
-  if (!targets || !Array.isArray(targets) || targets.length === 0) {
-    return res.status(400).json({ error: 'targets array is required' });
+  if (!goldId) {
+    return res.status(400).json({ error: 'goldId is required' });
   }
 
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    await repository.softDeleteRecords(userId, targets, bronzeId, silverId, goldId);
+    await repository.revertGoldToSilver(userId, goldId);
+    await repository.close();
+    res.status(200).json({ status: 'reverted' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Reversion failed' });
+  }
+});
+
+/**
+ * [FUNC-GMAIL-31] POST /api/gmail/revert-to-bronze
+ * Reverts a Silver staging transaction back to unprocessed Bronze raw email.
+ */
+router.post('/revert-to-bronze', async (req, res) => {
+  const { silverId } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!silverId) {
+    return res.status(400).json({ error: 'silverId is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.revertSilverToBronze(userId, silverId);
+    await repository.close();
+    res.status(200).json({ status: 'reverted' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Reversion failed' });
+  }
+});
+
+/**
+ * [FUNC-GMAIL-31] POST /api/gmail/delete
+ * Soft deletes a Bronze raw email record.
+ */
+router.post('/delete', async (req, res) => {
+  const { bronzeId } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!bronzeId) {
+    return res.status(400).json({ error: 'bronzeId is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.deleteBronzeEmail(userId, bronzeId);
     await repository.close();
     res.status(200).json({ status: 'deleted' });
   } catch (error: any) {
@@ -461,20 +511,20 @@ router.post('/delete', async (req, res) => {
 
 /**
  * [FUNC-GMAIL-31] POST /api/gmail/restore
- * Restores soft-deleted records and preserves lineages.
+ * Restores a soft-deleted Bronze raw email.
  */
 router.post('/restore', async (req, res) => {
-  const { bronzeId, silverId, goldId, targets } = req.body;
+  const { bronzeId } = req.body;
   const userId = (req as any).auth?.sub;
 
-  if (!targets || !Array.isArray(targets) || targets.length === 0) {
-    return res.status(400).json({ error: 'targets array is required' });
+  if (!bronzeId) {
+    return res.status(400).json({ error: 'bronzeId is required' });
   }
 
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    await repository.restoreRecords(userId, targets, bronzeId, silverId, goldId);
+    await repository.restoreBronzeEmail(userId, bronzeId);
     await repository.close();
     res.status(200).json({ status: 'restored' });
   } catch (error: any) {
@@ -484,7 +534,7 @@ router.post('/restore', async (req, res) => {
 
 /**
  * [FUNC-GMAIL-31] GET /api/gmail/deleted
- * Retrieves all soft-deleted records for Bronze, Silver, and Gold.
+ * Retrieves all soft-deleted raw email records.
  */
 router.get('/deleted', async (req, res) => {
   const userId = (req as any).auth?.sub;
@@ -493,13 +543,11 @@ router.get('/deleted', async (req, res) => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
     const emails = await repository.getDeletedRawEmails(userId);
-    const silver = await repository.getDeletedSilverTransactions(userId);
-    const gold = await repository.getDeletedGoldTransactions(userId);
     await repository.close();
     res.status(200).json({
       emails,
-      silverTransactions: silver,
-      goldTransactions: gold
+      silverTransactions: [],
+      goldTransactions: []
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to fetch deleted records' });

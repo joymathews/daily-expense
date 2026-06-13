@@ -404,9 +404,9 @@ describe('Gmail API Integration', () => {
   });
 
   /**
-   * [FUNC-GMAIL-31] Multi-Stage Delete & Trash Bin: Verify delete, restore, and fetch-deleted endpoints.
+   * [FUNC-GMAIL-31] Pipeline Reversion & Raw Email Deletion: Verify revert-to-silver, revert-to-bronze, delete/restore Bronze.
    */
-  it('should soft delete, fetch deleted, and restore records across Bronze, Silver, and Gold layers', async () => {
+  it('should support reverting Gold to Silver, reverting Silver to Bronze, and soft deleting/restoring Bronze emails', async () => {
     const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
@@ -457,61 +457,63 @@ describe('Gmail API Integration', () => {
     expect(initialSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(true);
     expect(initialGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(true);
 
-    // 3. Perform soft-delete from targets (silver and gold only)
-    const deleteRes = await request(app)
+    // 3. Revert Gold to Silver
+    const revertGoldRes = await request(app)
+      .post('/api/gmail/revert-to-silver')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ goldId: 'del_gold_1' });
+
+    expect(revertGoldRes.status).toBe(200);
+    expect(revertGoldRes.body.status).toBe('reverted');
+
+    // Verify Gold is gone, Silver is still active (status reset to pending/error)
+    const postRevertGoldRes = await request(app).get('/api/gmail/gold-transactions').set('Authorization', 'Bearer valid-token');
+    const postRevertSilverRes = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
+    expect(postRevertGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(false);
+    expect(postRevertSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(true);
+
+    // 4. Revert Silver to Bronze
+    const revertSilverRes = await request(app)
+      .post('/api/gmail/revert-to-bronze')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ silverId: 'del_silver_1' });
+
+    expect(revertSilverRes.status).toBe(200);
+    expect(revertSilverRes.body.status).toBe('reverted');
+
+    // Verify Silver is gone, Bronze is still active
+    const postRevertSilverRes2 = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
+    const postRevertBronzeRes = await request(app).get('/api/gmail/raw-emails').set('Authorization', 'Bearer valid-token');
+    expect(postRevertSilverRes2.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(false);
+    expect(postRevertBronzeRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
+
+    // 5. Soft-delete Bronze
+    const deleteBronzeRes = await request(app)
       .post('/api/gmail/delete')
       .set('Authorization', 'Bearer valid-token')
-      .send({
-        bronzeId: 'del_bronze_1',
-        silverId: 'del_silver_1',
-        goldId: 'del_gold_1',
-        targets: ['silver', 'gold']
-      });
+      .send({ bronzeId: 'del_bronze_1' });
 
-    expect(deleteRes.status).toBe(200);
-    expect(deleteRes.body.status).toBe('deleted');
+    expect(deleteBronzeRes.status).toBe(200);
+    expect(deleteBronzeRes.body.status).toBe('deleted');
 
-    // 4. Verify that silver and gold are excluded from active endpoints, but bronze is still active
+    // Verify Bronze is excluded from active, but exists in deleted
     const activeEmailsRes = await request(app).get('/api/gmail/raw-emails').set('Authorization', 'Bearer valid-token');
-    const activeSilverRes = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
-    const activeGoldRes = await request(app).get('/api/gmail/gold-transactions').set('Authorization', 'Bearer valid-token');
+    const deletedRes = await request(app).get('/api/gmail/deleted').set('Authorization', 'Bearer valid-token');
+    expect(activeEmailsRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(false);
+    expect(deletedRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
 
-    expect(activeEmailsRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
-    expect(activeSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(false);
-    expect(activeGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(false);
-
-    // 5. Fetch from recycle bin (/api/gmail/deleted)
-    const deletedRes = await request(app)
-      .get('/api/gmail/deleted')
-      .set('Authorization', 'Bearer valid-token');
-
-    expect(deletedRes.status).toBe(200);
-    expect(deletedRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(false); // Bronze not deleted
-    expect(deletedRes.body.silverTransactions.some((t: any) => t.id === 'del_silver_1')).toBe(true); // Silver is deleted
-    expect(deletedRes.body.goldTransactions.some((t: any) => t.id === 'del_gold_1')).toBe(true); // Gold is deleted
-
-    // 6. Restore silver and gold
-    const restoreRes = await request(app)
+    // 6. Restore Bronze
+    const restoreBronzeRes = await request(app)
       .post('/api/gmail/restore')
       .set('Authorization', 'Bearer valid-token')
-      .send({
-        bronzeId: 'del_bronze_1',
-        silverId: 'del_silver_1',
-        goldId: 'del_gold_1',
-        targets: ['silver', 'gold']
-      });
+      .send({ bronzeId: 'del_bronze_1' });
 
-    expect(restoreRes.status).toBe(200);
-    expect(restoreRes.body.status).toBe('restored');
+    expect(restoreBronzeRes.status).toBe(200);
+    expect(restoreBronzeRes.body.status).toBe('restored');
 
-    // 7. Verify they are active again
-    const restoredEmailsRes = await request(app).get('/api/gmail/raw-emails').set('Authorization', 'Bearer valid-token');
-    const restoredSilverRes = await request(app).get('/api/gmail/silver-transactions').set('Authorization', 'Bearer valid-token');
-    const restoredGoldRes = await request(app).get('/api/gmail/gold-transactions').set('Authorization', 'Bearer valid-token');
-
-    expect(restoredEmailsRes.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
-    expect(restoredSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(true);
-    expect(restoredGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(true);
+    // Verify Bronze is active again
+    const activeEmailsRes2 = await request(app).get('/api/gmail/raw-emails').set('Authorization', 'Bearer valid-token');
+    expect(activeEmailsRes2.body.emails.some((e: any) => e.id === 'del_bronze_1')).toBe(true);
   });
 
   /**

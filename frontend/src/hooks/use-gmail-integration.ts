@@ -674,27 +674,39 @@ export const useGmailIntegration = () => {
     }
   };
 
-  const deleteRecords = async (
-    bronzeId: string | undefined,
-    silverId: string | undefined,
-    goldId: string | undefined,
-    targets: string[]
+  const revertOrDeleteRecord = async (
+    stage: 'bronze' | 'silver' | 'gold',
+    ids: { bronzeId?: string; silverId?: string; goldId?: string }
   ) => {
     setIsLoading(true);
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/gmail/delete', {
+      let url = '';
+      let body: any = {};
+      if (stage === 'gold') {
+        url = '/api/gmail/revert-to-silver';
+        body = { goldId: ids.goldId };
+      } else if (stage === 'silver') {
+        url = '/api/gmail/revert-to-bronze';
+        body = { silverId: ids.silverId };
+      } else {
+        url = '/api/gmail/delete';
+        body = { bronzeId: ids.bronzeId };
+      }
+
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...authHeaders,
         },
-        body: JSON.stringify({ bronzeId, silverId, goldId, targets }),
+        body: JSON.stringify(body),
       });
+
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to delete records');
+        throw new Error(errorData.error || `Failed to perform ${stage} operation`);
       }
       await loadAllLayers();
     } catch (err: any) {
@@ -704,12 +716,7 @@ export const useGmailIntegration = () => {
     }
   };
 
-  const restoreRecords = async (
-    bronzeId: string | undefined,
-    silverId: string | undefined,
-    goldId: string | undefined,
-    targets: string[]
-  ) => {
+  const restoreBronzeEmail = async (bronzeId: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -720,11 +727,11 @@ export const useGmailIntegration = () => {
           'Content-Type': 'application/json',
           ...authHeaders,
         },
-        body: JSON.stringify({ bronzeId, silverId, goldId, targets }),
+        body: JSON.stringify({ bronzeId }),
       });
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to restore records');
+        throw new Error(errorData.error || 'Failed to restore record');
       }
       await loadAllLayers();
     } catch (err: any) {
@@ -782,8 +789,8 @@ export const useGmailIntegration = () => {
     approveTransaction,
     approveTransactionsBatch,
     loadAllLayers,
-    deleteRecords,
-    restoreRecords,
+    revertOrDeleteRecord,
+    restoreBronzeEmail,
     loadDeletedLayers,
   };
 };

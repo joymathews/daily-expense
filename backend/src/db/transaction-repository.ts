@@ -65,5 +65,10 @@ export interface ITransactionRepository {
   updateRawEmailClassification(id: string, userId: string, hasTransaction: boolean): Promise<void>;
   getSilverTransactionByEmailId(emailId: string, userId: string): Promise<PendingTransaction | undefined>;
   getSilverTransactionById(id: string, userId: string): Promise<PendingTransaction | undefined>;
+  revertGoldToSilver(userId: string, goldId: string): Promise<void>;
+  revertSilverToBronze(userId: string, silverId: string): Promise<void>;
+  deleteBronzeEmail(userId: string, bronzeId: string): Promise<void>;
+  restoreBronzeEmail(userId: string, bronzeId: string): Promise<void>;
+  getDeletedRawEmails(userId: string): Promise<RawEmail[]>;
   close(): Promise<void>;
 }

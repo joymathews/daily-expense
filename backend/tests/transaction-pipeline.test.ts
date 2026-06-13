@@ -213,6 +213,11 @@ describe('Transaction Processing Pipeline Integration', () => {
       updateRawEmailClassification: jest.fn().mockResolvedValue(undefined),
       getSilverTransactionByEmailId: jest.fn().mockResolvedValue(undefined),
       getSilverTransactionById: jest.fn().mockResolvedValue(undefined),
+      revertGoldToSilver: jest.fn().mockResolvedValue(undefined),
+      revertSilverToBronze: jest.fn().mockResolvedValue(undefined),
+      deleteBronzeEmail: jest.fn().mockResolvedValue(undefined),
+      restoreBronzeEmail: jest.fn().mockResolvedValue(undefined),
+      getDeletedRawEmails: jest.fn().mockResolvedValue([]),
       close: jest.fn().mockResolvedValue(undefined),
     };
 
