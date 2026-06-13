@@ -2089,6 +2089,211 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GOLD-PAGE-1] / [FUNC-GOLD-PAGE-2] / [FUNC-GOLD-PAGE-3] / [FUNC-GOLD-PAGE-6] / [NFR-USAB-12]:
+   * Verify navigation, high-density listing, and metrics aggregation on the Gold Transactions page.
+   */
+  it('provides navigation to the Transactions page and displays ledger items with currency totals summary', async () => {
+    const mockGold = [
+      { id: 'gold-1', silverTxId: 'silver-1', userId: 'user-1', sourceType: 'email', merchant: 'Supermarket A', amount: 50.00, currency: 'INR', transactionDate: '2026-06-10', category: 'Food', notes: 'Weekly groceries', paymentMethod: 'UPI' },
+      { id: 'gold-2', silverTxId: null, userId: 'user-1', sourceType: 'manual', merchant: 'Taxi Ride', amount: 15.50, currency: 'USD', transactionDate: '2026-06-11', category: 'Transport', notes: 'Business trip', paymentMethod: 'Cash' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Click on the Navbar link to go to /transactions
+    const transLink = screen.getByRole('link', { name: /Ledger/i });
+    expect(transLink).toBeInTheDocument();
+    fireEvent.click(transLink);
+
+    // Verify page headers
+    expect(await screen.findByText('Gold Ledger Transactions')).toBeInTheDocument();
+
+    // Verify presence of table rows
+    expect(screen.getByText('Supermarket A')).toBeInTheDocument();
+    expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
+
+    // Verify high density display columns
+    expect(screen.getByText('Weekly groceries')).toBeInTheDocument();
+    expect(screen.getByText('Business trip')).toBeInTheDocument();
+
+    // Verify totals summary widget elements
+    expect(screen.getByText('INR')).toBeInTheDocument();
+    expect(screen.getByText('50.00')).toBeInTheDocument();
+    expect(screen.getByText('USD')).toBeInTheDocument();
+    expect(screen.getByText('15.50')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GOLD-PAGE-4] / [FUNC-GOLD-PAGE-5] / [NFR-USAB-11]:
+   * Verify searching, filtering, and sorting of Gold ledger items on the Transactions page.
+   */
+  it('allows searching, filtering, and sorting of gold ledger items', async () => {
+    const mockGold = [
+      { id: 'gold-1', silverTxId: 'silver-1', userId: 'user-1', sourceType: 'email', merchant: 'Apple Store', amount: 999.00, currency: 'USD', transactionDate: '2026-06-10', category: 'Gadgets', notes: 'iPhone purchase', paymentMethod: 'Credit Card' },
+      { id: 'gold-2', silverTxId: null, userId: 'user-1', sourceType: 'manual', merchant: 'Coffee Shop', amount: 5.50, currency: 'USD', transactionDate: '2026-06-12', category: 'Food', notes: 'Latte', paymentMethod: 'UPI' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Verify Apple Store and Coffee Shop are visible initially
+    expect(await screen.findByText('Apple Store')).toBeInTheDocument();
+    expect(screen.getByText('Coffee Shop')).toBeInTheDocument();
+
+    // 1. Test keyword search
+    const searchInput = screen.getByPlaceholderText(/Search by keyword/i);
+    fireEvent.change(searchInput, { target: { value: 'apple' } });
+
+    // Apple Store should remain, Coffee Shop should disappear
+    expect(screen.getByText('Apple Store')).toBeInTheDocument();
+    expect(screen.queryByText('Coffee Shop')).not.toBeInTheDocument();
+
+    // Clear search
+    fireEvent.change(searchInput, { target: { value: '' } });
+    expect(screen.getByText('Coffee Shop')).toBeInTheDocument();
+
+    // 2. Test sorting: sorting dropdown
+    const sortSelect = screen.getByLabelText(/Sort By:/i);
+    expect(sortSelect).toBeInTheDocument();
+
+    // Sort by Amount Ascending
+    fireEvent.change(sortSelect, { target: { value: 'amountAsc' } });
+    // Verify first row is Coffee Shop (5.50) and second is Apple Store (999.00)
+    let rows = screen.getAllByRole('row').slice(1); // skip header
+    expect(rows[0]).toHaveTextContent('Coffee Shop');
+    expect(rows[1]).toHaveTextContent('Apple Store');
+
+    // Sort by Amount Descending
+    fireEvent.change(sortSelect, { target: { value: 'amountDesc' } });
+    rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0]).toHaveTextContent('Apple Store');
+    expect(rows[1]).toHaveTextContent('Coffee Shop');
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GOLD-PAGE-7] / [FUNC-GMAIL-18]:
+   * Verify that clicking the merchant opens the edit/correction modal, and updating values calls the API successfully.
+   */
+  it('allows editing a gold transaction details from the Transactions page list', async () => {
+    const mockGold = [
+      { id: 'gold-1', silverTxId: 'silver-1', userId: 'user-1', sourceType: 'email', merchant: 'Old Merchant', amount: 50.00, currency: 'INR', transactionDate: '2026-06-10', category: 'Food', notes: 'groceries', paymentMethod: 'UPI' }
+    ];
+
+    const updateMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'updated' }) });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/gold-transactions/gold-1')) {
+        return updateMock(url, init);
+      }
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Wait for Merchant to appear and click it
+    const merchantCell = await screen.findByText('Old Merchant');
+    fireEvent.click(merchantCell);
+
+    // Modal should open
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // Verify values in form
+    const merchantInput = within(modal).getByLabelText('Merchant');
+    expect(merchantInput).toHaveValue('Old Merchant');
+
+    // Change merchant name and submit
+    fireEvent.change(merchantInput, { target: { value: 'New Merchant' } });
+    const saveBtn = within(modal).getByRole('button', { name: 'Save Corrections' });
+    fireEvent.click(saveBtn);
+
+    // Verify the PUT request was made
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/pipeline/gold-transactions/gold-1'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.stringContaining('"merchant":"New Merchant"')
+        })
+      );
+    });
+
+    vi.unstubAllGlobals();
+  });
 });
 
 

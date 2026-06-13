@@ -9,6 +9,7 @@ import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import DataIngestion from './pages/DataIngestion';
 import TransactionPipeline from './pages/TransactionPipeline';
+import GoldTransactions from './pages/GoldTransactions';
 
 Amplify.configure(authConfig);
 
@@ -23,6 +24,7 @@ function App() {
           <Route path="/" element={<Dashboard userEmail={userEmail} />} />
           <Route path="/ingestion" element={<DataIngestion />} />
           <Route path="/pipeline" element={<TransactionPipeline />} />
+          <Route path="/transactions" element={<GoldTransactions />} />
           <Route path="/gmail" element={<Navigate to="/ingestion" replace />} />
         </Routes>
       </main>

@@ -55,4 +55,10 @@
 - [FUNC-GMAIL-33] Payment Standardization Config: The user must be able to manage a list of standardized payment methods (add, edit, delete) and alias mapping rules (e.g. mapping "hdfc" -> "HDFC Credit Card") in a dedicated "Payment Standardization" tab on the Data Ingestion page.
 - [FUNC-GMAIL-34] Auto-Standardization on Extraction: During LLM extraction and manual entry ingestion, payment methods must be automatically normalized using the user's mapping rules before saving them to the Silver layer (or Gold layer for direct entry).
 - [FUNC-GMAIL-35] Standardized Dropdown Selection: All UI forms that accept a payment method (Silver staging edits, Gold corrections, Direct manual entries) must render a dropdown selection populated from the user's standardized payment methods list rather than a free-text input field.
-
+- [FUNC-GOLD-PAGE-1] Gold Transactions Page: The system must provide a dedicated Gold Transactions page accessible at the route `/transactions` that retrieves and displays all confirmed transaction records from the Gold medallion stage.
+- [FUNC-GOLD-PAGE-2] Navigation: The user must be able to navigate to the Gold Transactions page through a link labeled "Transactions" in the primary navigation bar.
+- [FUNC-GOLD-PAGE-3] High-Density Listing: The page must display a high-density table view listing all transaction fields from the Gold stage: Transaction Date, Merchant, Source Type, Inferred/Assigned Category, Payment Method, Amount, Currency, and Notes.
+- [FUNC-GOLD-PAGE-4] Search and Date Filtering: The user must be able to search transactions by keyword (merchant, notes, payment method, category) and filter listed records dynamically by selecting a start and end date range.
+- [FUNC-GOLD-PAGE-5] Sorting: The user must be able to sort the transactions dynamically by Date, Merchant name, and Amount.
+- [FUNC-GOLD-PAGE-6] Total Sum Widget: The page must render a responsive totals summary widget showing sum totals of transactions grouped by currency.
+- [FUNC-GOLD-PAGE-7] Ledger Corrections & Reversion: The user must be able to click on the Merchant field in the Gold Transactions table to open the details/corrections modal. Inside this modal, they must be able to modify transaction fields, soft-delete manual transactions, delete email-sourced records, or revert the transaction back to the Silver staging stage.
