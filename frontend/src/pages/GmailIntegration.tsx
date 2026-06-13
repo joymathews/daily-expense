@@ -39,6 +39,7 @@ const GmailIntegration: React.FC = () => {
     markAsTransaction,
     markAsNonTransaction,
     extractSelectedEmails,
+    updateSilverTransaction,
     updateGoldTransaction,
     handleFetchClick,
     approveTransaction,
@@ -173,10 +174,11 @@ const GmailIntegration: React.FC = () => {
   };
 
   const toggleSelectAllSilver = () => {
-    if (checkedSilverIds.length === silverTransactions.length) {
+    const selectables = silverTransactions.filter(t => t.status !== 'error');
+    if (checkedSilverIds.length === selectables.length) {
       setCheckedSilverIds([]);
     } else {
-      setCheckedSilverIds(silverTransactions.map(t => t.id));
+      setCheckedSilverIds(selectables.map(t => t.id));
     }
   };
 
@@ -686,6 +688,7 @@ const GmailIntegration: React.FC = () => {
         selectedGoldTransaction={selectedGoldTransaction}
         setSelectedGoldTransaction={setSelectedGoldTransaction}
         updateGoldTransaction={updateGoldTransaction}
+        updateSilverTransaction={updateSilverTransaction}
         rawEmails={rawEmails}
         silverTransactions={silverTransactions}
         goldTransactions={goldTransactions}

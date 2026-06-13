@@ -385,6 +385,7 @@ describe('Requirement Traceability Matrix Verification', () => {
           currency: 'USD',
           date: '2023-01-15',
           category: 'Transport',
+          paymentMethod: 'UPI',
           status: 'pending'
         }
       }
@@ -1532,6 +1533,129 @@ describe('Requirement Traceability Matrix Verification', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('startDate=2023-01-12'), expect.any(Object));
     });
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-32] Staging Validation & Error Status:
+   * Verify disabling checkboxes of 'error' status rows in Silver list, warning alert banner,
+   * validation input highlights, and confirming that correcting the fields enables approval.
+   */
+  it('disables checkbox for error status rows, displays modal warning alert, highlights fields, and correction clears error and enables approval', async () => {
+    // 1. Mock fetch handlers
+    const mockSilver = [
+      {
+        id: 'silver_error_1',
+        rawEmailId: 'bronze_error_1',
+        merchantRaw: 'Error Merchant',
+        amount: 0, // Invalid
+        currency: 'USD',
+        transactionDate: '2023-01-15',
+        status: 'error',
+        paymentMethod: 'N/A' // Invalid
+      }
+    ];
+
+    const mockEmails = [
+      {
+        id: 'bronze_error_1',
+        sender: 'error@merchant.com',
+        subject: 'Error Invoice',
+        date: '2023-01-15',
+        snippet: 'Error snippet',
+        body: 'Full receipt details',
+        hasTransaction: true,
+        extracted: mockSilver[0]
+      }
+    ];
+
+    const updateMock = vi.fn().mockImplementation((url, init) => {
+      const updates = JSON.parse(init.body);
+      mockSilver[0] = {
+        ...mockSilver[0],
+        ...updates,
+        status: 'pending' // fixed!
+      };
+      mockEmails[0].extracted = mockSilver[0];
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: 'updated', transaction: mockSilver[0] }),
+      });
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/gmail/silver-transactions/silver_error_1')) {
+        return updateMock(url, init);
+      }
+      if (url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/gmail/fetch-detail')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'fetched', email: mockEmails[0] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Gmail Fetch page
+    fireEvent.click(screen.getByRole('link', { name: /Gmail Fetch/i }));
+
+    // Switch to Silver tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    // Wait for the staging item to appear
+    const merchantCell = await screen.findByText('Error Merchant');
+    expect(merchantCell).toBeInTheDocument();
+
+    // Verify row checkbox is disabled
+    const row = merchantCell.closest('tr')!;
+    const checkbox = within(row).getByRole('checkbox');
+    expect(checkbox).toBeDisabled();
+
+    // Click the row to open the detail modal
+    fireEvent.click(merchantCell);
+
+    // Verify detail modal is open
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // Check warning alert banner exists
+    expect(within(modal).getByTestId('staging-error-alert')).toBeInTheDocument();
+
+    // Verify fields are highlighted in red (border-rose-300)
+    const amountInput = within(modal).getByLabelText('Amount');
+    const paymentMethodInput = within(modal).getByLabelText('Payment Method');
+    expect(amountInput).toHaveClass('border-rose-300');
+    expect(paymentMethodInput).toHaveClass('border-rose-300');
+
+    // Confirm Approve & Save button is disabled
+    const approveBtn = within(modal).getByRole('button', { name: 'Approve & Save' });
+    expect(approveBtn).toBeDisabled();
+
+    // Correct the inputs
+    fireEvent.change(amountInput, { target: { value: '45.50' } });
+    fireEvent.change(paymentMethodInput, { target: { value: 'Credit Card' } });
+
+    // Click Save Updates button
+    const saveUpdatesBtn = within(modal).getByRole('button', { name: 'Save Updates' });
+    fireEvent.click(saveUpdatesBtn);
+
+    // Verify updates API was called
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalled();
+    });
+    const updateBody = JSON.parse(updateMock.mock.calls[0][1].body);
+    expect(updateBody.amount).toBe(45.5);
+    expect(updateBody.paymentMethod).toBe('Credit Card');
 
     vi.unstubAllGlobals();
   });

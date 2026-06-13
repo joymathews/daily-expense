@@ -76,7 +76,10 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
               <th className="px-2 py-2.5 text-center w-8">
                 <input 
                   type="checkbox" 
-                  checked={silverTransactions.length > 0 && checkedSilverIds.length === silverTransactions.length}
+                  checked={
+                    silverTransactions.filter(t => t.status !== 'error').length > 0 && 
+                    checkedSilverIds.length === silverTransactions.filter(t => t.status !== 'error').length
+                  }
                   onChange={toggleSelectAllSilver}
                   className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
                 />
@@ -98,13 +101,14 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
               </tr>
             ) : (
               silverTransactions.map(tx => (
-                <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors text-xs">
+                <tr key={tx.id} className={`hover:bg-gray-50/50 transition-colors text-xs ${tx.status === 'error' ? 'bg-rose-50/30' : ''}`}>
                   <td className="px-2 py-2.5 text-center">
                     <input 
                       type="checkbox" 
                       checked={checkedSilverIds.includes(tx.id)}
+                      disabled={tx.status === 'error'}
                       onChange={() => toggleSilverCheck(tx.id)}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
+                      className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     />
                   </td>
                   <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
@@ -130,7 +134,9 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                   <td className="px-2 py-2.5 text-center">
                     <div className="flex flex-col items-center">
                       <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] border whitespace-nowrap ${
-                        tx.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'
+                        tx.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                        tx.status === 'error' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                        'bg-amber-50 text-amber-700 border-amber-100'
                       }`}>
                         {tx.status}
                       </span>

@@ -295,6 +295,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       currency: ext1!.currency,
       transactionDate: ext1!.date,
       status: 'pending',
+      paymentMethod: ext1!.paymentMethod || 'UPI',
     });
 
     await repository.savePendingTransaction({
@@ -306,6 +307,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       currency: ext2!.currency,
       transactionDate: ext2!.date,
       status: 'pending',
+      paymentMethod: ext2!.paymentMethod || 'UPI',
     });
 
     // Verify Silver layer (Staging) exists and supports lineage metadata joins
@@ -327,6 +329,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       currency: 'USD',
       transactionDate: '2023-01-15',
       category: 'Travel',
+      paymentMethod: 'UPI',
     });
 
     // Verify Silver status changed and values updated
@@ -449,6 +452,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       currency: 'USD',
       transactionDate: '2023-01-17',
       status: 'pending',
+      paymentMethod: 'Credit Card',
     });
 
     // Verify staging record exists in Silver and correctly references Bronze email ID
@@ -471,6 +475,7 @@ describe('Transaction Processing Pipeline Integration', () => {
       currency: 'USD',
       transactionDate: '2023-01-17',
       category: 'Utilities',
+      paymentMethod: 'Credit Card',
     });
 
     // Verify isolation and linkage:

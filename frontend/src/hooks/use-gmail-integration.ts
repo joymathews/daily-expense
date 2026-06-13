@@ -31,7 +31,7 @@ export interface GmailMessage {
     currency: string;
     date: string;
     category: string;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'approved' | 'rejected' | 'error';
     paymentMethod?: string;
   };
   deletedAt?: string;
@@ -47,7 +47,7 @@ export interface SilverTransaction {
   transactionDate: string;
   inferredCategory?: string;
   confidenceScore?: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'error';
   extractedAt?: string;
   emailSubject?: string;
   emailSender?: string;

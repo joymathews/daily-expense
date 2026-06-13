@@ -60,8 +60,17 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     const hasHasTransaction = info.some(col => col.name === 'has_transaction');
     const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
     const hasPaymentMethod = silverInfo.some(col => col.name === 'payment_method');
+    
+    // Check if current silver table constraint contains 'error'
+    const schemaSql = await this.get<{ sql?: string }>(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='silver_extracted_transactions'"
+    );
+    const hasErrorStatus = schemaSql?.sql?.includes("'error'") ?? false;
 
-    if ((info.length > 0 && (!hasUserId || !hasHasTransaction)) || (silverInfo.length > 0 && !hasPaymentMethod)) {
+    if (
+      (info.length > 0 && (!hasUserId || !hasHasTransaction)) ||
+      (silverInfo.length > 0 && (!hasPaymentMethod || !hasErrorStatus))
+    ) {
       await this.run('DROP TABLE IF EXISTS gold_transactions;');
       await this.run('DROP TABLE IF EXISTS silver_extracted_transactions;');
       await this.run('DROP TABLE IF EXISTS bronze_raw_emails;');
@@ -98,7 +107,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         transaction_date TEXT NOT NULL,
         inferred_category TEXT,
         confidence_score REAL,
-        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
         payment_method TEXT,
         deleted_at TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -192,6 +201,15 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
   async savePendingTransaction(tx: PendingTransaction): Promise<void> {
     const amountCents = Math.round(tx.amount * 100);
+    
+    // Determine status: 'error' if any required fields are missing
+    const hasMerchant = !!(tx.merchantNormalized?.trim() || tx.merchantRaw?.trim());
+    const hasDate = !!(tx.transactionDate?.trim() && tx.transactionDate !== 'N/A');
+    const hasAmount = tx.amount !== undefined && tx.amount !== null && !isNaN(tx.amount) && tx.amount !== 0;
+    const hasMethod = !!(tx.paymentMethod?.trim() && tx.paymentMethod !== 'Unknown' && tx.paymentMethod !== 'N/A');
+    
+    const calculatedStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : tx.status;
+
     await this.run(
       `INSERT OR IGNORE INTO silver_extracted_transactions 
        (id, user_id, bronze_email_id, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method) 
@@ -207,7 +225,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         tx.transactionDate,
         tx.inferredCategory || null,
         tx.confidenceScore ?? null,
-        tx.status,
+        calculatedStatus,
         tx.paymentMethod || null,
       ]
     );
@@ -215,7 +233,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
   async getPendingTransactions(userId: string): Promise<PendingTransaction[]> {
     const rows = await this.all<any>(
-      `SELECT * FROM silver_extracted_transactions WHERE status = 'pending' AND user_id = ? AND deleted_at IS NULL`,
+      `SELECT * FROM silver_extracted_transactions WHERE status IN ('pending', 'error') AND user_id = ? AND deleted_at IS NULL`,
       [userId]
     );
 
@@ -230,13 +248,24 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       transactionDate: row.transaction_date,
       inferredCategory: row.inferred_category || undefined,
       confidenceScore: row.confidence_score ?? undefined,
-      status: row.status as 'pending' | 'approved' | 'rejected',
+      status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
       paymentMethod: row.payment_method || undefined,
     }));
   }
 
   async promoteToTransaction(pendingId: string, tx: Transaction): Promise<void> {
+    const current = await this.getSilverTransactionById(pendingId, tx.userId);
+    if (!current) {
+      throw new Error('Silver transaction not found or unauthorized');
+    }
+    if (current.status === 'error') {
+      throw new Error('Cannot promote transaction in error status');
+    }
+    if (!tx.merchant || !tx.transactionDate || !tx.amount || !tx.paymentMethod) {
+      throw new Error('Required transaction fields (merchant, date, amount, method) are missing');
+    }
+
     const amountCents = Math.round(tx.amount * 100);
 
     // Run promotions in an ACID Transaction Block
@@ -354,7 +383,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       transactionDate: row.transaction_date,
       inferredCategory: row.inferred_category || undefined,
       confidenceScore: row.confidence_score ?? undefined,
-      status: row.status as 'pending' | 'approved' | 'rejected',
+      status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
       emailSubject: row.email_subject || undefined,
       emailSender: row.email_sender || undefined,
@@ -383,7 +412,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       transactionDate: row.transaction_date,
       inferredCategory: row.inferred_category || undefined,
       confidenceScore: row.confidence_score ?? undefined,
-      status: row.status as 'pending' | 'approved' | 'rejected',
+      status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
       emailSubject: row.email_subject || undefined,
       emailSender: row.email_sender || undefined,
@@ -412,7 +441,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       transactionDate: row.transaction_date,
       inferredCategory: row.inferred_category || undefined,
       confidenceScore: row.confidence_score ?? undefined,
-      status: row.status as 'pending' | 'approved' | 'rejected',
+      status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
       emailSubject: row.email_subject || undefined,
       emailSender: row.email_sender || undefined,
@@ -499,6 +528,26 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
   }
 
   async updatePendingTransaction(id: string, userId: string, updates: Partial<PendingTransaction>): Promise<void> {
+    const current = await this.getSilverTransactionById(id, userId);
+    if (!current) {
+      throw new Error('Silver transaction not found or unauthorized');
+    }
+
+    const merged = {
+      ...current,
+      ...updates,
+    };
+
+    const hasMerchant = !!(merged.merchantNormalized?.trim() || merged.merchantRaw?.trim());
+    const hasDate = !!(merged.transactionDate?.trim() && merged.transactionDate !== 'N/A');
+    const hasAmount = merged.amount !== undefined && merged.amount !== null && !isNaN(merged.amount) && merged.amount !== 0;
+    const hasMethod = !!(merged.paymentMethod?.trim() && merged.paymentMethod !== 'Unknown' && merged.paymentMethod !== 'N/A');
+    
+    let newStatus = current.status;
+    if (current.status === 'pending' || current.status === 'error') {
+      newStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : 'pending';
+    }
+
     const sets: string[] = [];
     const params: any[] = [];
     if (updates.merchantRaw !== undefined) {
@@ -525,15 +574,14 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       sets.push('inferred_category = ?');
       params.push(updates.inferredCategory);
     }
-    if (updates.status !== undefined) {
-      sets.push('status = ?');
-      params.push(updates.status);
-    }
     if (updates.paymentMethod !== undefined) {
       sets.push('payment_method = ?');
       params.push(updates.paymentMethod);
     }
-    if (sets.length === 0) return;
+    
+    sets.push('status = ?');
+    params.push(newStatus);
+
     params.push(id);
     params.push(userId);
     await this.run(`UPDATE silver_extracted_transactions SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`, params);
@@ -647,7 +695,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       transactionDate: row.transaction_date,
       inferredCategory: row.inferred_category || undefined,
       confidenceScore: row.confidence_score ?? undefined,
-      status: row.status as 'pending' | 'approved' | 'rejected',
+      status: row.status as PendingTransaction['status'],
       extractedAt: row.extracted_at,
       emailSubject: row.email_subject || undefined,
       emailSender: row.email_sender || undefined,

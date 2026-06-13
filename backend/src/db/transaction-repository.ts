@@ -22,7 +22,7 @@ export interface PendingTransaction {
   transactionDate: string; // ISO UTC string
   inferredCategory?: string;
   confidenceScore?: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'error';
   extractedAt?: string;
   emailSubject?: string;
   emailSender?: string;

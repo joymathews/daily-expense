@@ -33,7 +33,9 @@ describe('Gmail API Integration', () => {
     const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    await (repository as any).run("DELETE FROM bronze_raw_emails WHERE id IN ('detail_msg_1', 'test_raw_tx_1', 'test_raw_otp_1')");
+    await (repository as any).run("DELETE FROM gold_transactions WHERE silver_tx_id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2') OR id IN ('del_gold_1', 'validation_test_gold_1', 'approve_test_gold_1')");
+    await (repository as any).run("DELETE FROM silver_extracted_transactions WHERE id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2')");
+    await (repository as any).run("DELETE FROM bronze_raw_emails WHERE id IN ('detail_msg_1', 'test_raw_tx_1', 'test_raw_otp_1', 'del_bronze_1')");
     await repository.close();
   });
 
@@ -429,6 +431,7 @@ describe('Gmail API Integration', () => {
       currency: 'USD',
       transactionDate: '2023-01-10',
       status: 'pending',
+      paymentMethod: 'Credit Card',
     });
 
     await repository.promoteToTransaction('del_silver_1', {
@@ -440,6 +443,7 @@ describe('Gmail API Integration', () => {
       currency: 'USD',
       transactionDate: '2023-01-10',
       category: 'Food',
+      paymentMethod: 'Credit Card',
     });
 
     await repository.close();
@@ -509,5 +513,165 @@ describe('Gmail API Integration', () => {
     expect(restoredSilverRes.body.transactions.some((t: any) => t.id === 'del_silver_1')).toBe(true);
     expect(restoredGoldRes.body.transactions.some((t: any) => t.id === 'del_gold_1')).toBe(true);
   });
-});
 
+  /**
+   * [FUNC-GMAIL-32] Staging Validation & Error Status:
+   * Verify missing required fields results in 'error' status upon extraction, and updating correct fields changes it to 'pending'.
+   */
+  it('should save pending transaction with status error if fields are missing, and transition status on updates', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    // 0. Seed raw email in Bronze to satisfy FK constraint
+    await repository.saveRawEmail({
+      id: 'test_raw_tx_1',
+      userId: 'user-123',
+      sender: 'sender@test.com',
+      subject: 'Test Subject',
+      snippet: 'Test Snippet',
+      rawBody: 'Full email body',
+      receivedAt: '2023-01-10T10:00:00Z',
+    });
+
+    // 1. Save with missing amount and paymentMethod -> should get 'error' status
+    await repository.savePendingTransaction({
+      id: 'validation_test_silver_1',
+      rawEmailId: 'test_raw_tx_1',
+      userId: 'user-123',
+      merchantRaw: 'Missing Fields Merchant',
+      amount: 0,
+      currency: 'USD',
+      transactionDate: '2023-01-10',
+      status: 'pending',
+    });
+
+    const txAfterSave = await repository.getSilverTransactionById('validation_test_silver_1', 'user-123');
+    expect(txAfterSave).toBeDefined();
+    expect(txAfterSave?.status).toBe('error');
+
+    // 2. Try to promote this error transaction -> should fail
+    await expect(repository.promoteToTransaction('validation_test_silver_1', {
+      id: 'validation_test_gold_1',
+      pendingTxId: 'validation_test_silver_1',
+      userId: 'user-123',
+      merchant: 'Missing Fields Merchant',
+      amount: 45.99,
+      currency: 'USD',
+      transactionDate: '2023-01-10',
+      category: 'Food',
+      paymentMethod: 'UPI',
+    })).rejects.toThrow(/Cannot promote/);
+
+    // 3. Update the fields to be valid -> should transition status to 'pending'
+    await repository.updatePendingTransaction('validation_test_silver_1', 'user-123', {
+      amount: 45.99,
+      paymentMethod: 'UPI'
+    });
+
+    const txAfterFix = await repository.getSilverTransactionById('validation_test_silver_1', 'user-123');
+    expect(txAfterFix?.status).toBe('pending');
+
+    // 4. Update to remove merchant -> should transition status back to 'error'
+    await repository.updatePendingTransaction('validation_test_silver_1', 'user-123', {
+      merchantRaw: ''
+    });
+
+    const txAfterClear = await repository.getSilverTransactionById('validation_test_silver_1', 'user-123');
+    expect(txAfterClear?.status).toBe('error');
+
+    await repository.close();
+  });
+
+  /**
+   * [FUNC-GMAIL-32] Staging Validation & Error Status:
+   * Verify category is optional in /api/gmail/approve route.
+   */
+  it('should approve transaction successfully if category is missing (defaulting to Other), but fail if paymentMethod is missing', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    // 0. Seed raw email in Bronze to satisfy FK constraint
+    await repository.saveRawEmail({
+      id: 'test_raw_tx_1',
+      userId: 'user-123',
+      sender: 'sender@test.com',
+      subject: 'Test Subject',
+      snippet: 'Test Snippet',
+      rawBody: 'Full email body',
+      receivedAt: '2023-01-10T10:00:00Z',
+    });
+
+    // 1. Seed valid pending transaction in silver staging
+    await repository.savePendingTransaction({
+      id: 'approve_test_silver_1',
+      rawEmailId: 'test_raw_tx_1',
+      userId: 'user-123',
+      merchantRaw: 'Valid Merchant',
+      amount: 25.50,
+      currency: 'USD',
+      transactionDate: '2023-01-10',
+      status: 'pending',
+      paymentMethod: 'UPI'
+    });
+    await repository.close();
+
+    // 2. Approve with missing category -> should succeed
+    const approveSuccess = await request(app)
+      .post('/api/gmail/approve')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        silverId: 'approve_test_silver_1',
+        merchant: 'Valid Merchant',
+        amount: 25.50,
+        currency: 'USD',
+        date: '2023-01-10',
+        paymentMethod: 'UPI'
+      });
+
+    expect(approveSuccess.status).toBe(200);
+    expect(approveSuccess.body.status).toBe('approved');
+
+    // Verify category defaulted to 'Other' in gold ledger
+    const repo2 = new SQLiteTransactionRepository();
+    await repo2.initializeSchema();
+    const goldTxs = await repo2.getGoldTransactions('user-123');
+    const approvedGold = goldTxs.find((g: any) => g.pendingTxId === 'approve_test_silver_1');
+    expect(approvedGold).toBeDefined();
+    expect(approvedGold?.category).toBe('Other');
+    await repo2.close();
+
+    // 3. Seed another pending transaction
+    const repo3 = new SQLiteTransactionRepository();
+    await repo3.initializeSchema();
+    await repo3.savePendingTransaction({
+      id: 'approve_test_silver_2',
+      rawEmailId: 'test_raw_tx_1',
+      userId: 'user-123',
+      merchantRaw: 'Valid Merchant 2',
+      amount: 15.00,
+      currency: 'USD',
+      transactionDate: '2023-01-10',
+      status: 'pending',
+      paymentMethod: 'UPI'
+    });
+    await repo3.close();
+
+    // 4. Try to approve with missing paymentMethod -> should fail with 400
+    const approveFail = await request(app)
+      .post('/api/gmail/approve')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        silverId: 'approve_test_silver_2',
+        merchant: 'Valid Merchant 2',
+        amount: 15.00,
+        currency: 'USD',
+        date: '2023-01-10',
+        category: 'Food'
+      });
+
+    expect(approveFail.status).toBe(400);
+    expect(approveFail.body.error).toContain('required');
+  });
+});

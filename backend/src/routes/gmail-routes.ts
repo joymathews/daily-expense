@@ -346,8 +346,8 @@ router.post('/approve', async (req, res) => {
   const { silverId, merchant, amount, currency, date, category, notes, paymentMethod } = req.body;
   const userId = (req as any).auth?.sub;
 
-  if (!silverId || !merchant || amount === undefined || !currency || !date || !category) {
-    return res.status(400).json({ error: 'All transaction details are required' });
+  if (!silverId || !merchant || amount === undefined || !currency || !date || !paymentMethod) {
+    return res.status(400).json({ error: 'All transaction details (silverId, merchant, amount, currency, date, paymentMethod) are required' });
   }
 
   try {
@@ -362,7 +362,7 @@ router.post('/approve', async (req, res) => {
       amount: parseFloat(amount),
       currency,
       transactionDate: date,
-      category,
+      category: category || 'Other',
       notes: notes || '',
       paymentMethod,
     });
