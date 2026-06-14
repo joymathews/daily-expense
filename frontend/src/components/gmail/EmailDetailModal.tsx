@@ -38,6 +38,7 @@ interface EmailDetailModalProps {
   paymentMethods?: PaymentMethod[];
   rejectBronzeInput?: (id: string) => Promise<void> | void;
   updateBronzeStatus?: (id: string, status: 'unprocessed' | 'processed' | 'rejected') => Promise<void> | void;
+  fetchLlmLog?: (bronzeId: string) => Promise<any | null>;
 }
 
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
@@ -58,6 +59,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   paymentMethods = [],
   rejectBronzeInput,
   updateBronzeStatus,
+  fetchLlmLog,
 }) => {
   // Staging / Gold shared inputs state
   const [merchant, setMerchant] = useState('');
@@ -72,6 +74,19 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   // Lineage toggle state
   const [showRawInGoldMode, setShowRawInGoldMode] = useState(false);
   const [rawBodyForGoldLineage, setRawBodyForGoldLineage] = useState('');
+  const [llmLog, setLlmLog] = useState<any | null>(null);
+
+  const bronzeInputIdForLog = selectedGoldTransaction?.bronzeEmailId || selectedEmail?.id;
+
+  useEffect(() => {
+    if (bronzeInputIdForLog && fetchLlmLog) {
+      fetchLlmLog(bronzeInputIdForLog)
+        .then(log => setLlmLog(log))
+        .catch(err => console.warn('Failed to load LLM log for modal', err));
+    } else {
+      setLlmLog(null);
+    }
+  }, [bronzeInputIdForLog, fetchLlmLog]);
 
   // Dynamically attach extracted silver record if selectedEmail has none, for pipeline backward-compatibility
   if (selectedEmail && !selectedEmail.extracted && silverTransactions) {
@@ -605,6 +620,85 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                       <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Type</span>
                       <span className="font-semibold text-gray-800 capitalize">{resolvedLineage.silverRecord.transactionType || 'expense'}</span>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {llmLog && (
+                <div data-testid="llm-accuracy-comparison" className="border border-indigo-100/60 rounded-2xl bg-indigo-50/10 p-4 space-y-2.5 shadow-sm animate-fade-in">
+                  <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider border-b border-indigo-100/30 pb-1.5 flex justify-between items-center">
+                    <span>🤖 LLM Extraction Audit (Original vs Confirmed)</span>
+                    <span className="text-[9px] text-gray-400 font-medium">Original predictions</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-[11px] divide-y divide-gray-100">
+                      <thead>
+                        <tr className="text-gray-400 font-bold uppercase text-[9px] tracking-wider text-left">
+                          <th className="pb-1.5">Field</th>
+                          <th className="pb-1.5">LLM Extracted</th>
+                          <th className="pb-1.5">Final Ledger</th>
+                          <th className="pb-1.5 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 text-gray-700">
+                        <tr>
+                          <td className="py-1.5 font-bold text-gray-400 uppercase text-[9px] tracking-wide">Merchant</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{llmLog.extractedMerchant}</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{merchant}</td>
+                          <td className="py-1.5 text-right">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                              (merchant || '').trim().toLowerCase() === (llmLog.extractedMerchant || '').trim().toLowerCase()
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/30'
+                                : 'bg-amber-50 text-amber-700 border border-amber-100/30'
+                            }`}>
+                              {(merchant || '').trim().toLowerCase() === (llmLog.extractedMerchant || '').trim().toLowerCase() ? '✅ Match' : '📝 Corrected'}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 font-bold text-gray-400 uppercase text-[9px] tracking-wide">Amount</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{(llmLog.extractedAmount).toFixed(2)} {llmLog.extractedCurrency}</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{amount.toFixed(2)} {llmLog.extractedCurrency}</td>
+                          <td className="py-1.5 text-right">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                              amount === llmLog.extractedAmount
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/30'
+                                : 'bg-amber-50 text-amber-700 border border-amber-100/30'
+                            }`}>
+                              {amount === llmLog.extractedAmount ? '✅ Match' : '📝 Corrected'}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 font-bold text-gray-400 uppercase text-[9px] tracking-wide">Category</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{llmLog.extractedCategory || 'N/A'}</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{category || 'N/A'}</td>
+                          <td className="py-1.5 text-right">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                              (category || '').trim().toLowerCase() === (llmLog.extractedCategory || '').trim().toLowerCase()
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/30'
+                                : 'bg-amber-50 text-amber-700 border border-amber-100/30'
+                            }`}>
+                              {(category || '').trim().toLowerCase() === (llmLog.extractedCategory || '').trim().toLowerCase() ? '✅ Match' : '📝 Corrected'}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 font-bold text-gray-400 uppercase text-[9px] tracking-wide">Payment Method</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{llmLog.extractedPaymentMethod || 'Unknown'}</td>
+                          <td className="py-1.5 font-semibold text-gray-800">{paymentMethod || 'Unknown'}</td>
+                          <td className="py-1.5 text-right">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                              (paymentMethod || '').trim().toLowerCase() === (llmLog.extractedPaymentMethod || '').trim().toLowerCase()
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/30'
+                                : 'bg-amber-50 text-amber-700 border border-amber-100/30'
+                            }`}>
+                              {(paymentMethod || '').trim().toLowerCase() === (llmLog.extractedPaymentMethod || '').trim().toLowerCase() ? '✅ Match' : '📝 Corrected'}
+                            </span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

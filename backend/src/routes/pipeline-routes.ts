@@ -506,4 +506,41 @@ router.get('/deleted', async (req, res) => {
   }
 });
 
+/**
+ * [FUNC-GOLD-PAGE-9] GET /api/pipeline/llm-logs/:bronzeInputId
+ * Retrieves the original LLM extraction log for a given raw input ID.
+ */
+router.get('/llm-logs/:bronzeInputId', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const bronzeInputId = req.params.bronzeInputId;
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const log = await repository.getLlmExtractionLogByBronzeId(bronzeInputId, userId);
+    await repository.close();
+    res.status(200).json({ log });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch LLM extraction log' });
+  }
+});
+
+/**
+ * [FUNC-GOLD-PAGE-10] GET /api/pipeline/llm-accuracy-stats
+ * Retrieves macro LLM parser accuracy statistics for the user.
+ */
+router.get('/llm-accuracy-stats', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const stats = await repository.getLlmAccuracyStats(userId);
+    await repository.close();
+    res.status(200).json({ stats });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch LLM accuracy stats' });
+  }
+});
+
 export default router;

@@ -41,6 +41,7 @@ const TransactionPipeline: React.FC = () => {
     rejectBronzeInput,
     rejectBronzeInputsBatch,
     updateBronzeStatus,
+    fetchLlmLog,
   } = useGmailIntegration();
 
   console.log('DEBUG: rawEmails length =', rawEmails.length, 'rawEmails =', rawEmails);
@@ -558,6 +559,7 @@ const TransactionPipeline: React.FC = () => {
         paymentMethods={paymentMethods}
         rejectBronzeInput={rejectBronzeInput}
         updateBronzeStatus={updateBronzeStatus}
+        fetchLlmLog={fetchLlmLog}
       />
 
       <DeleteConfirmationModal

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { useGmailIntegration } from '../hooks/use-gmail-integration';
 
 interface DashboardProps {
   userEmail: string;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
+  const { llmAccuracyStats } = useGmailIntegration();
   const [metrics, setMetrics] = useState({
     bronzeCount: 0,
     bronzeProcessedCount: 0,
@@ -210,6 +212,111 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           </div>
         </div>
       </div>
+      
+      {/* LLM Parser Performance Section */}
+      {llmAccuracyStats && (
+        <div className="bg-white border border-gray-150/60 rounded-3xl p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-100 pb-4 mb-6 gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                <span>🤖</span> LLM Parser Performance
+              </h3>
+              <p className="text-xs text-gray-400 font-semibold uppercase mt-0.5">
+                Accuracy Metrics vs Human Confirmations
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                Total Tested Transactions
+              </span>
+              <span className="text-sm font-extrabold text-indigo-600 Outfit">
+                {llmAccuracyStats.totalTested} items
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-center">
+            {/* Overall Accuracy Gauge */}
+            <div className="md:col-span-2 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-indigo-50/40 to-blue-50/40 rounded-2xl border border-indigo-100/35 relative overflow-hidden text-center">
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-16 h-16 bg-indigo-500/10 rounded-full blur-lg"></div>
+              <span className="text-[10px] font-black text-indigo-800 uppercase tracking-widest mb-2">
+                Overall Accuracy
+              </span>
+              <div className="relative flex items-center justify-center">
+                <span className="text-5xl font-black text-indigo-600 Outfit" data-testid="llm-overall-accuracy">
+                  {llmAccuracyStats.overallAccuracy}%
+                </span>
+              </div>
+              <p className="text-[10px] text-gray-555 font-medium uppercase mt-3 tracking-wider">
+                Across all parsed fields
+              </p>
+            </div>
+
+            {/* Field Breakdown Progress Bars */}
+            <div className="md:col-span-3 space-y-4">
+              <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
+                Accuracy by Field
+              </span>
+              
+              {/* Merchant */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                  <span className="text-gray-500">Merchant</span>
+                  <span className="text-indigo-650" data-testid="llm-merchant-accuracy">{llmAccuracyStats.merchantAccuracy}%</span>
+                </div>
+                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden border border-gray-200/20">
+                  <div 
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${llmAccuracyStats.merchantAccuracy}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                  <span className="text-gray-500">Amount</span>
+                  <span className="text-indigo-650" data-testid="llm-amount-accuracy">{llmAccuracyStats.amountAccuracy}%</span>
+                </div>
+                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden border border-gray-200/20">
+                  <div 
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${llmAccuracyStats.amountAccuracy}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Category */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                  <span className="text-gray-500">Category</span>
+                  <span className="text-indigo-650" data-testid="llm-category-accuracy">{llmAccuracyStats.categoryAccuracy}%</span>
+                </div>
+                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden border border-gray-200/20">
+                  <div 
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${llmAccuracyStats.categoryAccuracy}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                  <span className="text-gray-500">Payment Method</span>
+                  <span className="text-indigo-650" data-testid="llm-payment-accuracy">{llmAccuracyStats.paymentMethodAccuracy}%</span>
+                </div>
+                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden border border-gray-200/20">
+                  <div 
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${llmAccuracyStats.paymentMethodAccuracy}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Graph + Call to Action */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">

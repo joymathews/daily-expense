@@ -18,6 +18,7 @@ const GoldTransactions: React.FC = () => {
     revertOrDeleteRecord,
     paymentMethods,
     isLoading,
+    fetchLlmLog,
   } = useGmailIntegration();
 
   // Search keyword state
@@ -348,6 +349,7 @@ const GoldTransactions: React.FC = () => {
           onDeleteClick={handleGoldDeleteClick}
           extractSelectedEmails={async () => {}}
           paymentMethods={paymentMethods}
+          fetchLlmLog={fetchLlmLog}
         />
       )}
 

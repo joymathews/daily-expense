@@ -108,6 +108,30 @@ export interface PaymentMappingRule {
   paymentMethodName?: string;
 }
 
+export interface LlmAccuracyStats {
+  overallAccuracy: number;
+  merchantAccuracy: number;
+  amountAccuracy: number;
+  categoryAccuracy: number;
+  paymentMethodAccuracy: number;
+  totalTested: number;
+}
+
+export interface LlmExtractionLog {
+  id: string;
+  userId: string;
+  bronzeInputId: string;
+  extractedMerchant: string;
+  extractedAmount: number;
+  extractedCurrency: string;
+  extractedDate: string;
+  extractedCategory: string;
+  extractedPaymentMethod: string;
+  extractedTransactionType: string;
+  confidenceScore?: number;
+  extractedAt?: string;
+}
+
 export const useGmailIntegration = () => {
   const [senders, setSenders] = useState<string[]>([]);
   const [currentSender, setCurrentSender] = useState('');
@@ -125,6 +149,7 @@ export const useGmailIntegration = () => {
   const [deletedRawEmails, setDeletedRawEmails] = useState<GmailMessage[]>([]);
   const [deletedSilverTransactions, setDeletedSilverTransactions] = useState<SilverTransaction[]>([]);
   const [deletedGoldTransactions, setDeletedGoldTransactions] = useState<GoldTransaction[]>([]);
+  const [llmAccuracyStats, setLlmAccuracyStats] = useState<LlmAccuracyStats | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -324,6 +349,37 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const loadLlmAccuracyStats = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pipeline/llm-accuracy-stats', {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLlmAccuracyStats(data.stats || null);
+      }
+    } catch (err) {
+      console.warn('Failed to load LLM accuracy stats:', err);
+    }
+  };
+
+  const fetchLlmLog = async (bronzeId: string): Promise<LlmExtractionLog | null> => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/pipeline/llm-logs/${bronzeId}`, {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.log || null;
+      }
+    } catch (err) {
+      console.warn('Failed to load LLM log for raw input:', err);
+    }
+    return null;
+  };
+
   const loadAllLayers = async (start = startDate, end = endDate) => {
     setIsLoading(true);
     await Promise.all([
@@ -333,6 +389,7 @@ export const useGmailIntegration = () => {
       loadDeletedLayers(),
       loadPaymentMethods(),
       loadPaymentRules(),
+      loadLlmAccuracyStats(),
     ]);
     setIsLoading(false);
   };
@@ -1224,5 +1281,8 @@ export const useGmailIntegration = () => {
     updatePaymentRule,
     deletePaymentRule,
     applyRetroactiveStandardization,
+    llmAccuracyStats,
+    fetchLlmLog,
+    loadLlmAccuracyStats,
   };
 };

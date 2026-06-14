@@ -157,10 +157,32 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       );
     `);
 
+    // 3.1 LLM Ingestion Logs: Immutable log of parser output
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS llm_extraction_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        bronze_input_id TEXT NOT NULL UNIQUE,
+        extracted_merchant TEXT,
+        extracted_amount_cents INTEGER,
+        extracted_currency TEXT,
+        extracted_date TEXT,
+        extracted_category TEXT,
+        extracted_payment_method TEXT,
+        extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund')),
+        confidence_score REAL,
+        extracted_at TEXT DEFAULT (datetime('now', 'utc')),
+        FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+        UNIQUE(user_id, bronze_input_id),
+        UNIQUE(user_id, id)
+      );
+    `);
+
     // 4. Create Indexes
     await this.run('CREATE INDEX IF NOT EXISTS idx_bronze_inputs_sender ON bronze_raw_inputs(sender);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_silver_tx_status ON silver_extracted_transactions(status);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_gold_tx_user_date ON gold_transactions(user_id, transaction_date);');
+    await this.run('CREATE INDEX IF NOT EXISTS idx_llm_logs_bronze ON llm_extraction_logs(user_id, bronze_input_id);');
 
     // 5. Payment Standardization tables
     await this.run(`
@@ -270,6 +292,24 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           tx.paymentMethod || null,
           tx.transactionType || 'expense',
           tx.parentTransactionId || null,
+        ]
+      );
+      await this.run(
+        `INSERT OR IGNORE INTO llm_extraction_logs 
+         (id, user_id, bronze_input_id, extracted_merchant, extracted_amount_cents, extracted_currency, extracted_date, extracted_category, extracted_payment_method, extracted_transaction_type, confidence_score) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          crypto.randomUUID(),
+          tx.userId,
+          tx.bronzeInputId,
+          tx.merchantRaw,
+          amountCents,
+          tx.currency,
+          tx.transactionDate,
+          tx.inferredCategory || null,
+          tx.paymentMethod || null,
+          tx.transactionType || 'expense',
+          tx.confidenceScore ?? null
         ]
       );
       await this.run(
@@ -1087,6 +1127,104 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       await this.run('ROLLBACK');
       throw err;
     }
+  }
+
+  async getLlmExtractionLogByBronzeId(bronzeId: string, userId: string): Promise<any | null> {
+    const row = await this.get<any>(
+      'SELECT * FROM llm_extraction_logs WHERE bronze_input_id = ? AND user_id = ?',
+      [bronzeId, userId]
+    );
+    if (!row) return null;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      bronzeInputId: row.bronze_input_id,
+      extractedMerchant: row.extracted_merchant,
+      extractedAmount: row.extracted_amount_cents / 100,
+      extractedCurrency: row.extracted_currency,
+      extractedDate: row.extracted_date,
+      extractedCategory: row.extracted_category,
+      extractedPaymentMethod: row.extracted_payment_method,
+      extractedTransactionType: row.extracted_transaction_type,
+      confidenceScore: row.confidence_score,
+      extractedAt: row.extracted_at
+    };
+  }
+
+  async getLlmAccuracyStats(userId: string): Promise<{
+    overallAccuracy: number;
+    merchantAccuracy: number;
+    amountAccuracy: number;
+    categoryAccuracy: number;
+    paymentMethodAccuracy: number;
+    totalTested: number;
+  }> {
+    const rows = await this.all<any>(
+      `SELECT 
+         g.merchant, l.extracted_merchant,
+         g.amount_cents, l.extracted_amount_cents,
+         g.category, l.extracted_category,
+         g.payment_method, l.extracted_payment_method
+       FROM gold_transactions g
+       JOIN silver_extracted_transactions s ON g.silver_tx_id = s.id AND g.user_id = s.user_id
+       JOIN llm_extraction_logs l ON s.bronze_input_id = l.bronze_input_id AND s.user_id = l.user_id
+       WHERE g.user_id = ? AND g.deleted_at IS NULL`,
+      [userId]
+    );
+
+    const total = rows.length;
+    if (total === 0) {
+      return {
+        overallAccuracy: 100,
+        merchantAccuracy: 100,
+        amountAccuracy: 100,
+        categoryAccuracy: 100,
+        paymentMethodAccuracy: 100,
+        totalTested: 0
+      };
+    }
+
+    let merchantMatches = 0;
+    let amountMatches = 0;
+    let categoryMatches = 0;
+    let paymentMethodMatches = 0;
+
+    for (const r of rows) {
+      if ((r.merchant || '').trim().toLowerCase() === (r.extracted_merchant || '').trim().toLowerCase()) {
+        merchantMatches++;
+      }
+      if (r.amount_cents === r.extracted_amount_cents) {
+        amountMatches++;
+      }
+      if ((r.category || '').trim().toLowerCase() === (r.extracted_category || '').trim().toLowerCase()) {
+        categoryMatches++;
+      }
+      const normMethod = (r.payment_method || '').trim().toLowerCase();
+      const normExtractedMethod = (r.extracted_payment_method || '').trim().toLowerCase();
+      const isMethodEmpty = !normMethod || normMethod === 'unknown' || normMethod === 'n/a';
+      const isExtractedEmpty = !normExtractedMethod || normExtractedMethod === 'unknown' || normExtractedMethod === 'n/a';
+      if (normMethod === normExtractedMethod || (isMethodEmpty && isExtractedEmpty)) {
+        paymentMethodMatches++;
+      }
+    }
+
+    const merchantAccuracy = Math.round((merchantMatches / total) * 100);
+    const amountAccuracy = Math.round((amountMatches / total) * 100);
+    const categoryAccuracy = Math.round((categoryMatches / total) * 100);
+    const paymentMethodAccuracy = Math.round((paymentMethodMatches / total) * 100);
+    
+    const overallAccuracy = Math.round(
+      ((merchantMatches + amountMatches + categoryMatches + paymentMethodMatches) / (total * 4)) * 100
+    );
+
+    return {
+      overallAccuracy,
+      merchantAccuracy,
+      amountAccuracy,
+      categoryAccuracy,
+      paymentMethodAccuracy,
+      totalTested: total
+    };
   }
 
   close(): Promise<void> {

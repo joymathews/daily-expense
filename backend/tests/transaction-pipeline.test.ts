@@ -226,6 +226,15 @@ describe('Transaction Processing Pipeline Integration', () => {
       getDeletedRawInputs: jest.fn().mockResolvedValue([]),
       restoreGoldTransaction: jest.fn().mockResolvedValue(undefined),
       getDeletedGoldTransactions: jest.fn().mockResolvedValue([]),
+      getLlmExtractionLogByBronzeId: jest.fn().mockResolvedValue(null),
+      getLlmAccuracyStats: jest.fn().mockResolvedValue({
+        overallAccuracy: 100,
+        merchantAccuracy: 100,
+        amountAccuracy: 100,
+        categoryAccuracy: 100,
+        paymentMethodAccuracy: 100,
+        totalTested: 0
+      }),
       close: jest.fn().mockResolvedValue(undefined),
       getPaymentMethods: jest.fn().mockResolvedValue([]),
       savePaymentMethod: jest.fn().mockResolvedValue(undefined),

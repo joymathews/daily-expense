@@ -21,7 +21,7 @@ For ALL future changes, feature implementations, and code modifications, you mus
 9. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
 
 ## 3. Tech Stack & Engineering Standards
-* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail). Database: `sqlite3`. LLM Integration: Ollama (localhost API interface). Environment Configuration: `dotenv`.
+* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail). Database: `sqlite3` (Bronze, Silver, Gold layers, and LLM extraction audit logs). LLM Integration: Ollama (localhost API interface). Environment Configuration: `dotenv`.
 * **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Auth: AWS Amplify (for Cognito), `@react-oauth/google` (for Gmail). Navigation: `react-router-dom` (routes: `/` for Dashboard, `/ingestion` for Data Ingestion, `/pipeline` for Transaction Pipeline, and `/transactions` for Gold Ledger Transactions).
 * **Architecture:** Strictly adhere to SOLID principles and Clean Code rules.
 * **Testing:** Backend tests in `backend/tests`, frontend tests in `frontend/src/*.test.tsx`.

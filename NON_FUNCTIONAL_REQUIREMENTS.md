@@ -46,4 +46,7 @@
 - [NFR-USAB-14] Bronze Rejection Action Responsiveness: When a user rejects or restores a Bronze raw input, the status badge in the details modal and the raw inputs list table must update instantly (within 100ms) without requiring page reload.
 - [NFR-USAB-15] Bronze Batch Rejection Responsiveness: When a user batch-rejects multiple raw inputs, the status badges in the list table and count indicators must update instantly (within 150ms) without requiring page reload.
 - [NFR-USAB-16] Refund Balancing and Layout Consistency: Displaying refunds as negative credit values and updating cumulative net expense metrics on the dashboard and ledger tables must respond within 150ms of any update, keeping the typography standard ('Outfit') and glassmorphic aesthetics unified.
+- [NFR-LLM-2] Accuracy Aggregate Query Performance: The database query computing percentage match statistics across the ledger and LLM logs must execute within 100ms.
+- [NFR-USAB-17] Accuracy Metrics Visual Consistency: The dashboard parser performance card must adhere strictly to the custom 'Outfit' typography and glassmorphic styling of the core layout.
+- [NFR-USAB-18] Lineage Comparison Load Latency: Resolving and displaying the side-by-side comparison table in the detail modal must load within 150ms of expanding the lineage section.
 

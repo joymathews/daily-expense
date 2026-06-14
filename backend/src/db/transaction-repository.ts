@@ -82,6 +82,15 @@ export interface ITransactionRepository {
   getDeletedRawInputs(userId: string): Promise<RawInput[]>;
   restoreGoldTransaction(userId: string, goldId: string): Promise<void>;
   getDeletedGoldTransactions(userId: string): Promise<Transaction[]>;
+  getLlmExtractionLogByBronzeId(bronzeId: string, userId: string): Promise<any | null>;
+  getLlmAccuracyStats(userId: string): Promise<{
+    overallAccuracy: number;
+    merchantAccuracy: number;
+    amountAccuracy: number;
+    categoryAccuracy: number;
+    paymentMethodAccuracy: number;
+    totalTested: number;
+  }>;
   close(): Promise<void>;
 
   // Payment method standardization

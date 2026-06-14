@@ -3038,6 +3038,154 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('displays LLM parser performance metrics on the Dashboard and shows side-by-side comparison inside the lineage detail modal [FUNC-GOLD-PAGE-9] [FUNC-GOLD-PAGE-10] [FUNC-GMAIL-40]', async () => {
+    const mockFetch = vi.fn((url: string, options?: any) => {
+      if (url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            emails: [
+              {
+                id: 'bronze_log_123',
+                sender: 'receipts@uber.com',
+                subject: 'Your Ride with Uber',
+                date: '2026-06-12T10:00:00Z',
+                snippet: 'Charged USD 15.50',
+                body: 'Ride details: Uber, USD 15.50, Payment: Credit Card',
+                hasTransaction: true,
+                status: 'processed'
+              }
+            ]
+          })
+        });
+      }
+      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            transactions: [
+              {
+                id: 'silver_tx_123',
+                rawEmailId: 'bronze_log_123',
+                bronzeInputId: 'bronze_log_123',
+                merchantRaw: 'Uber',
+                merchantNormalized: 'Uber',
+                amount: 15.50,
+                currency: 'USD',
+                transactionDate: '2026-06-12',
+                inferredCategory: 'Transport',
+                status: 'approved',
+                paymentMethod: 'Credit Card',
+                transactionType: 'expense'
+              }
+            ]
+          })
+        });
+      }
+      if (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            transactions: [
+              {
+                id: 'gold_tx_123',
+                pendingTxId: 'silver_tx_123',
+                bronzeEmailId: 'bronze_log_123',
+                merchant: 'Uber Corrected',
+                amount: 15.50,
+                currency: 'USD',
+                transactionDate: '2026-06-12',
+                category: 'Taxi',
+                paymentMethod: 'Credit Card',
+                transactionType: 'expense',
+                sourceType: 'email'
+              }
+            ]
+          })
+        });
+      }
+      if (url.includes('/api/pipeline/llm-accuracy-stats')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            stats: {
+              overallAccuracy: 75,
+              merchantAccuracy: 50,
+              amountAccuracy: 100,
+              categoryAccuracy: 50,
+              paymentMethodAccuracy: 100,
+              totalTested: 4
+            }
+          })
+        });
+      }
+      if (url.includes('/api/pipeline/llm-logs/bronze_log_123')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            log: {
+              id: 'llm_log_123',
+              userId: 'user-123',
+              bronzeInputId: 'bronze_log_123',
+              extractedMerchant: 'Uber',
+              extractedAmount: 15.50,
+              extractedCurrency: 'USD',
+              extractedDate: '2026-06-12',
+              extractedCategory: 'Transport',
+              extractedPaymentMethod: 'Credit Card',
+              extractedTransactionType: 'expense',
+              confidenceScore: 0.95
+            }
+          })
+        });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ rules: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    const overallAcc = await screen.findByTestId('llm-overall-accuracy');
+    expect(overallAcc).toHaveTextContent('75%');
+    expect(screen.getByTestId('llm-merchant-accuracy')).toHaveTextContent('50%');
+    expect(screen.getByTestId('llm-amount-accuracy')).toHaveTextContent('100%');
+    expect(screen.getByTestId('llm-category-accuracy')).toHaveTextContent('50%');
+    expect(screen.getByTestId('llm-payment-accuracy')).toHaveTextContent('100%');
+
+    // Navigate to Ledger page to open modal
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    const merchantCell = await screen.findByText('Uber Corrected');
+    fireEvent.click(merchantCell);
+
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    const traceBtn = screen.getByRole('button', { name: /Trace Lineage/i });
+    expect(traceBtn).toBeInTheDocument();
+    fireEvent.click(traceBtn);
+
+    const auditHeading = await screen.findByText(/LLM Extraction Audit/i);
+    expect(auditHeading).toBeInTheDocument();
+
+    expect(screen.getAllByText('Taxi').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Transport').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('📝 Corrected')).toHaveLength(2);
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
