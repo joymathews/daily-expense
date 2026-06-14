@@ -571,23 +571,73 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
             )
           )}
 
-          {/* Decoded Plain Text Body (for raw review) */}
-          {(!isGoldMode || showRawInGoldMode) && (
+          {/* Collapsible Lineage Trace for Gold Mode */}
+          {isGoldMode && showRawInGoldMode && (
+            <div className="space-y-4 pt-2 border-t border-gray-100">
+              {resolvedLineage.silverRecord && (
+                <div data-testid="lineage-silver-card" className="border border-indigo-100/60 rounded-2xl bg-indigo-50/10 p-4 space-y-2.5 shadow-sm animate-fade-in">
+                  <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider border-b border-indigo-100/30 pb-1.5 flex justify-between items-center">
+                    <span>📥 Silver Staging Capture (Pre-Correction)</span>
+                    <span className="text-[9px] text-gray-400 font-medium">Original staging record</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3.5 text-xs text-gray-650">
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Merchant</span>
+                      <span className="font-semibold text-gray-800">{resolvedLineage.silverRecord.merchantNormalized || resolvedLineage.silverRecord.merchantRaw}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Amount</span>
+                      <span className="font-semibold text-gray-800">{resolvedLineage.silverRecord.amount.toFixed(2)} {resolvedLineage.silverRecord.currency}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Category</span>
+                      <span className="font-semibold text-gray-800">{resolvedLineage.silverRecord.inferredCategory || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Date</span>
+                      <span className="font-semibold text-gray-800">{resolvedLineage.silverRecord.transactionDate}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Method</span>
+                      <span className="font-semibold text-gray-800">{resolvedLineage.silverRecord.paymentMethod || 'Unknown'}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Type</span>
+                      <span className="font-semibold text-gray-800 capitalize">{resolvedLineage.silverRecord.transactionType || 'expense'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(rawBodyForGoldLineage || resolvedLineage.bronzeRecord?.body) && (
+                <div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Message Body (Bronze Raw Data)</div>
+                  <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-48 overflow-y-auto leading-relaxed">
+                    {rawBodyForGoldLineage || resolvedLineage.bronzeRecord?.body}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Standard raw email body for non-Gold mode */}
+          {!isGoldMode && selectedEmail?.body && (
             <div>
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Message Body (Bronze Raw Data)</div>
               <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-48 overflow-y-auto leading-relaxed">
-                {isGoldMode ? rawBodyForGoldLineage : selectedEmail?.body}
+                {selectedEmail.body}
               </pre>
             </div>
           )}
 
-          {isGoldMode && !showRawInGoldMode && (
+          {/* Lineage Toggle Button */}
+          {isGoldMode && (
             <button
               type="button"
-              onClick={() => setShowRawInGoldMode(true)}
-              className="text-xs font-bold text-indigo-600 hover:text-indigo-850 uppercase tracking-wider flex items-center space-x-1.5 cursor-pointer"
+              onClick={() => setShowRawInGoldMode(!showRawInGoldMode)}
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-850 uppercase tracking-wider flex items-center space-x-1.5 cursor-pointer mt-2"
             >
-              <span>🔍 Trace Lineage: View Source Bronze Raw Email</span>
+              <span>{showRawInGoldMode ? '🔼 Collapse Lineage Trace' : '🔍 Trace Lineage: View Staging & Raw Source'}</span>
             </button>
           )}
         </div>

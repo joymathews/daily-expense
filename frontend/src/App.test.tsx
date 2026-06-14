@@ -1361,6 +1361,32 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Verify Gold layer trace is shown (Merchant A Confirmed)
     expect(within(modal).getByText(/^Merchant A Confirmed -/i)).toBeInTheDocument();
 
+    // Verify Silver pre-correction card and raw body are hidden by default
+    expect(within(modal).queryByTestId('lineage-silver-card')).not.toBeInTheDocument();
+    expect(within(modal).queryByText('Full billing content')).not.toBeInTheDocument();
+
+    // Click the Trace Lineage button to expand
+    const toggleBtn = within(modal).getByRole('button', { name: /Trace Lineage: View Staging & Raw Source/i });
+    expect(toggleBtn).toBeInTheDocument();
+    fireEvent.click(toggleBtn);
+
+    // Verify Silver pre-correction card and raw body are now visible
+    const silverStagingCard = within(modal).getByTestId('lineage-silver-card');
+    expect(silverStagingCard).toBeInTheDocument();
+    expect(within(silverStagingCard).getByText('Merchant A')).toBeInTheDocument();
+    expect(within(silverStagingCard).getByText('100.00 INR')).toBeInTheDocument();
+    expect(within(silverStagingCard).getByText('UPI')).toBeInTheDocument();
+    expect(within(modal).getByText('Full billing content')).toBeInTheDocument();
+
+    // Click the Collapse button to hide again
+    const collapseBtn = within(modal).getByRole('button', { name: /Collapse Lineage Trace/i });
+    expect(collapseBtn).toBeInTheDocument();
+    fireEvent.click(collapseBtn);
+
+    // Verify they are hidden again
+    expect(within(modal).queryByTestId('lineage-silver-card')).not.toBeInTheDocument();
+    expect(within(modal).queryByText('Full billing content')).not.toBeInTheDocument();
+
     // Close the modal
     fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
 
