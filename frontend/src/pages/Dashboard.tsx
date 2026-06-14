@@ -208,7 +208,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           </div>
           <div className="mt-4 border-t border-gray-50 pt-4 text-xs font-semibold text-emerald-600 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-            Total amount: {metrics.goldTotalAmount.toFixed(2)} USD
+            Total amount: {metrics.goldTotalAmount.toFixed(2)} INR
           </div>
         </div>
       </div>

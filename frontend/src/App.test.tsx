@@ -2892,10 +2892,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     window.history.pushState({}, 'Dashboard', '/');
     render(<App />);
 
-    // 2. Dashboard verification: Net Expense = 120.00 USD
+    // 2. Dashboard verification: Net Expense = 120.00 INR
     const initialGoldCount = await screen.findByTestId('dashboard-gold-count');
     expect(initialGoldCount).toHaveTextContent('1');
-    expect(screen.getByText(/Total amount:/i)).toHaveTextContent('Total amount: 120.00 USD');
+    expect(screen.getByText(/Total amount:/i)).toHaveTextContent('Total amount: 120.00 INR');
 
     // 3. Navigate to Pipeline page
     fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
@@ -2945,11 +2945,11 @@ describe('Requirement Traceability Matrix Verification', () => {
     // The currency totals widget should offset the refund: 120 - 50 = 70 USD
     expect(screen.getByText('70.00')).toBeInTheDocument();
 
-    // 5. Navigate back to Dashboard and verify the balanced Net Expense total (70.00 USD)
+    // 5. Navigate back to Dashboard and verify the balanced Net Expense total (70.00 INR)
     fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
     const updatedGoldCount = await screen.findByTestId('dashboard-gold-count');
     expect(updatedGoldCount).toHaveTextContent('2');
-    expect(screen.getByText(/Total amount:/i)).toHaveTextContent('Total amount: 70.00 USD');
+    expect(screen.getByText(/Total amount:/i)).toHaveTextContent('Total amount: 70.00 INR');
 
     vi.unstubAllGlobals();
   });
