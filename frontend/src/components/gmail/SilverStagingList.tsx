@@ -121,7 +121,14 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = ({
                     {tx.transactionDate}
                   </td>
                   <td onClick={() => handleReviewSilver(tx)} className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px] cursor-pointer hover:text-indigo-650 transition-colors">
-                    <div className="truncate">{tx.merchantNormalized || tx.merchantRaw}</div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="truncate">{tx.merchantNormalized || tx.merchantRaw}</div>
+                      {tx.transactionType === 'refund' && (
+                        <span className="bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-emerald-250/30">
+                          Refund
+                        </span>
+                      )}
+                    </div>
                     <span className="block text-[10px] font-normal text-gray-400 truncate max-w-[160px]" title={tx.emailSubject}>{tx.emailSubject || 'Source Raw Email'}</span>
                   </td>
                   <td className="px-2 py-2.5 text-right font-bold text-gray-800 whitespace-nowrap">

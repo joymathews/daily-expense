@@ -209,6 +209,8 @@ const TransactionPipeline: React.FC = () => {
           category: silverTx.inferredCategory || 'Other',
           status: silverTx.status,
           paymentMethod: silverTx.paymentMethod,
+          transactionType: silverTx.transactionType,
+          parentTransactionId: silverTx.parentTransactionId,
         }
       });
     } else {
@@ -230,6 +232,8 @@ const TransactionPipeline: React.FC = () => {
           category: silverTx.inferredCategory || 'Other',
           status: silverTx.status,
           paymentMethod: silverTx.paymentMethod,
+          transactionType: silverTx.transactionType,
+          parentTransactionId: silverTx.parentTransactionId,
         }
       });
     }

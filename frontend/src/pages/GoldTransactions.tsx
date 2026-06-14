@@ -70,6 +70,8 @@ const GoldTransactions: React.FC = () => {
     );
   });
 
+  const getSignedAmount = (t: GoldTransaction) => t.transactionType === 'refund' ? -t.amount : t.amount;
+
   // 2. Sort transactions
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
     switch (sortBy) {
@@ -82,9 +84,9 @@ const GoldTransactions: React.FC = () => {
       case 'merchantDesc':
         return b.merchant.localeCompare(a.merchant);
       case 'amountAsc':
-        return a.amount - b.amount;
+        return getSignedAmount(a) - getSignedAmount(b);
       case 'amountDesc':
-        return b.amount - a.amount;
+        return getSignedAmount(b) - getSignedAmount(a);
       default:
         return 0;
     }
@@ -93,7 +95,7 @@ const GoldTransactions: React.FC = () => {
   // 3. Compute currency totals
   const currencyTotals = sortedTransactions.reduce((acc, tx) => {
     const cur = tx.currency.toUpperCase();
-    acc[cur] = (acc[cur] || 0) + tx.amount;
+    acc[cur] = (acc[cur] || 0) + getSignedAmount(tx);
     return acc;
   }, {} as Record<string, number>);
 
@@ -269,10 +271,17 @@ const GoldTransactions: React.FC = () => {
                     {/* Merchant (Clickable text identifier to open modal) */}
                     <td
                       onClick={() => setSelectedGoldTransaction(tx)}
-                      className="px-6 py-4 font-bold text-gray-900 cursor-pointer hover:text-emerald-700 hover:underline transition-colors max-w-[200px] truncate"
+                      className="px-6 py-4 font-bold text-gray-900 cursor-pointer hover:text-emerald-700 hover:underline transition-colors max-w-[200px]"
                       title="Click to correct or view details"
                     >
-                      {tx.merchant}
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate">{tx.merchant}</span>
+                        {tx.transactionType === 'refund' && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-emerald-250/30">
+                            Refund
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Category */}
@@ -295,8 +304,8 @@ const GoldTransactions: React.FC = () => {
                     </td>
 
                     {/* Amount + Currency */}
-                    <td className="px-6 py-4 font-extrabold text-right text-emerald-600 whitespace-nowrap">
-                      {tx.amount.toFixed(2)} {tx.currency}
+                    <td className={`px-6 py-4 font-extrabold text-right whitespace-nowrap ${tx.transactionType === 'refund' ? 'text-emerald-600' : 'text-gray-800'}`}>
+                      {tx.transactionType === 'refund' ? '-' : ''}{tx.amount.toFixed(2)} {tx.currency}
                     </td>
                   </tr>
                 ))

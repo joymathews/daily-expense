@@ -31,6 +31,7 @@ const DataIngestion: React.FC = () => {
     updatePaymentRule,
     deletePaymentRule,
     applyRetroactiveStandardization,
+    goldTransactions,
     isLoading,
   } = useGmailIntegration();
 
@@ -44,6 +45,10 @@ const DataIngestion: React.FC = () => {
   const [category, setCategory] = useState('Food');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [notes, setNotes] = useState('');
+  const [transactionType, setTransactionType] = useState('expense');
+  const [parentTransactionId, setParentTransactionId] = useState('');
+
+  const parentCandidates = goldTransactions.filter(tx => tx.transactionType !== 'refund');
 
   // Payment Standardization state
   const [newMethodName, setNewMethodName] = useState('');
@@ -106,6 +111,8 @@ const DataIngestion: React.FC = () => {
         category,
         paymentMethod,
         notes: notes.trim() || undefined,
+        transactionType,
+        parentTransactionId: parentTransactionId || undefined,
       });
 
       setSuccessMessage(`Successfully added transaction for ${merchant.trim()}!`);
@@ -113,6 +120,8 @@ const DataIngestion: React.FC = () => {
       setMerchant('');
       setAmount('');
       setNotes('');
+      setTransactionType('expense');
+      setParentTransactionId('');
     } catch (err: any) {
       setValidationError(err.message || 'Failed to submit transaction');
     } finally {
@@ -382,6 +391,45 @@ const DataIngestion: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Transaction Type */}
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="manual-type" className="text-xs font-bold text-gray-500 uppercase tracking-wider">Transaction Type *</label>
+                <select
+                  id="manual-type"
+                  value={transactionType}
+                  onChange={(e) => {
+                    setTransactionType(e.target.value);
+                    if (e.target.value !== 'refund') {
+                      setParentTransactionId('');
+                    }
+                  }}
+                  className="border border-gray-250 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 outline-none transition-all font-semibold bg-white cursor-pointer"
+                >
+                  <option value="expense">Expense</option>
+                  <option value="refund">Refund</option>
+                </select>
+              </div>
+
+              {/* Link to Purchase */}
+              {transactionType === 'refund' && (
+                <div className="flex flex-col space-y-1.5 md:col-span-2">
+                  <label htmlFor="manual-parent" className="text-xs font-bold text-gray-500 uppercase tracking-wider">Link to Original Purchase</label>
+                  <select
+                    id="manual-parent"
+                    value={parentTransactionId}
+                    onChange={(e) => setParentTransactionId(e.target.value)}
+                    className="border border-gray-250 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 outline-none transition-all font-semibold bg-white cursor-pointer"
+                  >
+                    <option value="">No Linked Purchase (Optional)</option>
+                    {parentCandidates.map(tx => (
+                      <option key={tx.id} value={tx.id}>
+                        {tx.transactionDate} - {tx.merchant} ({tx.amount.toFixed(2)} {tx.currency})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Notes */}
               <div className="flex flex-col space-y-1.5 md:col-span-2">

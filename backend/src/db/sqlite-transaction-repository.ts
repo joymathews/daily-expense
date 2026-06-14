@@ -72,7 +72,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         const silverInfo = await this.all<{ name: string }>("PRAGMA table_info(silver_extracted_transactions);");
         const hasBronzeInputId = silverInfo.some(col => col.name === 'bronze_input_id');
         const hasSourceType = silverInfo.some(col => col.name === 'source_type');
-        if (!hasBronzeInputId || !hasSourceType) {
+        const hasTxType = silverInfo.some(col => col.name === 'transaction_type');
+        if (!hasBronzeInputId || !hasSourceType || !hasTxType) {
           isLegacy = true;
         }
       }
@@ -121,6 +122,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         confidence_score REAL,
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
         payment_method TEXT,
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+        parent_transaction_id TEXT,
         deleted_at TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
@@ -143,10 +146,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         category TEXT NOT NULL,
         notes TEXT,
         payment_method TEXT,
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+        parent_transaction_id TEXT,
         deleted_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
         updated_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, silver_tx_id) REFERENCES silver_extracted_transactions(user_id, id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id, parent_transaction_id) REFERENCES gold_transactions(user_id, id) ON DELETE SET NULL,
         UNIQUE(user_id, id)
       );
     `);
@@ -246,8 +252,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     try {
       await this.run(
         `INSERT OR IGNORE INTO silver_extracted_transactions 
-         (id, user_id, bronze_input_id, source_type, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, user_id, bronze_input_id, source_type, merchant_raw, merchant_normalized, amount_cents, currency, transaction_date, inferred_category, confidence_score, status, payment_method, transaction_type, parent_transaction_id) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tx.id,
           tx.userId,
@@ -262,6 +268,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           tx.confidenceScore ?? null,
           calculatedStatus,
           tx.paymentMethod || null,
+          tx.transactionType || 'expense',
+          tx.parentTransactionId || null,
         ]
       );
       await this.run(
@@ -302,6 +310,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       sourceSender: row.source_sender || undefined,
       sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
+      transactionType: row.transaction_type || 'expense',
+      parentTransactionId: row.parent_transaction_id || undefined,
     }));
   }
 
@@ -331,8 +341,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       // 2. Insert validated transaction in gold ledger table
       await this.run(
         `INSERT OR IGNORE INTO gold_transactions 
-         (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type, parent_transaction_id) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tx.id,
           pendingId,
@@ -345,6 +355,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           tx.category,
           tx.notes || null,
           tx.paymentMethod || null,
+          tx.transactionType || 'expense',
+          tx.parentTransactionId || null,
         ]
       );
 
@@ -367,8 +379,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
     await this.run(
       `INSERT OR IGNORE INTO gold_transactions 
-       (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method) 
-       VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, ?)`,
+       (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type, parent_transaction_id) 
+       VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tx.id,
         tx.userId,
@@ -379,6 +391,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         tx.category,
         tx.notes || null,
         tx.paymentMethod,
+        tx.transactionType || 'expense',
+        tx.parentTransactionId || null,
       ]
     );
   }
@@ -481,6 +495,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       sourceSender: row.source_sender || undefined,
       sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
+      transactionType: row.transaction_type || 'expense',
+      parentTransactionId: row.parent_transaction_id || undefined,
     }));
   }
 
@@ -511,6 +527,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       sourceSender: row.source_sender || undefined,
       sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
+      transactionType: row.transaction_type || 'expense',
+      parentTransactionId: row.parent_transaction_id || undefined,
     };
   }
 
@@ -541,6 +559,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       sourceSender: row.source_sender || undefined,
       sourceReceivedAt: row.source_received_at || undefined,
       paymentMethod: row.payment_method || undefined,
+      transactionType: row.transaction_type || 'expense',
+      parentTransactionId: row.parent_transaction_id || undefined,
     };
   }
 
@@ -581,6 +601,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       sourceReceivedAt: row.source_received_at || undefined,
       bronzeInputId: row.bronze_input_id || undefined,
       paymentMethod: row.payment_method || undefined,
+      transactionType: row.transaction_type || 'expense',
+      parentTransactionId: row.parent_transaction_id || undefined,
     }));
   }
 
@@ -614,6 +636,14 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     if (updates.paymentMethod !== undefined) {
       sets.push('payment_method = ?');
       params.push(updates.paymentMethod || null);
+    }
+    if (updates.transactionType !== undefined) {
+      sets.push('transaction_type = ?');
+      params.push(updates.transactionType);
+    }
+    if (updates.parentTransactionId !== undefined) {
+      sets.push('parent_transaction_id = ?');
+      params.push(updates.parentTransactionId || null);
     }
 
     if (sets.length === 0) return;
@@ -661,6 +691,14 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     if (updates.status !== undefined) {
       sets.push('status = ?');
       params.push(updates.status);
+    }
+    if (updates.transactionType !== undefined) {
+      sets.push('transaction_type = ?');
+      params.push(updates.transactionType);
+    }
+    if (updates.parentTransactionId !== undefined) {
+      sets.push('parent_transaction_id = ?');
+      params.push(updates.parentTransactionId || null);
     }
 
     if (sets.length === 0) return;

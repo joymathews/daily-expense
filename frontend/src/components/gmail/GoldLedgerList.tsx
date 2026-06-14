@@ -76,7 +76,14 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
                     {tx.transactionDate}
                   </td>
                   <td onClick={() => setSelectedGoldTransaction(tx)} className="px-2 py-2.5 font-bold text-gray-900 max-w-[180px] cursor-pointer hover:text-emerald-750 transition-colors">
-                    <div className="truncate">{tx.merchant}</div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="truncate">{tx.merchant}</div>
+                      {tx.transactionType === 'refund' && (
+                        <span className="bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-emerald-250/30">
+                          Refund
+                        </span>
+                      )}
+                    </div>
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
                       tx.sourceType === 'manual' 
                         ? 'bg-amber-50 text-amber-700 border border-amber-100' 
@@ -85,7 +92,9 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = ({
                       {tx.sourceType || 'email'}
                     </span>
                   </td>
-                  <td className="px-2 py-2.5 font-extrabold text-right text-emerald-600 whitespace-nowrap">{tx.amount.toFixed(2)} {tx.currency}</td>
+                  <td className={`px-2 py-2.5 font-extrabold text-right whitespace-nowrap ${tx.transactionType === 'refund' ? 'text-emerald-600' : 'text-gray-800'}`}>
+                    {tx.transactionType === 'refund' ? '-' : ''}{tx.amount.toFixed(2)} {tx.currency}
+                  </td>
                   <td className="px-2 py-2.5 text-center">
                     <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-emerald-100/30 whitespace-nowrap">
                       {tx.category}

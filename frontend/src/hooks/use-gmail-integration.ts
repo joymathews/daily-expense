@@ -35,6 +35,8 @@ export interface GmailMessage {
     category: string;
     status: 'pending' | 'approved' | 'rejected' | 'error';
     paymentMethod?: string;
+    transactionType?: 'expense' | 'refund';
+    parentTransactionId?: string;
   };
   deletedAt?: string;
 }
@@ -61,6 +63,8 @@ export interface SilverTransaction {
   emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
+  transactionType?: 'expense' | 'refund';
+  parentTransactionId?: string;
 }
 
 export interface GoldTransaction {
@@ -86,6 +90,8 @@ export interface GoldTransaction {
   emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
+  transactionType?: 'expense' | 'refund';
+  parentTransactionId?: string;
 }
 
 export interface PaymentMethod {
@@ -713,6 +719,8 @@ export const useGmailIntegration = () => {
                     category: match.inferredCategory || 'Other',
                     status: match.status,
                     paymentMethod: match.paymentMethod,
+                    transactionType: match.transactionType,
+                    parentTransactionId: match.parentTransactionId,
                   }
                 };
               }
@@ -887,7 +895,9 @@ export const useGmailIntegration = () => {
     date: string,
     category: string,
     notes?: string,
-    paymentMethod?: string
+    paymentMethod?: string,
+    transactionType?: 'expense' | 'refund',
+    parentTransactionId?: string
   ) => {
     setIsLoading(true);
     setError(null);
@@ -908,6 +918,8 @@ export const useGmailIntegration = () => {
           category,
           notes,
           paymentMethod,
+          transactionType,
+          parentTransactionId,
         }),
       });
 
@@ -931,6 +943,8 @@ export const useGmailIntegration = () => {
                   category,
                   date,
                   paymentMethod,
+                  transactionType,
+                  parentTransactionId,
                 }
               } 
             : email
@@ -952,6 +966,8 @@ export const useGmailIntegration = () => {
             category,
             date,
             paymentMethod,
+            transactionType,
+            parentTransactionId,
           },
         });
       }
@@ -1110,6 +1126,8 @@ export const useGmailIntegration = () => {
     category: string;
     paymentMethod: string;
     notes?: string;
+    transactionType?: 'expense' | 'refund';
+    parentTransactionId?: string;
   }) => {
     setIsLoading(true);
     setError(null);

@@ -168,7 +168,7 @@ router.put('/gold-transactions/:id', async (req, res) => {
  * Stage 3: Confirms a staging transaction and promotes it to the Gold ledger.
  */
 router.post('/approve', async (req, res) => {
-  const { silverId, merchant, amount, currency, date, category, notes, paymentMethod } = req.body;
+  const { silverId, merchant, amount, currency, date, category, notes, paymentMethod, transactionType, parentTransactionId } = req.body;
   const userId = (req as any).auth?.sub;
 
   if (!silverId || !merchant || amount === undefined || !currency || !date || !paymentMethod) {
@@ -191,6 +191,8 @@ router.post('/approve', async (req, res) => {
       category: category || 'Other',
       notes: notes || '',
       paymentMethod,
+      transactionType: transactionType || 'expense',
+      parentTransactionId: parentTransactionId || undefined,
     });
 
     await repository.close();
@@ -233,6 +235,8 @@ router.post('/approve-batch', async (req, res) => {
           category: tx.inferredCategory || 'Other',
           notes: 'Batch approved',
           paymentMethod: tx.paymentMethod,
+          transactionType: tx.transactionType || 'expense',
+          parentTransactionId: tx.parentTransactionId || undefined,
         });
         approvedIds.push(silverId);
       }
@@ -325,6 +329,8 @@ router.post('/extract', async (req, res) => {
           confidenceScore: 0.95,
           status: 'pending' as const,
           paymentMethod: standardizedMethod,
+          transactionType: extracted.transactionType || 'expense',
+          parentTransactionId: undefined,
         };
         await repository.savePendingTransaction(pendingTx);
         results.push(pendingTx);
@@ -343,7 +349,7 @@ router.post('/extract', async (req, res) => {
  * Directly inserts manual validated transaction records into the Gold ledger.
  */
 router.post('/add-transaction', async (req, res) => {
-  const { merchant, amount, currency, transactionDate, category, paymentMethod, notes } = req.body;
+  const { merchant, amount, currency, transactionDate, category, paymentMethod, notes, transactionType, parentTransactionId } = req.body;
   const userId = (req as any).auth?.sub;
 
   if (!merchant || amount === undefined || !transactionDate || !category || !paymentMethod) {
@@ -370,6 +376,8 @@ router.post('/add-transaction', async (req, res) => {
       category,
       notes: notes || '',
       paymentMethod,
+      transactionType: transactionType || 'expense',
+      parentTransactionId: parentTransactionId || undefined,
     });
 
     await repository.close();

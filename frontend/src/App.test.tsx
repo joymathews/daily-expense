@@ -2737,6 +2737,186 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-39] Refund Ingestion & Ledger Offsets: Ingest, staging review with link dropdown, ledger rendering with negative sign, dashboard balancing.
+   * [NFR-USAB-16] Refund Balancing and Layout Consistency.
+   */
+  it('supports extracting, reviewing, linking, and offsetting refund transactions', async () => {
+    // 1. Setup mock data
+    const mockEmails = [
+      {
+        id: 'refund-email-id',
+        sender: 'support@store.com',
+        subject: 'Refund Confirmation',
+        date: '2026-06-12T12:00:00Z',
+        snippet: 'We refunded you USD 50.00',
+        body: 'Full refund details for purchase reversal.',
+        hasTransaction: true,
+        status: 'unprocessed' as const,
+        extracted: {
+          id: 'silver-refund-id',
+          merchant: 'Store',
+          amount: 50.00,
+          currency: 'USD',
+          date: '2026-06-12',
+          category: 'Shopping',
+          paymentMethod: 'Credit Card',
+          status: 'pending' as const,
+          transactionType: 'refund' as const,
+        }
+      }
+    ];
+
+    const mockGold = [
+      {
+        id: 'gold-purchase-id',
+        pendingTxId: 'silver-purchase-id',
+        userId: 'user-1',
+        sourceType: 'email',
+        merchant: 'Store',
+        amount: 120.00,
+        currency: 'USD',
+        transactionDate: '2026-06-10',
+        category: 'Shopping',
+        paymentMethod: 'Credit Card',
+        transactionType: 'expense' as const,
+      }
+    ];
+
+    const approveMock = vi.fn().mockImplementation((url, init) => {
+      const body = JSON.parse(init.body);
+      expect(body.transactionType).toBe('refund');
+      expect(body.parentTransactionId).toBe('gold-purchase-id');
+      
+      mockEmails[0].status = 'processed';
+      mockEmails[0].extracted.status = 'approved';
+      mockGold.push({
+        id: 'gold-refund-id',
+        pendingTxId: 'silver-refund-id',
+        userId: 'user-1',
+        sourceType: 'email',
+        merchant: 'Store',
+        amount: 50.00,
+        currency: 'USD',
+        transactionDate: '2026-06-12',
+        category: 'Shopping',
+        paymentMethod: 'Credit Card',
+        transactionType: 'refund' as const,
+        parentTransactionId: 'gold-purchase-id',
+      });
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: 'approved' })
+      });
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/approve')) {
+        return approveMock(url, init);
+      }
+      if (url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) {
+        const staging = mockEmails[0].status === 'processed' ? [] : [
+          {
+            id: 'silver-refund-id',
+            bronzeInputId: 'refund-email-id',
+            rawEmailId: 'refund-email-id',
+            sourceType: 'email',
+            merchantRaw: 'Store',
+            amount: 50.00,
+            currency: 'USD',
+            transactionDate: '2026-06-12',
+            inferredCategory: 'Shopping',
+            status: mockEmails[0].extracted.status,
+            paymentMethod: 'Credit Card',
+            transactionType: 'refund',
+          }
+        ];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: staging }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      if (url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [{ id: 'pm-1', name: 'Credit Card' }] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // 2. Dashboard verification: Net Expense = 120.00 USD
+    const initialGoldCount = await screen.findByTestId('dashboard-gold-count');
+    expect(initialGoldCount).toHaveTextContent('1');
+    expect(screen.getByText(/Total amount:/i)).toHaveTextContent('Total amount: 120.00 USD');
+
+    // 3. Navigate to Pipeline page
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Click on Silver staging list tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    // Staging table must contain the refund row and the Refund Badge
+    expect(await screen.findByText('Store')).toBeInTheDocument();
+    expect(screen.getByText('Refund')).toBeInTheDocument();
+
+    // Click on merchant name to open Detail Modal
+    fireEvent.click(screen.getByText('Store'));
+
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // The Type select dropdown must be visible and value set to "refund"
+    const typeSelect = within(modal).getByLabelText('Transaction Type');
+    expect(typeSelect).toHaveValue('refund');
+
+    // Link Purchase dropdown must be visible
+    const parentSelect = within(modal).getByLabelText('Link to Purchase (Reversal)');
+    expect(parentSelect).toBeInTheDocument();
+
+    // Choose the original purchase
+    fireEvent.change(parentSelect, { target: { value: 'gold-purchase-id' } });
+
+    // Click Approve & Save to promote refund to Gold ledger
+    const approveBtn = within(modal).getByRole('button', { name: 'Approve & Save' });
+    fireEvent.click(approveBtn);
+
+    // Verify approve API payload
+    await waitFor(() => {
+      expect(approveMock).toHaveBeenCalled();
+    });
+
+    // Dismiss the modal
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+
+    // 4. Navigate to Gold Transactions Page and verify negative rendering
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Ledger table should contain the refund row and the negative amount
+    expect(await screen.findByText('-50.00 USD')).toBeInTheDocument();
+
+    // The currency totals widget should offset the refund: 120 - 50 = 70 USD
+    expect(screen.getByText('70.00')).toBeInTheDocument();
+
+    // 5. Navigate back to Dashboard and verify the balanced Net Expense total (70.00 USD)
+    fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
+    const updatedGoldCount = await screen.findByTestId('dashboard-gold-count');
+    expect(updatedGoldCount).toHaveTextContent('2');
+    expect(screen.getByText(/Total amount:/i)).toHaveTextContent('Total amount: 70.00 USD');
+
+    vi.unstubAllGlobals();
+  });
 });
 
 

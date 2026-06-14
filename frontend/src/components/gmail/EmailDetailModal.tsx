@@ -15,7 +15,9 @@ interface EmailDetailModalProps {
     date: string,
     category: string,
     notes?: string,
-    paymentMethod?: string
+    paymentMethod?: string,
+    transactionType?: 'expense' | 'refund',
+    parentTransactionId?: string
   ) => Promise<void>;
   
   // Gold Transaction corrections support
@@ -64,6 +66,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
+  const [transactionType, setTransactionType] = useState('expense');
+  const [parentTransactionId, setParentTransactionId] = useState('');
   
   // Lineage toggle state
   const [showRawInGoldMode, setShowRawInGoldMode] = useState(false);
@@ -82,6 +86,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         category: silverRecord.inferredCategory || 'Other',
         status: silverRecord.status as any,
         paymentMethod: silverRecord.paymentMethod,
+        transactionType: silverRecord.transactionType,
+        parentTransactionId: silverRecord.parentTransactionId,
       };
     }
   }
@@ -106,6 +112,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         transactionDate: date,
         paymentMethod: paymentMethod,
         inferredCategory: category,
+        transactionType: transactionType as any,
+        parentTransactionId: parentTransactionId || null as any,
       });
       
       const isErr = !merchant.trim() || !date.trim() || date === 'N/A' || amount === 0 || !paymentMethod.trim() || paymentMethod === 'Unknown' || paymentMethod === 'N/A';
@@ -121,6 +129,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
           category,
           paymentMethod,
           status: updatedStatus,
+          transactionType: transactionType as any,
+          parentTransactionId: parentTransactionId || undefined,
         }
       });
     }
@@ -140,6 +150,15 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       });
     }
   };
+
+  // Resolve parent transaction candidates for linkages
+  const parentCandidates = React.useMemo(() => {
+    return goldTransactions.filter(
+      (tx) => 
+        tx.transactionType !== 'refund' && 
+        (!selectedGoldTransaction || tx.id !== selectedGoldTransaction.id)
+    );
+  }, [goldTransactions, selectedGoldTransaction]);
 
   // Resolve related records for the selected item (lineage tracking)
   const resolvedLineage = React.useMemo(() => {
@@ -175,6 +194,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setDate(selectedGoldTransaction.transactionDate || '');
       setNotes(selectedGoldTransaction.notes || '');
       setPaymentMethod(selectedGoldTransaction.paymentMethod || '');
+      setTransactionType(selectedGoldTransaction.transactionType || 'expense');
+      setParentTransactionId(selectedGoldTransaction.parentTransactionId || '');
       setShowRawInGoldMode(false);
       setRawBodyForGoldLineage('');
       
@@ -202,6 +223,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setDate(selectedEmail.extracted.date);
       setNotes('');
       setPaymentMethod(selectedEmail.extracted.paymentMethod || '');
+      setTransactionType(selectedEmail.extracted.transactionType || 'expense');
+      setParentTransactionId(selectedEmail.extracted.parentTransactionId || '');
     } else {
       setMerchant('');
       setAmount(0);
@@ -209,6 +232,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setDate('');
       setNotes('');
       setPaymentMethod('');
+      setTransactionType('expense');
+      setParentTransactionId('');
     }
   }, [selectedEmail, selectedGoldTransaction]);
 
@@ -225,6 +250,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         transactionDate: date,
         notes,
         paymentMethod,
+        transactionType: transactionType as any,
+        parentTransactionId: parentTransactionId || null as any,
       });
       setSelectedGoldTransaction!(null);
     } else if (selectedEmail && selectedEmail.extracted) {
@@ -236,7 +263,9 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         date,
         category,
         notes,
-        paymentMethod
+        paymentMethod,
+        transactionType as any,
+        parentTransactionId || undefined
       );
     }
   };
@@ -345,6 +374,11 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                         <span className="text-indigo-600 font-extrabold">
                           {resolvedLineage.silverRecord.amount.toFixed(2)} {resolvedLineage.silverRecord.currency}
                         </span>
+                        {resolvedLineage.silverRecord.transactionType === 'refund' && (
+                          <span className="ml-1.5 bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                            Refund
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-gray-450">
                         Category: {resolvedLineage.silverRecord.inferredCategory || 'N/A'} | Status: {resolvedLineage.silverRecord.status} | Method: {resolvedLineage.silverRecord.paymentMethod || 'Unknown'}
@@ -367,11 +401,17 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                       <div className="font-bold text-gray-800">
                         {resolvedLineage.goldRecord.merchant} -{' '}
                         <span className="text-emerald-600 font-extrabold">
-                          {resolvedLineage.goldRecord.amount.toFixed(2)} {resolvedLineage.goldRecord.currency}
+                          {resolvedLineage.goldRecord.transactionType === 'refund' ? '-' : ''}{resolvedLineage.goldRecord.amount.toFixed(2)} {resolvedLineage.goldRecord.currency}
                         </span>
+                        {resolvedLineage.goldRecord.transactionType === 'refund' && (
+                          <span className="ml-1.5 bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                            Refund
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-gray-450 truncate">
                         Category: {resolvedLineage.goldRecord.category} | Method: {resolvedLineage.goldRecord.paymentMethod || 'Unknown'} {resolvedLineage.goldRecord.notes ? `| Notes: ${resolvedLineage.goldRecord.notes}` : ''}
+                        {resolvedLineage.goldRecord.parentTransactionId && ` | Linked Purchase ID: ${resolvedLineage.goldRecord.parentTransactionId}`}
                       </div>
                     </div>
                   ) : (
@@ -466,6 +506,41 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   </select>
                   {isMethodInvalid && <span className="text-[10px] text-rose-600 font-bold mt-1 block">Payment method is required</span>}
                 </div>
+                <div>
+                  <label htmlFor="modal-transaction-type" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Transaction Type</label>
+                  <select 
+                    id="modal-transaction-type"
+                    className="w-full px-3 py-2 bg-white border border-gray-200 focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all shadow-sm cursor-pointer"
+                    value={transactionType}
+                    onChange={(e) => {
+                      setTransactionType(e.target.value);
+                      if (e.target.value !== 'refund') {
+                        setParentTransactionId('');
+                      }
+                    }}
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="refund">Refund</option>
+                  </select>
+                </div>
+                {transactionType === 'refund' && (
+                  <div className="col-span-1 md:col-span-2">
+                    <label htmlFor="modal-parent-link" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Link to Purchase (Reversal)</label>
+                    <select 
+                      id="modal-parent-link"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-750 transition-all shadow-sm cursor-pointer"
+                      value={parentTransactionId}
+                      onChange={(e) => setParentTransactionId(e.target.value)}
+                    >
+                      <option value="">No Linked Purchase (Optional)</option>
+                      {parentCandidates.map(tx => (
+                        <option key={tx.id} value={tx.id}>
+                          {tx.transactionDate} - {tx.merchant} ({tx.amount.toFixed(2)} {tx.currency})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="col-span-1 md:col-span-2">
                   <label htmlFor="modal-notes" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Notes / Comments</label>
                   <input 

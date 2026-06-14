@@ -31,6 +31,8 @@ export interface PendingTransaction {
   sourceSender?: string;
   sourceReceivedAt?: string;
   paymentMethod?: string;
+  transactionType?: 'expense' | 'refund';
+  parentTransactionId?: string;
 }
 
 export interface Transaction {
@@ -51,6 +53,8 @@ export interface Transaction {
   sourceReceivedAt?: string;
   bronzeInputId?: string;
   paymentMethod?: string;
+  transactionType?: 'expense' | 'refund';
+  parentTransactionId?: string;
 }
 
 export interface ITransactionRepository {

@@ -16,7 +16,8 @@ You are a precise financial parser. Extract transaction details from the email t
   "date": "string",
   "category": "string",
   "description": "string",
-  "paymentMethod": "string"
+  "paymentMethod": "string",
+  "transactionType": "string"
 }
 
 Ensure:
@@ -24,6 +25,7 @@ Ensure:
 - "currency" is a 3-letter ISO code (e.g. "USD", "INR", "EUR").
 - "date" is a standardized YYYY-MM-DD string.
 - "paymentMethod" identifies how the transaction was made (e.g. "UPI", "HDFC credit card", "HDFC Rupay Card", "ICICI", "Bank transaction"). If you cannot confidently identify the payment method, return "Unknown".
+- "transactionType" must be "refund" if the email indicates a refund, reversal, reversal of debit, credit received, chargeback, or purchase cancellation. Otherwise, it must be "expense".
 - If any field cannot be found, set it to a default (e.g. category to "Other").
 `;
 
@@ -62,7 +64,8 @@ Ensure:
         date: parsedJSON.date || new Date().toISOString().split('T')[0],
         category: parsedJSON.category || 'Other',
         description: parsedJSON.description || undefined,
-        paymentMethod: parsedJSON.paymentMethod || 'Unknown'
+        paymentMethod: parsedJSON.paymentMethod || 'Unknown',
+        transactionType: parsedJSON.transactionType === 'refund' ? 'refund' : 'expense'
       };
     } catch (error) {
       console.error('Ollama extraction failed:', error);
