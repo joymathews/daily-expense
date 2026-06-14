@@ -217,6 +217,67 @@ CREATE TABLE IF NOT EXISTS payment_mapping_rules (
 
 ---
 
+### 6. `llm_extraction_logs` (Extraction Snapshot Audit Log)
+Stores an immutable snapshot of LLM parsed details for a raw input to track and measure LLM accuracy.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS llm_extraction_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  bronze_input_id TEXT NOT NULL UNIQUE,
+  extracted_merchant TEXT,
+  extracted_amount_cents INTEGER,
+  extracted_currency TEXT,
+  extracted_date TEXT,
+  extracted_category TEXT,
+  extracted_payment_method TEXT,
+  extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund')),
+  confidence_score REAL,
+  extracted_at TEXT DEFAULT (datetime('now', 'utc')),
+  FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+  UNIQUE(user_id, bronze_input_id),
+  UNIQUE(user_id, id)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | `PRIMARY KEY` | Unique UUID generated for the audit log record. |
+| **`user_id`** | `TEXT` | `NOT NULL` | AWS Cognito user sub. Partitions extraction logs by user. |
+| **`bronze_input_id`**| `TEXT` | `UNIQUE, FOREIGN KEY` | References the Bronze raw input parent record. Ensures one extraction snapshot log exists per processed raw item. |
+| **`extracted_merchant`**| `TEXT` | `Nullable` | Original merchant name parsed by the LLM before any user modifications. |
+| **`extracted_amount_cents`**| `INTEGER`| `Nullable` | Original transaction amount (in cents) extracted by the LLM. |
+| **`extracted_currency`**| `TEXT` | `Nullable` | Original currency extracted by the LLM. |
+| **`extracted_date`** | `TEXT` | `Nullable` | Original transaction date parsed by the LLM. |
+| **`extracted_category`**| `TEXT` | `Nullable` | Original category inferred by the LLM. |
+| **`extracted_payment_method`**| `TEXT`| `Nullable` | Original raw payment method string extracted by the LLM. |
+| **`extracted_transaction_type`**| `TEXT` | `CHECK (expense, refund)`| Original transaction type inferred by the LLM (`'expense'` or `'refund'`). |
+| **`confidence_score`**| `REAL` | `Nullable` | LLM parsing confidence score (0.0 to 1.0) for validation metrics. |
+| **`extracted_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Audit log creation timestamp. |
+
+---
+
+### 7. `user_preferences` (Metadata & Seeding Preferences)
+Tracks user-specific configuration flags, such as whether default payment methods have been seeded.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id TEXT PRIMARY KEY,
+  defaults_seeded INTEGER DEFAULT 0
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`user_id`** | `TEXT` | `PRIMARY KEY` | AWS Cognito user sub. Partitions user preferences. |
+| **`defaults_seeded`** | `INTEGER` | `DEFAULT 0` | Flag (`1` for true, `0` for false) indicating whether default payment methods and mapping rules have been populated for this user. Prevents auto-reseeding deleted methods. |
+
+---
+
 ## Indexes Reference
 
 To optimize performance and query speeds, the following custom database indexes are defined:
@@ -236,3 +297,6 @@ To optimize performance and query speeds, the following custom database indexes 
 5. **`idx_payment_rules_user`**:
    - *Query*: `CREATE INDEX IF NOT EXISTS idx_payment_rules_user ON payment_mapping_rules(user_id);`
    - *Justification*: Optimizes ingestion mapping loops where a user's alias rules are compared against extracted data.
+6. **`idx_llm_logs_bronze`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_llm_logs_bronze ON llm_extraction_logs(user_id, bronze_input_id);`
+   - *Justification*: Optimizes lookup of immutable LLM logs when displaying the side-by-side comparison inside detail modals.
