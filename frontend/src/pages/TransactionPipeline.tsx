@@ -55,7 +55,7 @@ const TransactionPipeline: React.FC = () => {
   const [selectedGoldTransaction, setSelectedGoldTransaction] = useState<GoldTransaction | null>(null);
 
   // Ingestion status filtering for Bronze section
-  const [bronzeFilter, setBronzeFilter] = useState<'all' | 'processed' | 'unprocessed' | 'rejected'>('all');
+  const [bronzeFilter, setBronzeFilter] = useState<'all' | 'unprocessed' | 'rejected'>('all');
 
   // Delete modal trigger states
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -122,7 +122,7 @@ const TransactionPipeline: React.FC = () => {
 
   // Helper to determine if an email has already been processed
   const isEmailProcessed = (email: typeof rawEmails[0]) => {
-    if (email.status === 'processed' || email.status === 'rejected') return true;
+    if (email.status === 'processed') return true;
     if (email.extracted) return true;
     const inSilver = silverTransactions.some(tx => tx.rawEmailId === email.id);
     const inGold = goldTransactions.some(tx => tx.bronzeEmailId === email.id);
@@ -134,10 +134,11 @@ const TransactionPipeline: React.FC = () => {
     const tabMatch = bronzeSubTab === 'transaction' ? email.hasTransaction : !email.hasTransaction;
     if (!tabMatch) return false;
     
-    if (bronzeFilter === 'processed') {
-      return email.status === 'processed' || (email.status !== 'rejected' && isEmailProcessed(email));
-    } else if (bronzeFilter === 'unprocessed') {
-      return email.status === 'unprocessed' || (!email.status && !isEmailProcessed(email));
+    // Hide processed raw inputs entirely from the UI list
+    if (isEmailProcessed(email)) return false;
+    
+    if (bronzeFilter === 'unprocessed') {
+      return email.status === 'unprocessed' || (!email.status);
     } else if (bronzeFilter === 'rejected') {
       return email.status === 'rejected';
     }

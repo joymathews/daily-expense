@@ -180,6 +180,7 @@ export const useGmailIntegration = () => {
           hasTransaction: e.hasTransaction !== undefined ? !!e.hasTransaction : false,
           sourceType: e.sourceType || 'email',
           extracted: e.extracted,
+          status: e.status,
         }));
         setRawEmails(mapped);
         // Backwards compatibility for tests that read "emails"

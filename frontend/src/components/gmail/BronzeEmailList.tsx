@@ -18,8 +18,8 @@ interface BronzeEmailListProps {
   bronzeSubTab: 'transaction' | 'non-transaction';
   setActiveTab: (tab: 'bronze' | 'silver' | 'gold' | 'transaction' | 'non-transaction') => void;
   rawEmails: GmailMessage[];
-  bronzeFilter: 'all' | 'processed' | 'unprocessed' | 'rejected';
-  setBronzeFilter: (filter: 'all' | 'processed' | 'unprocessed' | 'rejected') => void;
+  bronzeFilter: 'all' | 'unprocessed' | 'rejected';
+  setBronzeFilter: (filter: 'all' | 'unprocessed' | 'rejected') => void;
   onDeleteClick: (email: GmailMessage) => void;
   startDate: string;
   setStartDate: (val: string) => void;
@@ -69,9 +69,9 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
           >
             Transactions
             <span className={`ml-2 px-2 py-0.5 text-[10px] rounded-full font-bold transition-colors ${
-              bronzeSubTab === 'transaction' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-200 text-gray-650'
+              bronzeSubTab === 'transaction' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-200 text-gray-655'
             }`}>
-              {rawEmails.filter(e => e.hasTransaction).length}
+              {rawEmails.filter(e => e.hasTransaction && !isEmailProcessed(e)).length}
             </span>
           </button>
           <button
@@ -87,7 +87,7 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
             <span className={`ml-2 px-2 py-0.5 text-[10px] rounded-full font-bold transition-colors ${
               bronzeSubTab === 'non-transaction' ? 'bg-amber-105 text-amber-900' : 'bg-gray-200 text-gray-655'
             }`}>
-              {rawEmails.filter(e => !e.hasTransaction).length}
+              {rawEmails.filter(e => !e.hasTransaction && !isEmailProcessed(e)).length}
             </span>
           </button>
         </div>
@@ -138,11 +138,10 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
             <select
               id="bronze-status-filter"
               value={bronzeFilter}
-              onChange={(e) => setBronzeFilter(e.target.value as 'all' | 'processed' | 'unprocessed' | 'rejected')}
+              onChange={(e) => setBronzeFilter(e.target.value as 'all' | 'unprocessed' | 'rejected')}
               className="bg-white border border-gray-200 text-xs font-bold text-gray-750 px-2.5 py-1 rounded-lg outline-none cursor-pointer focus:border-indigo-500"
             >
               <option value="all">All</option>
-              <option value="processed">Processed</option>
               <option value="unprocessed">Unprocessed</option>
               <option value="rejected">Rejected</option>
             </select>

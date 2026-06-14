@@ -416,7 +416,27 @@ describe('Requirement Traceability Matrix Verification', () => {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
       }
       if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            transactions: [
+              {
+                id: 'silver_pending_555',
+                bronzeInputId: 'email_staging_123',
+                rawEmailId: 'email_staging_123',
+                sourceType: 'email',
+                merchantRaw: 'Uber Inc',
+                merchantNormalized: 'Uber Inc',
+                amount: 14.50,
+                currency: 'USD',
+                transactionDate: '2023-01-15',
+                inferredCategory: 'Transport',
+                paymentMethod: 'UPI',
+                status: 'pending'
+              }
+            ]
+          })
+        });
       }
       if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
@@ -453,8 +473,11 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Navigate to Pipeline
     fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
-    // Wait for email to appear and click it
-    const subjectCell = await screen.findByText('Your Ride Details');
+    // Click on Silver staging list tab
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    // Wait for Uber Inc to appear and click it
+    const subjectCell = await screen.findByText('Uber Inc');
     expect(subjectCell).toBeInTheDocument();
     fireEvent.click(subjectCell);
 
@@ -513,10 +536,10 @@ describe('Requirement Traceability Matrix Verification', () => {
   });
 
   /**
-   * [FUNC-GMAIL-21] Processed Emails Visibility: Distinct visual status or indicator for processed emails and disabled action button.
+   * [FUNC-GMAIL-21] Processed Inputs Visibility: Processed raw inputs are completely hidden from the Bronze list view.
    * [NFR-USAB-1] Ingestion Status Feedback: Status display for raw emails.
    */
-  it('displays processed badge and disables extraction/checkbox for already processed emails', async () => {
+  it('excludes processed emails from the bronze list view entirely and updates sub-tab counts accordingly', async () => {
     // Mock the fetch calls
     const mockEmails = [
       { id: '1', sender: 'sender@test.com', subject: 'Inv 123', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content for Inv 123', hasTransaction: true },
@@ -584,34 +607,17 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Navigate to Pipeline
     fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
-    // Wait for the emails to appear
-    expect(await screen.findByText('Inv 123')).toBeInTheDocument();
-    expect(screen.getByText('Inv 456')).toBeInTheDocument();
+    // Wait for the emails to appear - Inv 456 (unprocessed) must be visible
+    expect(await screen.findByText('Inv 456')).toBeInTheDocument();
+    
+    // Inv 123 (processed) must NOT be visible
+    expect(screen.queryByText('Inv 123')).not.toBeInTheDocument();
 
-    // Check that Inv 123 has "Processed" badge or indicator
-    expect(screen.getAllByText(/Processed/i).length).toBeGreaterThan(0);
+    // The count badge on the Transactions tab should be 1 (counting only unprocessed)
+    expect(screen.getByText('Transactions').querySelector('span')?.textContent).toBe('1');
 
-    // Get the rows for both emails
-    const row1 = screen.getByText('Inv 123').closest('tr')!;
+    // Get row for Inv 456 and verify its checkbox is enabled
     const row2 = screen.getByText('Inv 456').closest('tr')!;
-
-    // Verify that Unmark Tx button is not visible inside detail modal for processed email
-    fireEvent.click(screen.getByText('Inv 123'));
-    const detailModal = screen.getByTestId('email-detail-modal');
-    expect(within(detailModal).queryByRole('button', { name: 'Unmark Tx' })).not.toBeInTheDocument();
-    fireEvent.click(within(detailModal).getByRole('button', { name: 'Close' }));
-
-    expect(within(row1).getByText('✓ Processed')).toBeInTheDocument();
-    expect(within(row1).queryByRole('button', { name: 'Extract' })).not.toBeInTheDocument();
-
-    // In row2, the row-level extract action should also not be present (Action column removed)
-    expect(within(row2).queryByRole('button', { name: 'Extract' })).not.toBeInTheDocument();
-
-    // The checkbox in row1 should be disabled
-    const checkbox1 = within(row1).getByRole('checkbox');
-    expect(checkbox1).toBeDisabled();
-
-    // The checkbox in row2 should not be disabled
     const checkbox2 = within(row2).getByRole('checkbox');
     expect(checkbox2).not.toBeDisabled();
 
@@ -698,20 +704,17 @@ describe('Requirement Traceability Matrix Verification', () => {
   });
 
   /**
-   * [FUNC-GMAIL-23] Bronze Ingestion Status Filter: Filter raw emails in Bronze view by processed or unprocessed status.
+   * [FUNC-GMAIL-23] Bronze Ingestion Status Filter: Filter raw emails in Bronze view by unprocessed or rejected status.
    * [NFR-USAB-2] Ingestion Status Filtering Usability: Instant filter response in UI.
    */
-  it('allows the user to filter bronze emails by processed and unprocessed status', async () => {
+  it('allows the user to filter bronze emails by unprocessed and rejected status', async () => {
     // Mock the fetch calls
     const mockEmails = [
-      { id: '1', sender: 'sender@test.com', subject: 'Inv 123 (Processed)', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content for Inv 123', hasTransaction: true },
-      { id: '2', sender: 'sender@test.com', subject: 'Inv 456 (Unprocessed)', date: '2023-01-02', snippet: 'Paid Rs. 200', body: 'Full billing content for Inv 456', hasTransaction: true }
+      { id: '1', sender: 'sender@test.com', subject: 'Inv 123 (Unprocessed)', date: '2023-01-01', snippet: 'Paid Rs. 100', body: 'Full billing content for Inv 123', hasTransaction: true, status: 'unprocessed' as const },
+      { id: '2', sender: 'sender@test.com', subject: 'Inv 456 (Rejected)', date: '2023-01-02', snippet: 'Paid Rs. 200', body: 'Full billing content for Inv 456', hasTransaction: true, status: 'rejected' as const },
+      { id: '3', sender: 'sender@test.com', subject: 'Inv 789 (Processed)', date: '2023-01-03', snippet: 'Paid Rs. 300', body: 'Full billing content for Inv 789', hasTransaction: true, status: 'processed' as const }
     ];
-    // Inv 123 is processed (exists in silverTransactions)
-    const mockSilver = [
-      { id: 'silver_1', rawEmailId: '1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'pending' }
-    ];
-
+    
     const mockFetch = vi.fn().mockImplementation((url, init) => {
       if (url.includes('fetch-list')) {
         return Promise.resolve({
@@ -730,7 +733,7 @@ describe('Requirement Traceability Matrix Verification', () => {
       if ((url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions'))) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ transactions: mockSilver }),
+          json: () => Promise.resolve({ transactions: [] }),
         });
       }
       if ((url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs'))) {
@@ -769,8 +772,11 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for the emails to appear
-    expect(await screen.findByText('Inv 123 (Processed)')).toBeInTheDocument();
-    expect(screen.getByText('Inv 456 (Unprocessed)')).toBeInTheDocument();
+    expect(await screen.findByText('Inv 123 (Unprocessed)')).toBeInTheDocument();
+    expect(screen.getByText('Inv 456 (Rejected)')).toBeInTheDocument();
+    
+    // Inv 789 (Processed) must be hidden
+    expect(screen.queryByText('Inv 789 (Processed)')).not.toBeInTheDocument();
 
     // Verify filter dropdown exists with options
     const selectFilter = screen.getByLabelText(/Filter:/i);
@@ -779,18 +785,19 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Filter by Unprocessed only
     fireEvent.change(selectFilter, { target: { value: 'unprocessed' } });
-    expect(screen.queryByText('Inv 123 (Processed)')).not.toBeInTheDocument();
-    expect(screen.getByText('Inv 456 (Unprocessed)')).toBeInTheDocument();
+    expect(screen.getByText('Inv 123 (Unprocessed)')).toBeInTheDocument();
+    expect(screen.queryByText('Inv 456 (Rejected)')).not.toBeInTheDocument();
 
-    // Filter by Processed only
-    fireEvent.change(selectFilter, { target: { value: 'processed' } });
-    expect(screen.getByText('Inv 123 (Processed)')).toBeInTheDocument();
-    expect(screen.queryByText('Inv 456 (Unprocessed)')).not.toBeInTheDocument();
+    // Filter by Rejected only
+    fireEvent.change(selectFilter, { target: { value: 'rejected' } });
+    expect(screen.queryByText('Inv 123 (Unprocessed)')).not.toBeInTheDocument();
+    expect(screen.getByText('Inv 456 (Rejected)')).toBeInTheDocument();
 
     // Filter back to All
     fireEvent.change(selectFilter, { target: { value: 'all' } });
-    expect(screen.getByText('Inv 123 (Processed)')).toBeInTheDocument();
-    expect(screen.getByText('Inv 456 (Unprocessed)')).toBeInTheDocument();
+    expect(screen.getByText('Inv 123 (Unprocessed)')).toBeInTheDocument();
+    expect(screen.getByText('Inv 456 (Rejected)')).toBeInTheDocument();
+    expect(screen.queryByText('Inv 789 (Processed)')).not.toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });
@@ -1333,9 +1340,12 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Navigate to Gmail Fetch page
     fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
-    // Wait for the Bronze raw emails to load and open the first one
-    const emailSubject = await screen.findByText('Inv 123');
-    fireEvent.click(emailSubject);
+    // Click on Gold tab to view confirmed ledger records
+    fireEvent.click(screen.getByRole('button', { name: /Gold/i }));
+
+    // Wait for the Gold transaction to load and click on the merchant name
+    const goldMerchant = await screen.findByText('Merchant A Confirmed');
+    fireEvent.click(goldMerchant);
 
     // Verify detail modal opens and contains the lineage explorer
     const modal = screen.getByTestId('email-detail-modal');
