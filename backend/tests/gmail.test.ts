@@ -957,6 +957,89 @@ describe('Gmail API Integration', () => {
   });
 
   /**
+   * [FUNC-GMAIL-44] Category Standardization & Normalization.
+   * Verify that category names are normalized, variations mapped,
+   * and casing standardized (Title Case) on insertion/update in DB.
+   */
+  it('should normalize and standardize category names on insert and update [FUNC-GMAIL-44]', async () => {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    const userId = 'user-category-norm';
+
+    // 1. Ingest/Save pending transaction with whitespace/casing variations
+    const rawId = 'raw_cat_norm_1';
+    await repository.saveRawInput({
+      id: rawId,
+      userId,
+      sourceType: 'email',
+      sender: 'zomato@order.com',
+      title: 'Food Order',
+      snippet: 'Paid $12',
+      rawBody: 'Zomato order details...',
+      rawPayload: '{}',
+      receivedAt: new Date().toISOString(),
+      hasTransaction: true,
+      status: 'unprocessed'
+    });
+
+    const pendingTxId = crypto.randomUUID();
+    await repository.savePendingTransaction({
+      id: pendingTxId,
+      bronzeInputId: rawId,
+      userId,
+      sourceType: 'email',
+      merchantRaw: 'Zomato',
+      amount: 12.00,
+      currency: 'INR',
+      transactionDate: '2026-06-12',
+      status: 'pending',
+      paymentMethod: 'UPI',
+      inferredCategory: '  online food order  ' // Extra spaces & lowercase
+    });
+
+    // Verify it was normalized to "Online Food Order"
+    const pending = await repository.getSilverTransactionById(pendingTxId, userId);
+    expect(pending?.inferredCategory).toBe('Online Food Order');
+
+    // 2. Add direct manual Gold transaction with variation
+    const goldId = crypto.randomUUID();
+    await repository.addDirectGoldTransaction({
+      id: goldId,
+      userId,
+      sourceType: 'manual',
+      merchant: 'Supermarket',
+      amount: 50.00,
+      currency: 'INR',
+      transactionDate: '2026-06-12',
+      category: 'grocery', // variation of "Groceries"
+      paymentMethod: 'Cash'
+    });
+
+    // Verify it was normalized to "Groceries"
+    const goldTxs = await repository.getGoldTransactions(userId);
+    const gold = goldTxs.find(tx => tx.id === goldId);
+    expect(gold?.category).toBe('Groceries');
+
+    // 3. Update pending transaction category to custom non-standard name
+    await repository.updatePendingTransaction(pendingTxId, userId, {
+      inferredCategory: 'gadgets'
+    });
+    const pendingUpdated = await repository.getSilverTransactionById(pendingTxId, userId);
+    expect(pendingUpdated?.inferredCategory).toBe('Gadgets'); // Title Case
+
+    // 4. Update gold transaction category to custom non-standard name
+    await repository.updateGoldTransaction(goldId, userId, {
+      category: 'health & fitness'
+    });
+    const goldTxsUpdated = await repository.getGoldTransactions(userId);
+    const goldUpdated = goldTxsUpdated.find(tx => tx.id === goldId);
+    expect(goldUpdated?.category).toBe('Health & Fitness'); // Title Case
+
+    await repository.close();
+  });
+
+  /**
    * [FUNC-GMAIL-34] Retroactive standardization.
    * [NFR-USAB-10] Payment Standardization Usability.
    */

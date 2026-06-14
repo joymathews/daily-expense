@@ -41,6 +41,21 @@ interface EmailDetailModalProps {
   fetchLlmLog?: (bronzeId: string) => Promise<any | null>;
 }
 
+const STANDARD_CATEGORIES = [
+  'Groceries',
+  'Cabs & Transport',
+  'Travel',
+  'Utilities',
+  'Internet & Telecom',
+  'Entertainment Subscriptions',
+  'Cloud & Software Services',
+  'Shopping',
+  'Restaurant & Dining',
+  'Online Food Order',
+  'Medical & Healthcare',
+  'Other'
+];
+
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   selectedEmail,
   setSelectedEmail,
@@ -482,11 +497,17 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   <label htmlFor="modal-category" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Category</label>
                   <input 
                     id="modal-category"
-                    type="text" 
+                    type="text"
+                    list="modal-categories-list"
                     className="w-full px-3 py-2 bg-white border border-gray-200 focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all shadow-sm"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                   />
+                  <datalist id="modal-categories-list">
+                    {STANDARD_CATEGORIES.map(opt => (
+                      <option key={opt} value={opt} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label htmlFor="modal-date" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Date</label>

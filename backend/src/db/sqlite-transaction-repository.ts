@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { ITransactionRepository, RawInput, PendingTransaction, Transaction } from './transaction-repository';
+import { normalizeCategory } from '../utils/category-helper';
 
 export class SQLiteTransactionRepository implements ITransactionRepository {
   private db: sqlite3.Database;
@@ -277,6 +278,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     const hasMethod = !!(tx.paymentMethod?.trim() && tx.paymentMethod !== 'Unknown' && tx.paymentMethod !== 'N/A');
     
     const calculatedStatus = (!hasMerchant || !hasDate || !hasAmount || !hasMethod) ? 'error' : tx.status;
+    const normalizedCategory = normalizeCategory(tx.inferredCategory);
 
     await this.run('BEGIN TRANSACTION');
     try {
@@ -294,7 +296,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           amountCents,
           tx.currency,
           tx.transactionDate,
-          tx.inferredCategory || null,
+          normalizedCategory,
           tx.confidenceScore ?? null,
           calculatedStatus,
           tx.paymentMethod || null,
@@ -314,7 +316,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           amountCents,
           tx.currency,
           tx.transactionDate,
-          tx.inferredCategory || null,
+          normalizedCategory,
           tx.paymentMethodRaw || tx.paymentMethod || null,
           tx.transactionType || 'expense',
           tx.confidenceScore ?? null
@@ -400,7 +402,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           amountCents,
           tx.currency,
           tx.transactionDate,
-          tx.category,
+          normalizeCategory(tx.category),
           tx.notes || null,
           tx.paymentMethod || null,
           tx.transactionType || 'expense',
@@ -436,7 +438,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         amountCents,
         tx.currency || 'INR',
         tx.transactionDate,
-        tx.category,
+        normalizeCategory(tx.category),
         tx.notes || null,
         tx.paymentMethod,
         tx.transactionType || 'expense',
@@ -675,7 +677,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }
     if (updates.category !== undefined) {
       sets.push('category = ?');
-      params.push(updates.category);
+      params.push(normalizeCategory(updates.category));
     }
     if (updates.notes !== undefined) {
       sets.push('notes = ?');
@@ -730,7 +732,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     }
     if (updates.inferredCategory !== undefined) {
       sets.push('inferred_category = ?');
-      params.push(updates.inferredCategory || null);
+      params.push(updates.inferredCategory ? normalizeCategory(updates.inferredCategory) : null);
     }
     if (updates.paymentMethod !== undefined) {
       sets.push('payment_method = ?');

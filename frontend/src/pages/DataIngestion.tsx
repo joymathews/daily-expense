@@ -2,6 +2,21 @@ import React, { useState } from 'react';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import { FilterPanel } from '../components/gmail/FilterPanel';
 
+const STANDARD_CATEGORIES = [
+  'Groceries',
+  'Cabs & Transport',
+  'Travel',
+  'Utilities',
+  'Internet & Telecom',
+  'Entertainment Subscriptions',
+  'Cloud & Software Services',
+  'Shopping',
+  'Restaurant & Dining',
+  'Online Food Order',
+  'Medical & Healthcare',
+  'Other'
+];
+
 const DataIngestion: React.FC = () => {
   const {
     senders,
@@ -42,7 +57,7 @@ const DataIngestion: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('INR');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
-  const [category, setCategory] = useState('Food');
+  const [category, setCategory] = useState('Other');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [notes, setNotes] = useState('');
   const [transactionType, setTransactionType] = useState('expense');
@@ -360,20 +375,19 @@ const DataIngestion: React.FC = () => {
               {/* Category */}
               <div className="flex flex-col space-y-1.5">
                 <label htmlFor="manual-category" className="text-xs font-bold text-gray-500 uppercase tracking-wider">Category *</label>
-                <select
+                <input
                   id="manual-category"
+                  type="text"
+                  list="manual-categories-list"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="border border-gray-250 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 outline-none transition-all font-semibold bg-white cursor-pointer"
-                >
-                  <option value="Food">Food</option>
-                  <option value="Travel">Travel</option>
-                  <option value="Transport">Transport</option>
-                  <option value="Shopping">Shopping</option>
-                  <option value="Utilities">Utilities</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Other">Other</option>
-                </select>
+                  className="border border-gray-250 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 outline-none transition-all font-semibold bg-white"
+                />
+                <datalist id="manual-categories-list">
+                  {STANDARD_CATEGORIES.map(opt => (
+                    <option key={opt} value={opt} />
+                  ))}
+                </datalist>
               </div>
 
               {/* Payment Method */}
