@@ -315,7 +315,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           tx.currency,
           tx.transactionDate,
           tx.inferredCategory || null,
-          tx.paymentMethod || null,
+          tx.paymentMethodRaw || tx.paymentMethod || null,
           tx.transactionType || 'expense',
           tx.confidenceScore ?? null
         ]

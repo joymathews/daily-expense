@@ -3078,6 +3078,20 @@ describe('Requirement Traceability Matrix Verification', () => {
                 status: 'approved',
                 paymentMethod: 'Credit Card',
                 transactionType: 'expense'
+              },
+              {
+                id: 'silver_tx_456',
+                rawEmailId: 'bronze_log_123',
+                bronzeInputId: 'bronze_log_123',
+                merchantRaw: 'Uber Staging',
+                merchantNormalized: 'Uber Staging',
+                amount: 15.50,
+                currency: 'USD',
+                transactionDate: '2026-06-12',
+                inferredCategory: 'Transport',
+                status: 'pending',
+                paymentMethod: 'Credit Card',
+                transactionType: 'expense'
               }
             ]
           })
@@ -3183,6 +3197,31 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getAllByText('Taxi').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Transport').length).toBeGreaterThan(0);
     expect(screen.getAllByText('📝 Corrected')).toHaveLength(2);
+
+    // Close Gold modal
+    const closeBtn = screen.getByRole('button', { name: /Close/i });
+    fireEvent.click(closeBtn);
+    expect(screen.queryByTestId('email-detail-modal')).not.toBeInTheDocument();
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Switch to Silver tab
+    const silverTab = await screen.findByRole('button', { name: /Silver \(Staging Queue\)/i });
+    fireEvent.click(silverTab);
+
+    // Open pending staging item
+    const silverMerchantCell = await screen.findByText('Uber Staging');
+    fireEvent.click(silverMerchantCell);
+
+    // Assert read-only LLM preview card is rendered and correct
+    expect(screen.getByTestId('email-detail-modal')).toBeInTheDocument();
+    const stagingLlmPreview = await screen.findByTestId('silver-llm-extracted-preview');
+    expect(stagingLlmPreview).toBeInTheDocument();
+    expect(stagingLlmPreview).toHaveTextContent('Uber');
+    expect(stagingLlmPreview).toHaveTextContent('15.50 USD');
+    expect(stagingLlmPreview).toHaveTextContent('Transport');
+    expect(stagingLlmPreview).toHaveTextContent('Credit Card');
 
     vi.unstubAllGlobals();
   });

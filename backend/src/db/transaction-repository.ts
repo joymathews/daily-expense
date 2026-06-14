@@ -31,6 +31,7 @@ export interface PendingTransaction {
   sourceSender?: string;
   sourceReceivedAt?: string;
   paymentMethod?: string;
+  paymentMethodRaw?: string;
   transactionType?: 'expense' | 'refund';
   parentTransactionId?: string;
 }

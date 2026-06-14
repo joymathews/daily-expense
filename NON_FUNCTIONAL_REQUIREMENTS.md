@@ -49,4 +49,6 @@
 - [NFR-LLM-2] Accuracy Aggregate Query Performance: The database query computing percentage match statistics across the ledger and LLM logs must execute within 100ms.
 - [NFR-USAB-17] Accuracy Metrics Visual Consistency: The dashboard parser performance card must adhere strictly to the custom 'Outfit' typography and glassmorphic styling of the core layout.
 - [NFR-USAB-18] Lineage Comparison Load Latency: Resolving and displaying the side-by-side comparison table in the detail modal must load within 150ms of expanding the lineage section.
+- [NFR-USAB-19] Staging Original Preview Load Latency: When reviewing a pending transaction in the Silver staging queue, the original LLM extracted details preview card must load and render within 150ms of opening the modal, utilizing standard 'Outfit' typography and card layout elements.
+
 

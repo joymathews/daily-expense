@@ -329,6 +329,7 @@ router.post('/extract', async (req, res) => {
           confidenceScore: 0.95,
           status: 'pending' as const,
           paymentMethod: standardizedMethod,
+          paymentMethodRaw: extracted.paymentMethod,
           transactionType: extracted.transactionType || 'expense',
           parentTransactionId: undefined,
         };

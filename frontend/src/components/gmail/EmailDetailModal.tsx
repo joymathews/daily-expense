@@ -568,6 +568,38 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   />
                 </div>
               </div>
+
+              {isSilver && llmLog && (
+                <div data-testid="silver-llm-extracted-preview" className="mt-4 border-t border-indigo-100/35 pt-4 space-y-2.5">
+                  <div className="text-[11px] font-bold text-gray-550 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🤖 Original LLM Extracted Details (Read-Only)</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50/60 p-3.5 rounded-xl border border-gray-150/50 text-xs">
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Merchant</span>
+                      <span className="font-semibold text-gray-800">{llmLog.extractedMerchant || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Amount</span>
+                      <span className="font-semibold text-gray-800">
+                        {llmLog.extractedAmount !== undefined && llmLog.extractedAmount !== null
+                          ? `${llmLog.extractedAmount.toFixed(2)} ${llmLog.extractedCurrency || 'INR'}`
+                          : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Category</span>
+                      <span className="font-semibold text-gray-800">{llmLog.extractedCategory || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase text-[9px] tracking-wide block mb-0.5">Payment Method</span>
+                      <span className="font-semibold text-gray-850 truncate block" title={llmLog.extractedPaymentMethod || 'Unknown'}>
+                        {llmLog.extractedPaymentMethod || 'Unknown'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             selectedEmail?.extracted && (

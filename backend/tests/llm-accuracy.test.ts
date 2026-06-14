@@ -58,6 +58,7 @@ describe('LLM Accuracy Ingestion and Metrics API [FUNC-GMAIL-40]', () => {
       confidenceScore: 0.95,
       status: 'pending',
       paymentMethod: 'UPI',
+      paymentMethodRaw: 'UPI HDFC BANK',
       transactionType: 'expense'
     });
 
@@ -71,7 +72,7 @@ describe('LLM Accuracy Ingestion and Metrics API [FUNC-GMAIL-40]', () => {
     expect(llmLog).not.toBeNull();
     expect(llmLog.extractedMerchant).toBe('Merchant A');
     expect(llmLog.extractedAmount).toBe(10.00);
-    expect(llmLog.extractedPaymentMethod).toBe('UPI');
+    expect(llmLog.extractedPaymentMethod).toBe('UPI HDFC BANK');
   });
 
   it('calculates LLM accuracy stats and exposes them via REST API [FUNC-GOLD-PAGE-9] [FUNC-GOLD-PAGE-10]', async () => {
