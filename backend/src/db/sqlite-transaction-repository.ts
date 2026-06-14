@@ -1083,16 +1083,31 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
     // 1. Fetch rules (supports +, & or , for AND combinations)
     const rules = await this.getPaymentMappingRules(userId);
+    let bestRule: any = null;
+    let maxPartsCount = 0;
+    let bestPatternLength = 0;
+
     for (const rule of rules) {
       if (rule.aliasPattern) {
         const parts = rule.aliasPattern.split(/[+&,]/).map((p: string) => p.trim().toLowerCase()).filter(Boolean);
         if (parts.length > 0) {
           const allMatch = parts.every((part: string) => lowerRaw.includes(part));
           if (allMatch) {
-            return rule.paymentMethodName || 'Unknown';
+            const partsCount = parts.length;
+            const patternLength = rule.aliasPattern.length;
+            // Pick rule with more parts, or tie-break on pattern length
+            if (partsCount > maxPartsCount || (partsCount === maxPartsCount && patternLength > bestPatternLength)) {
+              bestRule = rule;
+              maxPartsCount = partsCount;
+              bestPatternLength = patternLength;
+            }
           }
         }
       }
+    }
+
+    if (bestRule) {
+      return bestRule.paymentMethodName || 'Unknown';
     }
 
     // 2. If no rule matches, check if it matches any standardized method name exactly (case-insensitive)

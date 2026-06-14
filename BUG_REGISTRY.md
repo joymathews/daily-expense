@@ -189,9 +189,19 @@ Updated `revertSilverToBronze` in `sqlite-transaction-repository.ts` to run `DEL
 * **Test Case**: `backend/tests/llm-accuracy.test.ts`
   - *clears LLM log entry upon reverting Silver transaction to Bronze to allow fresh re-extraction [BUG-011]*
 
+---
 
+## [BUG-012] Payment Mapping Priority Conflict
 
+### Description
+When standardizing a payment method, the repository evaluates rules sequentially. A generic mapping rule checked first will intercept raw input that matches a more specific rule checked later (e.g. raw output `"hdfc rupay credit card"` matches generic `"hdfc"` or `"hdfc + credit + card"` and gets mapped, overriding `"hdfc + rupay"`).
 
+### Root Cause
+In `standardizePaymentMethod`, mapping rules are evaluated in a simple `for` loop as they are fetched from the database, and the first matching rule is immediately returned. There is no ranking or specificity check to ensure the most specific rule takes precedence.
 
+### Resolution
+Updated `standardizePaymentMethod` to run the matching logic over all user payment mapping rules in a single loop, tracking the matching rule that has the maximum number of matched parts (`parts.length`). If there is a tie in the number of parts, the rule with the longer pattern length is preferred.
 
-
+### Verification Test
+* **Test Case**: `backend/tests/gmail.test.ts`
+  - *should prioritize more specific payment mapping rules based on number of parts and length [BUG-012]*

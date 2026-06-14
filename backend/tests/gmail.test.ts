@@ -909,6 +909,54 @@ describe('Gmail API Integration', () => {
   });
 
   /**
+   * [BUG-012] Payment Mapping Priority Conflict.
+   * Verify that standardizePaymentMethod prioritizes matching rules with more parts,
+   * and tie-breaks using pattern length.
+   */
+  it('should prioritize more specific payment mapping rules based on number of parts and length [BUG-012]', async () => {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    const userId = 'user-priority-test';
+
+    // 1. Create standardized payment methods
+    const mHdfcId = crypto.randomUUID();
+    const mRupayId = crypto.randomUUID();
+    const mVisaId = crypto.randomUUID();
+    const mCardGenericId = crypto.randomUUID();
+    const mCardSpecificId = crypto.randomUUID();
+
+    await repository.savePaymentMethod({ id: mHdfcId, userId, name: 'HDFC Credit Card' });
+    await repository.savePaymentMethod({ id: mRupayId, userId, name: 'HDFC RuPay Credit Card' });
+    await repository.savePaymentMethod({ id: mVisaId, userId, name: 'HDFC Visa Credit Card' });
+    await repository.savePaymentMethod({ id: mCardGenericId, userId, name: 'HDFC Card Generic' });
+    await repository.savePaymentMethod({ id: mCardSpecificId, userId, name: 'HDFC Credit Card Specific' });
+
+    // 2. Save mapping rules
+    await repository.savePaymentMappingRule({ id: crypto.randomUUID(), userId, aliasPattern: 'hdfc', paymentMethodId: mHdfcId });
+    await repository.savePaymentMappingRule({ id: crypto.randomUUID(), userId, aliasPattern: 'hdfc + rupay', paymentMethodId: mRupayId });
+    await repository.savePaymentMappingRule({ id: crypto.randomUUID(), userId, aliasPattern: 'hdfc + credit + visa', paymentMethodId: mVisaId });
+    
+    // Tie-breaker rules (both 2 parts)
+    await repository.savePaymentMappingRule({ id: crypto.randomUUID(), userId, aliasPattern: 'hdfc + card', paymentMethodId: mCardGenericId });
+    await repository.savePaymentMappingRule({ id: crypto.randomUUID(), userId, aliasPattern: 'hdfc + creditcard', paymentMethodId: mCardSpecificId });
+
+    // 3. Scenario A: simple match (only "hdfc" matches)
+    const resA = await repository.standardizePaymentMethod(userId, 'hdfc cash payment');
+    expect(resA).toBe('HDFC Credit Card');
+
+    // 4. Scenario B: priority match (both "hdfc" and "hdfc + rupay" match. "hdfc + rupay" has 2 parts, so it wins)
+    const resB = await repository.standardizePaymentMethod(userId, 'hdfc rupay credit card');
+    expect(resB).toBe('HDFC RuPay Credit Card');
+
+    // 5. Scenario C: tie-breaker on pattern length (both "hdfc + card" and "hdfc + creditcard" match. "hdfc + creditcard" is longer, so it wins)
+    const resC = await repository.standardizePaymentMethod(userId, 'hdfc creditcard statement');
+    expect(resC).toBe('HDFC Credit Card Specific');
+
+    await repository.close();
+  });
+
+  /**
    * [FUNC-GMAIL-34] Retroactive standardization.
    * [NFR-USAB-10] Payment Standardization Usability.
    */
