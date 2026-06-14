@@ -2,6 +2,8 @@ import request from 'supertest';
 import { app } from '../src/app';
 import { google } from 'googleapis';
 import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import path from 'path';
+import fs from 'fs';
 
 // Mock googleapis
 jest.mock('googleapis', () => {
@@ -28,11 +30,46 @@ jest.mock('googleapis', () => {
 
 describe('Gmail API Integration', () => {
   const gmail = google.gmail('v1');
+  const testDbPath = path.resolve(__dirname, '../data/test_gmail.db');
+  let originalDatabaseUrl: string | undefined;
+
+  beforeAll(() => {
+    originalDatabaseUrl = process.env.DATABASE_URL;
+    // Create data directory if it does not exist
+    const dataDir = path.dirname(testDbPath);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+  });
+
+  afterAll(async () => {
+    if (originalDatabaseUrl) {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    } else {
+      delete process.env.DATABASE_URL;
+    }
+    if (fs.existsSync(testDbPath)) {
+      try {
+        fs.unlinkSync(testDbPath);
+      } catch (err) {
+        // Ignore errors unlinking test db
+      }
+    }
+  });
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    if (fs.existsSync(testDbPath)) {
+      try {
+        fs.unlinkSync(testDbPath);
+      } catch (err) {
+        // Ignore errors unlinking test db
+      }
+    }
+    process.env.DATABASE_URL = testDbPath;
+
     const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
-    const repository = new SQLiteTransactionRepository();
+    const repository = new SQLiteTransactionRepository(testDbPath);
     await repository.initializeSchema();
     await (repository as any).run("DELETE FROM gold_transactions WHERE silver_tx_id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2') OR id IN ('del_gold_1', 'validation_test_gold_1', 'approve_test_gold_1')");
     await (repository as any).run("DELETE FROM silver_extracted_transactions WHERE id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2')");

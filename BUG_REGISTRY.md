@@ -155,6 +155,24 @@ In `getPaymentMethods(userId)` inside `sqlite-transaction-repository.ts`, if the
 * **Test Case**: `backend/tests/llm-accuracy.test.ts`
   - *does not re-seed default payment methods and mapping rules once deleted by the user [BUG-009]*
 
+---
+
+## [BUG-010] Test Database Pollution Resetting User Preferences
+
+### Description
+Running the backend Jest integration test suite (specifically `gmail.test.ts`) clears tables (including `user_preferences` and `payment_methods`) from the active development database file `daily_expense.db` instead of an isolated test environment. This wipes the user seeding flags, causing the development app to auto-re-seed deleted payment methods and rules on the next query.
+
+### Root Cause
+`tests/gmail.test.ts` instantiates `SQLiteTransactionRepository` without any arguments, which defaults to the active development database file specified by `process.env.DATABASE_URL` (or `./data/daily_expense.db` inside `/backend`). The test suite does not redirect `process.env.DATABASE_URL` to a temporary test file.
+
+### Resolution
+Updated `tests/gmail.test.ts` to redirect `process.env.DATABASE_URL` to a temporary test database file (`test_gmail.db`) during test setup, and restore it on teardown. This ensures all database writes, schema initializations, and clears are isolated from the development database.
+
+### Verification Test
+* **Test Case**: `backend/tests/gmail.test.ts`
+  - *All Gmail API integration tests run against isolated test_gmail.db database*
+
+
 
 
 
