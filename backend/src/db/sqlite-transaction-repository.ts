@@ -857,6 +857,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       );
       if (silver) {
         await this.run(
+          'DELETE FROM llm_extraction_logs WHERE bronze_input_id = ? AND user_id = ?',
+          [silver.bronzeInputId, userId]
+        );
+        await this.run(
           "UPDATE bronze_raw_inputs SET status = 'unprocessed' WHERE id = ? AND user_id = ?",
           [silver.bronzeInputId, userId]
         );

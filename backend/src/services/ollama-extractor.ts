@@ -24,7 +24,7 @@ Ensure:
 - "amount" is a raw decimal number (e.g. 10.50). Do not prefix with currency symbols.
 - "currency" is a 3-letter ISO code (e.g. "USD", "INR", "EUR").
 - "date" is a standardized YYYY-MM-DD string.
-- "paymentMethod" must identify the bank name (e.g., "HDFC", "ICICI", "SBI", to find bank name scan the entire text) and payment mode (e.g., "UPI", "NEFT", "Credit Card", "Rupay Credit Card") where available. The output should combine these details (e.g., "HDFC Credit Card", "SBI UPI", "ICICI NEFT", "HDFC Rupay Credit Card"). If you cannot confidently identify the payment method, return "Unknown".
+- "paymentMethod" must identify the bank name (e.g., "HDFC", "ICICI", "SBI", to find bank name scan the entire text) and payment mode (e.g., "UPI", "NEFT", "Credit Card", "Rupay Credit Card",to find payment method scan the entire text) where available. The output should combine these details (e.g., "HDFC Credit Card", "SBI UPI", "ICICI NEFT", "HDFC Rupay Credit Card"). If you cannot confidently identify the payment method, return "Unknown".
 - "transactionType" must be "refund" if the email indicates a refund, reversal, reversal of debit, credit received, chargeback, or purchase cancellation. Otherwise, it must be "expense".
 - If any field cannot be found, set it to a default (e.g. category to "Other").
 `;

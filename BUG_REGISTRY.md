@@ -172,6 +172,24 @@ Updated `tests/gmail.test.ts` to redirect `process.env.DATABASE_URL` to a tempor
 * **Test Case**: `backend/tests/gmail.test.ts`
   - *All Gmail API integration tests run against isolated test_gmail.db database*
 
+---
+
+## [BUG-011] Stale LLM Logs Prevents Re-Extraction Updates After Reverting to Bronze
+
+### Description
+When a user reverts a Silver staging transaction back to Bronze raw input and extracts it again, the LLM extraction log in `llm_extraction_logs` is not updated. This leaves the old/stale LLM log values visible in the read-only preview card in the Silver detail modal.
+
+### Root Cause
+In `revertSilverToBronze(userId, silverId)` in `sqlite-transaction-repository.ts`, the database deletes records from `gold_transactions` and `silver_extracted_transactions`, and updates `bronze_raw_inputs.status` back to `'unprocessed'`. However, it does not delete the corresponding log from `llm_extraction_logs`. When the user triggers extraction again, the repository executes `INSERT OR IGNORE INTO llm_extraction_logs`, which ignores the write due to a UNIQUE constraint conflict on `bronze_input_id`.
+
+### Resolution
+Updated `revertSilverToBronze` in `sqlite-transaction-repository.ts` to run `DELETE FROM llm_extraction_logs WHERE bronze_input_id = ? AND user_id = ?` using the referenced `silver.bronzeInputId` value, ensuring a clean state for subsequent extractions.
+
+### Verification Test
+* **Test Case**: `backend/tests/llm-accuracy.test.ts`
+  - *clears LLM log entry upon reverting Silver transaction to Bronze to allow fresh re-extraction [BUG-011]*
+
+
 
 
 

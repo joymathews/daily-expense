@@ -220,4 +220,53 @@ describe('LLM Accuracy Ingestion and Metrics API [FUNC-GMAIL-40]', () => {
     const methods2 = await repository.getPaymentMethods(userId);
     expect(methods2.length).toBe(0);
   });
+
+  it('clears LLM log entry upon reverting Silver transaction to Bronze to allow fresh re-extraction [BUG-011]', async () => {
+    const rawInputId = 'raw_revert_123';
+    await repository.saveRawInput({
+      id: rawInputId,
+      userId,
+      sourceType: 'email',
+      sender: 'uber@rides.com',
+      title: 'Uber Ride',
+      snippet: 'Paid $15',
+      rawBody: 'Uber details...',
+      rawPayload: '{}',
+      receivedAt: new Date().toISOString(),
+      hasTransaction: true,
+      status: 'unprocessed'
+    });
+
+    const pendingTxId = crypto.randomUUID();
+    await repository.savePendingTransaction({
+      id: pendingTxId,
+      bronzeInputId: rawInputId,
+      userId,
+      sourceType: 'email',
+      merchantRaw: 'Uber',
+      amount: 15.00,
+      currency: 'USD',
+      transactionDate: '2026-06-12',
+      status: 'pending',
+      paymentMethod: 'UPI',
+      paymentMethodRaw: 'Original UPI Payment'
+    });
+
+    // Verify LLM log exists
+    let llmLog = await repository.getLlmExtractionLogByBronzeId(rawInputId, userId);
+    expect(llmLog).not.toBeNull();
+    expect(llmLog.extractedPaymentMethod).toBe('Original UPI Payment');
+
+    // Revert Silver staging to Bronze raw input
+    await repository.revertSilverToBronze(userId, pendingTxId);
+
+    // Verify LLM log is deleted
+    llmLog = await repository.getLlmExtractionLogByBronzeId(rawInputId, userId);
+    expect(llmLog).toBeNull();
+
+    // Verify raw input status is reverted to unprocessed
+    const rawInput = await repository.getRawInputById(rawInputId, userId);
+    expect(rawInput).toBeDefined();
+    expect(rawInput?.status).toBe('unprocessed');
+  });
 });
