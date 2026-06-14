@@ -1,0 +1,238 @@
+# SQLite Database Schema & Reference Manual
+
+This document provides a comprehensive technical overview of the SQLite database schema for the **Daily Expense** application. It details every table, data type, key relationship, index, data validation constraint, and the **User Isolation Standard** that enforces data security.
+
+---
+
+## Architectural Principles
+
+1. **Medallion Data Pipeline Structure**: 
+   The database is organized into three distinct stages of data evolution:
+   - **Bronze Layer (`bronze_raw_inputs`)**: Raw data ingestion. Retains the original receipt email content or manual input text.
+   - **Silver Layer (`silver_extracted_transactions`)**: Staging and parsing area. Holds extracted fields pending user correction, validation, and status reviews.
+   - **Gold Layer (`gold_transactions`)**: Confirmed double-entry ledger. Finalized transactions used for financial analysis, dashboards, and reporting.
+2. **User Isolation Standard**:
+   Every database table partitions records by a `user_id` field. The `user_id` is extracted from the secure AWS Cognito JWT sub claim (`req.auth.sub`). Any SELECT, INSERT, UPDATE, or DELETE query must strictly filter or constrain records by the authenticated user's ID to prevent cross-user data exposure.
+3. **Floating-Point Avoidance (Amount Cents)**:
+   To prevent IEEE 754 floating-point rounding errors during mathematical aggregates, all financial amounts are stored as integers representing **cents** or the lowest currency denomination (e.g., `$10.50` is stored as `1050`).
+4. **Standardized Normalization**:
+   Payment methods and mapping alias rules allow raw string patterns to normalize automatically into standard options before entering the Silver and Gold layers.
+
+---
+
+## Database Tables Reference
+
+### 1. `bronze_raw_inputs` (Bronze Ingestion Layer)
+This table acts as the raw ingestion sink. It stores receipt emails fetched via the Gmail API or manual raw receipt descriptions.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS bronze_raw_inputs (
+  id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  sender TEXT NOT NULL,
+  title TEXT NOT NULL,
+  snippet TEXT,
+  raw_body TEXT NOT NULL,
+  raw_payload TEXT,
+  received_at TEXT NOT NULL,
+  has_transaction INTEGER NOT NULL DEFAULT 1,
+  status TEXT DEFAULT 'unprocessed' CHECK (status IN ('unprocessed', 'processed', 'rejected')),
+  ingested_at TEXT DEFAULT (datetime('now', 'utc')),
+  deleted_at TEXT,
+  PRIMARY KEY (user_id, id)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | `PRIMARY KEY (Part 2)` | Unique identifier of the raw source. For emails, this maps directly to the unique Gmail API Message ID. For manual entry, it is a randomly generated uuid. |
+| **`user_id`** | `TEXT` | `PRIMARY KEY (Part 1)` | AWS Cognito user identity unique ID. Establishes the partition boundary for multi-tenant data privacy. |
+| **`source_type`** | `TEXT` | `NOT NULL` | The entry mechanism identifier. Stores `'email'` for records ingested via Gmail API, and `'manual'` for direct ledger creations. |
+| **`sender`** | `TEXT` | `NOT NULL` | The email address of the message sender (e.g., `support@merchant.com`). For manual direct entries, it defaults to `'User Direct'`. Helps identify source merchants. |
+| **`title`** | `TEXT` | `NOT NULL` | The email subject line or raw header identifier. Serves as the primary title in lists and review modals. |
+| **`snippet`** | `TEXT` | `Nullable` | A brief plain-text excerpt of the raw data. Displayed in high-density listings so users get quick context without reloading the full body text. |
+| **`raw_body`** | `TEXT` | `NOT NULL` | The complete plain-text message body or raw descriptive block. This content is passed to LLM modules for detail extraction and rendered in the lineage trace. |
+| **`raw_payload`** | `TEXT` | `Nullable` | A raw JSON serialization dump of the API payload (Gmail headers, metadata, etc.). Retained for diagnostics and audit logging. |
+| **`received_at`** | `TEXT` | `NOT NULL` | ISO-8601 string indicating when the email or raw record was received/recorded. Crucial for timeline filters and date sorting. |
+| **`has_transaction`** | `INTEGER` | `NOT NULL DEFAULT 1` | A binary flag (`1` for true, `0` for false) classifying if the item is a financial transaction. Used to filter out spam or non-receipt emails. |
+| **`status`** | `TEXT` | `CHECK (unprocessed, processed, rejected)` | Processing state. Tracks pipeline progress. `'unprocessed'` items await extraction; `'processed'` items have been staging-analyzed; `'rejected'` items are ignored by ingestion. |
+| **`ingested_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Audit timestamp showing exactly when the row was recorded in the database. |
+| **`deleted_at`** | `TEXT` | `Nullable` | ISO-8601 timestamp representing soft-delete status. If populated, the item is moved to the Trash Bin and hidden from active views. |
+
+---
+
+### 2. `silver_extracted_transactions` (Silver Staging Layer)
+Acts as the staging queue. It stores parsed key-value transaction properties extracted from Bronze raw inputs.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS silver_extracted_transactions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  bronze_input_id TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'email',
+  merchant_raw TEXT NOT NULL,
+  merchant_normalized TEXT,
+  amount_cents INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  transaction_date TEXT NOT NULL,
+  inferred_category TEXT,
+  confidence_score REAL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
+  payment_method TEXT,
+  transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+  parent_transaction_id TEXT,
+  deleted_at TEXT,
+  extracted_at TEXT DEFAULT (datetime('now', 'utc')),
+  FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+  UNIQUE(user_id, bronze_input_id),
+  UNIQUE(user_id, id)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | `PRIMARY KEY` | Unique UUID generated for the staging transaction record. |
+| **`user_id`** | `TEXT` | `NOT NULL` | AWS Cognito user sub. Partitions staging items. |
+| **`bronze_input_id`**| `TEXT` | `FOREIGN KEY` | References the parent raw input in the Bronze layer. Forms the Medallion data lineage link. Cascades deletion. |
+| **`source_type`** | `TEXT` | `DEFAULT 'email'` | Classification of the transaction source (e.g. `'email'`, `'manual'`). |
+| **`merchant_raw`** | `TEXT` | `NOT NULL` | The unmodified merchant name extracted directly from the receipt content by the parser. |
+| **`merchant_normalized`**| `TEXT`| `Nullable` | Normalized or user-corrected merchant spelling. Used as the default name when promoting the transaction. |
+| **`amount_cents`** | `INTEGER` | `NOT NULL` | Staged amount stored in cents. For instance, `$99.95` stores `9995`. Avoids floating-point math errors. |
+| **`currency`** | `TEXT` | `NOT NULL` | 3-letter currency code (e.g., `USD`, `INR`, `EUR`). |
+| **`transaction_date`**| `TEXT` | `NOT NULL` | The parsed date the transaction took place. |
+| **`inferred_category`**| `TEXT`| `Nullable` | Inferred transaction category based on merchant classification (e.g. `Travel`, `Food`). |
+| **`confidence_score`**| `REAL` | `Nullable` | Numeric value (0.0 to 1.0) indicating LLM extraction confidence. |
+| **`status`** | `TEXT` | `CHECK (pending, approved, rejected, error)` | Current review status. `'pending'` represents extracted and validated items; `'error'` highlights missing required fields; `'approved'` matches items promoted to Gold; `'rejected'` items are staging-dismissed. |
+| **`payment_method`** | `TEXT` | `Nullable` | Normalized payment channel (e.g. `Credit Card`, `UPI`). |
+| **`transaction_type`**| `TEXT` | `DEFAULT 'expense'` | Represents whether this is an `'expense'` (payment) or a `'refund'` (offset reversal). |
+| **`parent_transaction_id`**| `TEXT`| `Nullable` | In the case of a refund, references the matching parent purchase ID to correctly calculate credit balances. |
+| **`deleted_at`** | `TEXT` | `Nullable` | Soft-delete ISO-8601 timestamp for trash recovery. |
+| **`extracted_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Creation timestamp indicating when parsing was executed. |
+
+---
+
+### 3. `gold_transactions` (Gold Confirmed Ledger)
+Contains confirmed double-entry ledger entries. Holds final user-corrected data.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS gold_transactions (
+  id TEXT PRIMARY KEY,
+  silver_tx_id TEXT UNIQUE,
+  user_id TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'email',
+  merchant TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  transaction_date TEXT NOT NULL,
+  category TEXT NOT NULL,
+  notes TEXT,
+  payment_method TEXT,
+  transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+  parent_transaction_id TEXT,
+  deleted_at TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'utc')),
+  updated_at TEXT DEFAULT (datetime('now', 'utc')),
+  FOREIGN KEY (user_id, silver_tx_id) REFERENCES silver_extracted_transactions(user_id, id) ON DELETE SET NULL,
+  FOREIGN KEY (user_id, parent_transaction_id) REFERENCES gold_transactions(user_id, id) ON DELETE SET NULL,
+  UNIQUE(user_id, id)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | `PRIMARY KEY` | Unique UUID generated for the confirmed ledger transaction. |
+| **`silver_tx_id`** | `TEXT` | `UNIQUE, FOREIGN KEY`| References the matching Silver staging record. Forms the lineage lineage from staging back to source. If staging is deleted, this is set to NULL. |
+| **`user_id`** | `TEXT` | `NOT NULL` | AWS Cognito user sub. Partitions ledger entries. |
+| **`source_type`** | `TEXT` | `DEFAULT 'email'` | Classification of the confirmation source (e.g. `'manual'`, `'email'`). |
+| **`merchant`** | `TEXT` | `NOT NULL` | The finalized, user-corrected name of the merchant. |
+| **`amount_cents`** | `INTEGER` | `NOT NULL` | Confirmed transaction value stored as cents. |
+| **`currency`** | `TEXT` | `NOT NULL` | Confirmed currency identifier. |
+| **`transaction_date`**| `TEXT` | `NOT NULL` | The date of the transaction. |
+| **`category`** | `TEXT` | `NOT NULL` | Confirmed transaction category (e.g. `Travel`, `Shopping`). |
+| **`notes`** | `TEXT` | `Nullable` | Freeform notes, annotations, or comments appended by the user during review. |
+| **`payment_method`** | `TEXT` | `Nullable` | Standardized payment channel verified by the user. |
+| **`transaction_type`**| `TEXT` | `DEFAULT 'expense'` | Transaction type designation (`'expense'` or `'refund'`). Refunds are evaluated as negative deductions from category aggregates. |
+| **`parent_transaction_id`**| `TEXT`| `FOREIGN KEY` | References another verified transaction inside `gold_transactions`. Used to chain credit offsets to parent purchases. |
+| **`deleted_at`** | `TEXT` | `Nullable` | Soft-delete ISO-8601 timestamp. Supports trash and recovery. |
+| **`created_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Timestamp tracking when the entry was finalized and approved. |
+| **`updated_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Timestamp tracking the last modification or correction time. |
+
+---
+
+### 4. `payment_methods` (Standardization Reference)
+Stores standardized payment channels defined by users.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now', 'utc')),
+  UNIQUE(user_id, name)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | `PRIMARY KEY` | Unique ID generated for the payment method registry. |
+| **`user_id`** | `TEXT` | `NOT NULL` | AWS Cognito sub. Payment configuration is user-specific. |
+| **`name`** | `TEXT` | `NOT NULL, UNIQUE` | The user's standardized payment method name (e.g. `'Amex Credit Card'`). Populates standard form dropdown selections. |
+| **`created_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Audit log of method creation. |
+
+---
+
+### 5. `payment_mapping_rules` (Standardization Alias Rules)
+Stores rules that map parsed billing method strings to standardized payment method rows.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS payment_mapping_rules (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  alias_pattern TEXT NOT NULL,
+  payment_method_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now', 'utc')),
+  FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE CASCADE,
+  UNIQUE(user_id, alias_pattern)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | `PRIMARY KEY` | Unique ID generated for the mapping rule. |
+| **`user_id`** | `TEXT` | `NOT NULL` | AWS Cognito user sub. Rules configurations are user-specific. |
+| **`alias_pattern`** | `TEXT` | `NOT NULL, UNIQUE` | Text substring or match pattern (e.g., `'hdfc'`, `'visa'`) found during raw message ingestion. |
+| **`payment_method_id`**| `TEXT` | `FOREIGN KEY` | The reference standardized payment method ID in `payment_methods`. If match pattern matches during extraction, method defaults to this ID. Cascades on method deletion. |
+| **`created_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Audit log of rule creation. |
+
+---
+
+## Indexes Reference
+
+To optimize performance and query speeds, the following custom database indexes are defined:
+
+1. **`idx_bronze_inputs_sender`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_bronze_inputs_sender ON bronze_raw_inputs(sender);`
+   - *Justification*: Optimizes filtering, grouping, and searching raw receipts based on sender addresses when tracing sources.
+2. **`idx_silver_tx_status`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_silver_tx_status ON silver_extracted_transactions(status);`
+   - *Justification*: Accelerates retrieval of pending review rows and error logs in staging tables, reducing table scan latency.
+3. **`idx_gold_tx_user_date`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_gold_tx_user_date ON gold_transactions(user_id, transaction_date);`
+   - *Justification*: Essential index for Ledger pages. Optimizes range searches, search queries, pagination, and total sum aggregates grouped by transaction dates and currencies.
+4. **`idx_payment_methods_user`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_payment_methods_user ON payment_methods(user_id);`
+   - *Justification*: Rapid lookup of standardized payment methods for form selections.
+5. **`idx_payment_rules_user`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_payment_rules_user ON payment_mapping_rules(user_id);`
+   - *Justification*: Optimizes ingestion mapping loops where a user's alias rules are compared against extracted data.
