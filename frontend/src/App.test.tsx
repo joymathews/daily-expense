@@ -2953,6 +2953,91 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [BUG-008] Delete Signature Mismatch for Manual Gold Ledger Entries on Ledger Page
+   */
+  it('supports deleting manual Gold transactions directly from the Ledger page details modal [BUG-008]', async () => {
+    const mockManualTx = {
+      id: 'gold_manual_999',
+      userId: 'user-1',
+      sourceType: 'manual',
+      merchant: 'Manual Merchant B',
+      amount: 150.00,
+      currency: 'USD',
+      transactionDate: '2026-06-12',
+      category: 'Shopping',
+      paymentMethod: 'Cash',
+      notes: 'Manual payment notes'
+    };
+
+    let goldList = [mockManualTx];
+    const deleteMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'reverted' }) });
+
+    const mockFetch = vi.fn().mockImplementation((url, options) => {
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: goldList }) });
+      }
+      if (url.includes('/api/pipeline/revert-to-silver')) {
+        return deleteMock(url, options);
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ rules: [] }) });
+      }
+      // fallback other pipeline mocks
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Ledger page
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Click the manual entry merchant cell to open details
+    const merchantCell = await screen.findByText('Manual Merchant B');
+    fireEvent.click(merchantCell);
+
+    // Modal should open
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // Verify the delete button says "Delete" (since it's a manual entry) and click it
+    const deleteBtn = within(modal).getByTestId('modal-delete-btn');
+    expect(deleteBtn).toHaveTextContent('Delete');
+    fireEvent.click(deleteBtn);
+
+    // Confirmation modal should open, showing manual deletion title
+    const confirmModal = screen.getByTestId('delete-confirmation-modal');
+    expect(confirmModal).toBeInTheDocument();
+    expect(within(confirmModal).getByText(/Delete Manual Transaction/i)).toBeInTheDocument();
+
+    // Confirm deletion
+    const confirmBtn = within(confirmModal).getByTestId('confirm-delete-btn');
+    fireEvent.click(confirmBtn);
+
+    // Verify delete endpoint was hit with correct goldId
+    await waitFor(() => {
+      expect(deleteMock).toHaveBeenCalled();
+    });
+    const deletePayload = JSON.parse(deleteMock.mock.calls[0][1].body);
+    expect(deletePayload.goldId).toBe('gold_manual_999');
+
+    vi.unstubAllGlobals();
+  });
 });
 
 

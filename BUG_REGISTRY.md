@@ -118,6 +118,25 @@ In the Medallion Pipeline, when a user approves Silver staging transactions to t
 * **Test Case**: `frontend/src/App.test.tsx`
   - *allows the user to reject a staging transaction from the detail view modal and updates counts*
 
+---
+
+## [BUG-008] Delete Signature Mismatch for Manual Gold Ledger Entries on Ledger Page
+
+### Description
+On the Ledger page (`/transactions`), clicking the "Delete" button inside the details modal for a manual Gold ledger entry displays a confirmation modal with the incorrect "Revert to Staging" header/description and fails to delete/revert the record upon confirmation.
+
+### Root Cause
+The `EmailDetailModal` component's `onDeleteClick` prop expects the signature `(stage: 'bronze' | 'silver' | 'gold', lineage: { bronzeId?: string; silverId?: string; goldId?: string }) => void`.
+However, the Ledger page `GoldTransactions.tsx` passes `handleGoldDeleteClick` which has the signature `(tx: GoldTransaction) => void`.
+When `onDeleteClick('gold', lineage)` is triggered, the argument `'gold'` is bound to `tx`, making `tx.sourceType` and all other fields `undefined`. Consequently, `isDeleteManual` is set to `false`, and the deletion lineage is set to empty values, which causes the confirmation modal to display "Revert to Staging" and make an invalid API call.
+
+### Resolution
+Refactored `handleGoldDeleteClick` in `GoldTransactions.tsx` to accept both direct `GoldTransaction` object and `(stage, lineage)` parameters. When called with `(stage, lineage)`, it correctly determines whether the transaction is manual by looking it up in the `goldTransactions` list, setting `isDeleteManual` and `deleteLineage` appropriately.
+
+### Verification Test
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *supports deleting manual Gold transactions directly from the Ledger page details modal [BUG-008]*
+
 
 
 

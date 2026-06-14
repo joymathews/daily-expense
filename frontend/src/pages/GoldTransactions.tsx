@@ -33,15 +33,30 @@ const GoldTransactions: React.FC = () => {
   const [deleteSourceStage, setDeleteSourceStage] = useState<'bronze' | 'silver' | 'gold'>('gold');
   const [isDeleteManual, setIsDeleteManual] = useState(false);
 
-  const handleGoldDeleteClick = (tx: GoldTransaction) => {
+  const handleGoldDeleteClick = (
+    firstArg: GoldTransaction | 'bronze' | 'silver' | 'gold',
+    secondArg?: { bronzeId?: string; silverId?: string; goldId?: string }
+  ) => {
     setSelectedGoldTransaction(null);
-    setDeleteLineage({
-      bronzeId: tx.bronzeInputId,
-      silverId: tx.pendingTxId,
-      goldId: tx.id,
-    });
-    setDeleteSourceStage('gold');
-    setIsDeleteManual(tx.sourceType === 'manual');
+    if (typeof firstArg === 'string') {
+      const stage = firstArg;
+      const lineage = secondArg || {};
+      setDeleteLineage(lineage);
+      setDeleteSourceStage(stage);
+      
+      const isManualGold = stage === 'gold' && !!lineage.goldId &&
+        goldTransactions.some(g => g.id === lineage.goldId && g.sourceType === 'manual');
+      setIsDeleteManual(isManualGold);
+    } else {
+      const tx = firstArg;
+      setDeleteLineage({
+        bronzeId: tx.bronzeInputId,
+        silverId: tx.pendingTxId,
+        goldId: tx.id,
+      });
+      setDeleteSourceStage('gold');
+      setIsDeleteManual(tx.sourceType === 'manual');
+    }
     setIsDeleteModalOpen(true);
   };
 
