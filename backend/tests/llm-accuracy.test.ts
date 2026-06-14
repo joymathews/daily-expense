@@ -202,4 +202,21 @@ describe('LLM Accuracy Ingestion and Metrics API [FUNC-GMAIL-40]', () => {
     expect(logRes.body.log.extractedAmount).toBe(100.00);
     expect(logRes.body.log.extractedPaymentMethod).toBe('UPI');
   });
+
+  it('does not re-seed default payment methods and mapping rules once deleted by the user [BUG-009]', async () => {
+    // 1. Initial query seeds defaults
+    const methods1 = await repository.getPaymentMethods(userId);
+    expect(methods1.length).toBeGreaterThan(0);
+    const hasUpi = methods1.some(m => m.name === 'UPI');
+    expect(hasUpi).toBe(true);
+
+    // 2. User deletes all payment methods
+    for (const m of methods1) {
+      await repository.deletePaymentMethod(m.id, userId);
+    }
+
+    // 3. Querying again should return 0 methods, not re-seed them!
+    const methods2 = await repository.getPaymentMethods(userId);
+    expect(methods2.length).toBe(0);
+  });
 });

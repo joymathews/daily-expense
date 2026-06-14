@@ -39,6 +39,7 @@ describe('Gmail API Integration', () => {
     await (repository as any).run("DELETE FROM bronze_raw_inputs WHERE id IN ('detail_msg_1', 'test_raw_tx_1', 'test_raw_otp_1', 'del_bronze_1')");
     await (repository as any).run("DELETE FROM payment_mapping_rules");
     await (repository as any).run("DELETE FROM payment_methods");
+    await (repository as any).run("DELETE FROM user_preferences");
     await repository.close();
   });
 

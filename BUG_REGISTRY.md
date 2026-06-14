@@ -137,6 +137,24 @@ Refactored `handleGoldDeleteClick` in `GoldTransactions.tsx` to accept both dire
 * **Test Case**: `frontend/src/App.test.tsx`
   - *supports deleting manual Gold transactions directly from the Ledger page details modal [BUG-008]*
 
+---
+
+## [BUG-009] Automatic Re-seeding of Deleted Payment Methods & Rules
+
+### Description
+When a user deletes all payment methods and rules, they are automatically recreated (re-seeded) by the database on the next query/load.
+
+### Root Cause
+In `getPaymentMethods(userId)` inside `sqlite-transaction-repository.ts`, if the count of payment methods for the user is `0`, the repository assumes it is a fresh/new user profile and calls `seedDefaultPaymentMethodsAndRules`. This prevents users from ever clearing or having `0` customized payment methods.
+
+### Resolution
+1. Created a `user_preferences` table to track if a user has already had their defaults seeded (`defaults_seeded INTEGER`).
+2. Updated `getPaymentMethods(userId)` to check `user_preferences` table. If the user has already been seeded (`defaults_seeded = 1`), do not auto-seed, allowing the list of payment methods to remain empty.
+
+### Verification Test
+* **Test Case**: `backend/tests/llm-accuracy.test.ts`
+  - *does not re-seed default payment methods and mapping rules once deleted by the user [BUG-009]*
+
 
 
 

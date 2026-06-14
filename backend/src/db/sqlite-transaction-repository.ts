@@ -209,6 +209,14 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
     await this.run('CREATE INDEX IF NOT EXISTS idx_payment_methods_user ON payment_methods(user_id);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_payment_rules_user ON payment_mapping_rules(user_id);');
+
+    // Track user preferences (e.g. if defaults have been seeded to prevent auto-recreating them after deletion)
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id TEXT PRIMARY KEY,
+        defaults_seeded INTEGER DEFAULT 0
+      );
+    `);
   }
 
   async emailExists(gmailId: string, userId: string): Promise<boolean> {
@@ -965,12 +973,22 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
   }
 
   async getPaymentMethods(userId: string): Promise<any[]> {
+    const pref = await this.get<any>(
+      'SELECT defaults_seeded FROM user_preferences WHERE user_id = ?',
+      [userId]
+    );
+    const hasSeeded = pref ? pref.defaults_seeded === 1 : false;
+
     const rows = await this.all<any>(
       'SELECT * FROM payment_methods WHERE user_id = ? ORDER BY name ASC',
       [userId]
     );
-    if (rows.length === 0) {
+    if (!hasSeeded && rows.length === 0) {
       await this.seedDefaultPaymentMethodsAndRules(userId);
+      await this.run(
+        'INSERT OR REPLACE INTO user_preferences (user_id, defaults_seeded) VALUES (?, 1)',
+        [userId]
+      );
       const newRows = await this.all<any>(
         'SELECT * FROM payment_methods WHERE user_id = ? ORDER BY name ASC',
         [userId]
