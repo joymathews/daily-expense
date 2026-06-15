@@ -509,6 +509,17 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     );
   }
 
+  /**
+   * Atomically marks a raw input as rejected AND non-transactional.
+   * Calling this ensures the two fields never diverge when a user rejects a record.
+   */
+  async rejectRawInput(id: string, userId: string): Promise<void> {
+    await this.run(
+      'UPDATE bronze_raw_inputs SET status = \'rejected\', has_transaction = 0 WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+  }
+
   async getSilverTransactions(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<PendingTransaction[]> {
     let sql = `
       SELECT s.*, b.title AS source_title, b.sender AS source_sender, b.received_at AS source_received_at

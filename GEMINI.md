@@ -11,7 +11,7 @@ For ALL future changes, feature implementations, and code modifications, you mus
    - Design the solution in alignment with the [Architectural and Design Policies](#7-architectural-and-design-policies-solid--clean-code-reference) in Section 7.
    - Account for existing functional `FUNCTIONAL_DOCUMENTATION.md` and non-functional requirements `NON_FUNCTIONAL_REQUIREMENTS.md`, as well as current bugs/defects `BUG_REGISTRY.md`.
    - Outline how the solution will be tested, including validation strategies for edge-case scenarios.
-2. **Functional Requirements:** Explicitly define functional requirements and update `FUNCTIONAL_DOCUMENTATION.md` FIRST.
+2. **Functional Requirements:** Explicitly define functional requirements and update `FUNCTIONAL_DOCUMENTATION.md` FIRST. All functional requirements MUST be written in a **user-centric** style — describing what the user can do or experience, not what the system does internally. Use language such as *"The user must be able to..."*, *"When the user does X, the system must Y"*, or *"The user must see/receive/be notified of..."*. Requirements written from a purely technical, system-centric perspective are not acceptable.
 3. **Non-Functional Requirements:** Update `NON_FUNCTIONAL_REQUIREMENTS.md` with system qualities (Security, Performance, Availability, Scalability, Usability, etc.).
 4. **Tech Stack & Standards:** Document all technical stack choices, library additions, and engineering standards in Section 3 of this `GEMINI.md` file. NEVER add these to requirement documents.
 5. **Requirements Hygiene:** NEVER include technical noise, shell command outputs, or implementation logs in documentation.
@@ -84,6 +84,7 @@ When writing or refactoring code, enforce the following standards for readabilit
 * **Don't Repeat Yourself (DRY):** Eliminate duplication. Abstract repetitive logic, structures, or algorithms into reusable functions or utility modules.
 * **Self-Documenting Code over Comments:** Write code that reads like well-written prose. Only use comments to explain the *why* behind a non-obvious business decision or a complex workaround, never to explain *what* a poorly named variable or function is doing.
 * **Scout Rule:** Always leave the code cleaner than you found it. If you modify a file, take a moment to fix minor clean-code violations within that scope.
+* **User-Centric Naming:** Functions, UI labels, API actions, and event handlers must be named from the **user's perspective** — describing what the user does or achieves, not internal system mechanics. Examples: prefer `rejectTransaction()` over `setStatusRejected()`, prefer `approveStagingEntry()` over `promoteToGoldLayer()`, prefer button label *"Mark as Non-Transactional"* over *"Update hasTransaction Flag"*. If a function name makes sense only to a developer and not to the user whose action triggers it, rename it.
 
 ### 3. Architectural Metrics for Success
 * **High Cohesion:** Code that changes together must live together. Functions and classes must be highly focused on their singular domain task.

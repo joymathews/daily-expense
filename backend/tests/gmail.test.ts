@@ -1156,4 +1156,107 @@ describe('Gmail API Integration', () => {
   });
 });
 
+describe('[FUNC-GMAIL-48] Reject Implies Non-Transactional Classification', () => {
+  /**
+   * [FUNC-GMAIL-48] Single rejection: rejecting a Bronze raw input via PUT must
+   * atomically set status='rejected' AND hasTransaction=false.
+   */
+  it('should atomically set status=rejected and hasTransaction=false when the user rejects a single Bronze input', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
 
+    const rawId = 'func48_single_reject_raw_1';
+    await repository.saveRawInput({
+      id: rawId,
+      userId: 'user-123',
+      sourceType: 'email',
+      sender: 'bank@hdfc.com',
+      title: 'HDFC Transaction Alert',
+      snippet: 'Your card was charged INR 500',
+      rawBody: 'Full email body content',
+      rawPayload: JSON.stringify({ id: rawId }),
+      receivedAt: '2026-06-15T10:00:00Z',
+    });
+    await repository.close();
+
+    // User rejects the single Bronze raw input
+    const rejectRes = await request(app)
+      .put(`/api/pipeline/raw-inputs/${rawId}`)
+      .set('Authorization', 'Bearer valid-token')
+      .send({ status: 'rejected' });
+
+    expect(rejectRes.status).toBe(200);
+
+    // Verify both fields changed atomically in the database
+    const fetchRes = await request(app)
+      .get('/api/pipeline/raw-inputs')
+      .set('Authorization', 'Bearer valid-token');
+
+    const record = fetchRes.body.emails.find((e: any) => e.id === rawId);
+    expect(record).toBeDefined();
+    expect(record.status).toBe('rejected');
+    expect(record.hasTransaction).toBe(false);
+
+    // Clean up
+    const repo2 = new SQLiteTransactionRepository();
+    await repo2.initializeSchema();
+    await (repo2 as any).run('DELETE FROM bronze_raw_inputs WHERE id = ?', [rawId]);
+    await repo2.close();
+  });
+
+  /**
+   * [FUNC-GMAIL-48] Batch rejection: rejecting multiple Bronze raw inputs via POST reject-batch
+   * must atomically set status='rejected' AND hasTransaction=false for all targeted records.
+   */
+  it('should atomically set status=rejected and hasTransaction=false for all inputs when the user batch-rejects Bronze records', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    const rawId1 = 'func48_batch_reject_raw_1';
+    const rawId2 = 'func48_batch_reject_raw_2';
+
+    for (const rawId of [rawId1, rawId2]) {
+      await repository.saveRawInput({
+        id: rawId,
+        userId: 'user-123',
+        sourceType: 'email',
+        sender: 'bank@hdfc.com',
+        title: `HDFC Alert ${rawId}`,
+        snippet: 'Your card was charged',
+        rawBody: 'Full email body content',
+        rawPayload: JSON.stringify({ id: rawId }),
+        receivedAt: '2026-06-15T10:00:00Z',
+      });
+    }
+    await repository.close();
+
+    // User batch-rejects both Bronze raw inputs
+    const rejectRes = await request(app)
+      .post('/api/pipeline/reject-batch')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ rawEmailIds: [rawId1, rawId2] });
+
+    expect(rejectRes.status).toBe(200);
+    expect(rejectRes.body.status).toBe('rejected');
+
+    // Verify both fields changed atomically in the database for each record
+    const fetchRes = await request(app)
+      .get('/api/pipeline/raw-inputs')
+      .set('Authorization', 'Bearer valid-token');
+
+    for (const rawId of [rawId1, rawId2]) {
+      const record = fetchRes.body.emails.find((e: any) => e.id === rawId);
+      expect(record).toBeDefined();
+      expect(record.status).toBe('rejected');
+      expect(record.hasTransaction).toBe(false);
+    }
+
+    // Clean up
+    const repo2 = new SQLiteTransactionRepository();
+    await repo2.initializeSchema();
+    await (repo2 as any).run('DELETE FROM bronze_raw_inputs WHERE id IN (?, ?)', [rawId1, rawId2]);
+    await repo2.close();
+  });
+});

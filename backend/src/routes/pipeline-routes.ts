@@ -65,7 +65,12 @@ router.put(['/raw-inputs/:id', '/raw-emails/:id'], async (req, res) => {
         await repository.close();
         return res.status(400).json({ error: "status must be 'unprocessed', 'processed', or 'rejected'" });
       }
-      await repository.updateRawInputStatus(id, userId, status);
+      // Rejecting a record also marks it as non-transactional (atomic operation)
+      if (status === 'rejected') {
+        await repository.rejectRawInput(id, userId);
+      } else {
+        await repository.updateRawInputStatus(id, userId, status);
+      }
     }
 
     await repository.close();
@@ -268,7 +273,8 @@ router.post('/reject-batch', async (req, res) => {
     for (const id of rawEmailIds) {
       const input = await repository.getRawInputById(id, userId);
       if (input) {
-        await repository.updateRawInputStatus(id, userId, 'rejected');
+        // Rejecting a record also marks it as non-transactional (atomic operation)
+        await repository.rejectRawInput(id, userId);
       }
     }
 

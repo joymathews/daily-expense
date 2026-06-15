@@ -632,14 +632,16 @@ export const useGmailIntegration = () => {
   };
 
   const rejectBronzeInput = async (id: string) => {
+    // Optimistically mark as rejected AND non-transactional so the record
+    // immediately moves from the Transactions sub-tab to Non-Transactional
     setRawEmails(prev =>
       prev.map(email =>
-        email.id === id ? { ...email, status: 'rejected' } : email
+        email.id === id ? { ...email, status: 'rejected', hasTransaction: false } : email
       )
     );
     setEmails(prev =>
       prev.map(email =>
-        email.id === id ? { ...email, status: 'rejected' } : email
+        email.id === id ? { ...email, status: 'rejected', hasTransaction: false } : email
       )
     );
 
@@ -661,14 +663,15 @@ export const useGmailIntegration = () => {
   const rejectBronzeInputsBatch = async (ids: string[]) => {
     if (ids.length === 0) return;
 
+    // Optimistically mark all targeted records as rejected AND non-transactional
     setRawEmails(prev =>
       prev.map(email =>
-        ids.includes(email.id) ? { ...email, status: 'rejected' } : email
+        ids.includes(email.id) ? { ...email, status: 'rejected', hasTransaction: false } : email
       )
     );
     setEmails(prev =>
       prev.map(email =>
-        ids.includes(email.id) ? { ...email, status: 'rejected' } : email
+        ids.includes(email.id) ? { ...email, status: 'rejected', hasTransaction: false } : email
       )
     );
 

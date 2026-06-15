@@ -2526,6 +2526,12 @@ describe('Requirement Traceability Matrix Verification', () => {
         const body = JSON.parse(init.body);
         if (body.status) {
           mockEmail.status = body.status;
+          // [FUNC-GMAIL-48] Rejection also marks the record as non-transactional
+          if (body.status === 'rejected') {
+            (mockEmail as any).hasTransaction = false;
+          } else if (body.status === 'unprocessed') {
+            (mockEmail as any).hasTransaction = true;
+          }
         }
       } catch (e) {}
       return Promise.resolve({
@@ -2607,17 +2613,19 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Close detail modal
     fireEvent.click(within(modal).getByRole('button', { name: /Dismiss/i }));
 
-    // Back on the list view, verify status badge in the row shows 'Rejected'
-    expect(screen.getByText('✗ Rejected')).toBeInTheDocument();
+    // [FUNC-GMAIL-48] After rejection, the row must disappear from the Transactions sub-tab
+    await waitFor(() => {
+      expect(screen.queryByText('Bronze Raw Receipt')).not.toBeInTheDocument();
+    });
 
-    // Check filter functionality: filter by unprocessed should hide the rejected email
+    // Navigate to Non-Transactional sub-tab to verify the record appears there with rejected filter
+    const nonTransactionalTab = screen.getByRole('button', { name: /Non-Transactional/i });
+    fireEvent.click(nonTransactionalTab);
+
+    // Filter by rejected should show the rejected email in the Non-Transactional sub-tab
     const filterSelect = screen.getByLabelText(/Filter:/i);
-    fireEvent.change(filterSelect, { target: { value: 'unprocessed' } });
-    expect(screen.queryByText('Bronze Raw Receipt')).not.toBeInTheDocument();
-
-    // Filter by rejected should show the rejected email
     fireEvent.change(filterSelect, { target: { value: 'rejected' } });
-    expect(screen.getByText('Bronze Raw Receipt')).toBeInTheDocument();
+    expect(await screen.findByText('Bronze Raw Receipt')).toBeInTheDocument();
 
     // Re-open detail modal and restore
     fireEvent.click(screen.getByText('Bronze Raw Receipt'));
@@ -2638,9 +2646,6 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Close detail modal
     fireEvent.click(within(modal2).getByRole('button', { name: /Dismiss/i }));
-
-    // Row status badge updates to 'Unprocessed'
-    expect(screen.getByText('Unprocessed')).toBeInTheDocument();
 
     // Navigate back to Dashboard and verify metrics
     fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
@@ -2768,14 +2773,16 @@ describe('Requirement Traceability Matrix Verification', () => {
       );
     });
 
-    // Verify row status badges update to '✗ Rejected'
+    // [FUNC-GMAIL-48] After rejection, both records must disappear from the Transactions sub-tab
+    // (they are now non-transactional and move to the Non-Transactional sub-tab)
     await waitFor(() => {
-      expect(screen.getAllByText('✗ Rejected').length).toBe(2);
+      expect(screen.queryByText('Bronze Raw 10')).not.toBeInTheDocument();
+      expect(screen.queryByText('Bronze Raw 20')).not.toBeInTheDocument();
     });
 
-    // Checkboxes should now be disabled
-    expect(checkbox1).toBeDisabled();
-    expect(checkbox2).toBeDisabled();
+    // Non-Transactional tab should now show count 2
+    const nonTransactionalTab = screen.getByRole('button', { name: /Non-Transactional/i });
+    expect(nonTransactionalTab.textContent).toContain('2');
 
     // Navigate back to Dashboard and verify metrics
     fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
@@ -2784,6 +2791,90 @@ describe('Requirement Traceability Matrix Verification', () => {
     const updatedUnprocessedEl = await screen.findByTestId('dashboard-bronze-unprocessed');
     expect(updatedUnprocessedEl).toHaveTextContent('0 Unprocessed');
     expect(screen.getByTestId('dashboard-bronze-rejected')).toHaveTextContent('2 Rejected');
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-48] Reject Implies Non-Transactional Classification:
+   * After the user rejects a Bronze raw input, it must immediately move
+   * from the Transactions sub-tab to the Non-Transactional sub-tab.
+   */
+  it('moves a rejected Bronze input from Transactions to Non-Transactional sub-tab immediately', async () => {
+    const mockEmails = [
+      {
+        id: 'func48-email-1',
+        sender: 'bank@hdfc.com',
+        subject: 'HDFC Transaction Alert',
+        date: '2026-06-15T10:00:00Z',
+        snippet: 'Your card was charged INR 500',
+        body: 'Full email body content',
+        hasTransaction: true,
+        status: 'unprocessed' as const,
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      // Simulate PUT /api/pipeline/raw-inputs/:id with status=rejected
+      if (url.includes('/api/pipeline/raw-inputs/func48-email-1') && init?.method === 'PUT') {
+        const body = JSON.parse(init.body as string);
+        if (body.status === 'rejected') {
+          const email = mockEmails.find(e => e.id === 'func48-email-1');
+          if (email) {
+            email.status = 'rejected';
+            (email as any).hasTransaction = false;
+          }
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'updated' }) });
+      }
+      if (url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: mockEmails }) });
+      }
+      if (url.includes('/api/gmail/silver-transactions') || url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/gold-transactions') || url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/gmail/deleted') || url.includes('/api/pipeline/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Pipeline', '/pipeline');
+    render(<App />);
+
+    // Confirm the email appears in the Transactions sub-tab
+    expect(await screen.findByText('HDFC Transaction Alert')).toBeInTheDocument();
+
+    // The Transactions badge should show 1
+    const transactionTab = screen.getByRole('button', { name: /Transactions/i });
+    expect(transactionTab.textContent).toContain('1');
+
+    // Reject the email via checkbox + batch reject
+    const emailRow = screen.getByText('HDFC Transaction Alert').closest('tr')!;
+    const checkbox = within(emailRow).getByRole('checkbox');
+    fireEvent.click(checkbox);
+
+    const rejectBtn = screen.getByTestId('batch-reject-btn');
+    fireEvent.click(rejectBtn);
+
+    // After rejection, the record should be gone from the Transactions sub-tab
+    await waitFor(() => {
+      expect(screen.queryByText('HDFC Transaction Alert')).not.toBeInTheDocument();
+    });
+
+    // Non-Transactional tab should now show 1
+    const nonTransactionalTab = screen.getByRole('button', { name: /Non-Transactional/i });
+    expect(nonTransactionalTab.textContent).toContain('1');
 
     vi.unstubAllGlobals();
   });
