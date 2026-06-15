@@ -3277,8 +3277,11 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('15.50')).toBeInTheDocument(); // USD total
 
     // 1. Filter by Category: Food
-    const categorySelect = screen.getByLabelText(/Category:/i);
-    fireEvent.change(categorySelect, { target: { value: 'Food' } });
+    const categoryBtn = screen.getByLabelText(/Category:/i);
+    fireEvent.click(categoryBtn);
+    
+    const foodCheckbox = screen.getByRole('checkbox', { name: 'Food' });
+    fireEvent.click(foodCheckbox);
 
     // Supermarket A and Restaurant B should remain, Taxi Ride should disappear
     expect(screen.getByText('Supermarket A')).toBeInTheDocument();
@@ -3290,8 +3293,11 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.queryByText('15.50')).not.toBeInTheDocument();
 
     // 2. Filter by Payment Method: Cash (while Category is still Food)
-    const methodSelect = screen.getByLabelText(/Payment Method:/i);
-    fireEvent.change(methodSelect, { target: { value: 'Cash' } });
+    const methodBtn = screen.getByLabelText(/Payment Method:/i);
+    fireEvent.click(methodBtn);
+    
+    const cashCheckbox = screen.getByRole('checkbox', { name: 'Cash' });
+    fireEvent.click(cashCheckbox);
 
     // Restaurant B (Food + Cash) should remain, Supermarket A (Food + UPI) should disappear
     expect(screen.getByText('Restaurant B')).toBeInTheDocument();
@@ -3301,18 +3307,47 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('20.00')).toBeInTheDocument();
     expect(screen.queryByText('70.00')).not.toBeInTheDocument();
 
-    // 3. Reset filters (Category = all, Method = all)
-    fireEvent.change(categorySelect, { target: { value: 'all' } });
-    fireEvent.change(methodSelect, { target: { value: 'all' } });
+    // 3. Reset filters (uncheck Food & Cash)
+    fireEvent.click(foodCheckbox);
+    fireEvent.click(categoryBtn); // close category dropdown
+    
+    fireEvent.click(cashCheckbox);
+    fireEvent.click(methodBtn); // close method dropdown
 
     // Verify all visible again
     expect(screen.getByText('Supermarket A')).toBeInTheDocument();
     expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
     expect(screen.getByText('Restaurant B')).toBeInTheDocument();
 
-    // 4. Filter by Source: Manual Entry
-    const sourceSelect = screen.getByLabelText(/Source:/i);
-    fireEvent.change(sourceSelect, { target: { value: 'manual' } });
+    // 4. Test multi-select options for Payment Method (Cash + UPI)
+    fireEvent.click(methodBtn);
+    const cashCheckboxMulti = screen.getByRole('checkbox', { name: 'Cash' });
+    const upiCheckboxMulti = screen.getByRole('checkbox', { name: 'UPI' });
+    
+    // Check both Cash and UPI
+    fireEvent.click(cashCheckboxMulti);
+    fireEvent.click(upiCheckboxMulti);
+    
+    // All 3 should be visible
+    expect(screen.getByText('Supermarket A')).toBeInTheDocument();
+    expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
+    expect(screen.getByText('Restaurant B')).toBeInTheDocument();
+    
+    // Uncheck UPI -> Supermarket A should disappear, Taxi Ride & Restaurant B should remain
+    fireEvent.click(upiCheckboxMulti);
+    expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
+    expect(screen.getByText('Restaurant B')).toBeInTheDocument();
+    expect(screen.queryByText('Supermarket A')).not.toBeInTheDocument();
+    
+    // Uncheck Cash to reset
+    fireEvent.click(cashCheckboxMulti);
+    fireEvent.click(methodBtn); // close method dropdown
+
+    // 5. Filter by Source: Manual Entry
+    const sourceBtn = screen.getByLabelText(/Source:/i);
+    fireEvent.click(sourceBtn);
+    const manualCheckbox = screen.getByRole('checkbox', { name: 'Manual Entry' });
+    fireEvent.click(manualCheckbox);
 
     // Taxi Ride (manual) should remain, Supermarket A & Restaurant B (email) should disappear
     expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
@@ -3323,13 +3358,19 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('15.50')).toBeInTheDocument();
     expect(screen.queryByText('70.00')).not.toBeInTheDocument();
 
-    // 5. Filter by Source: Email Ingested
-    fireEvent.change(sourceSelect, { target: { value: 'email' } });
+    // Uncheck Manual Entry, check Email Ingested
+    fireEvent.click(manualCheckbox);
+    const emailCheckbox = screen.getByRole('checkbox', { name: 'Email Ingested' });
+    fireEvent.click(emailCheckbox);
 
     // Supermarket A & Restaurant B should remain, Taxi Ride should disappear
     expect(screen.getByText('Supermarket A')).toBeInTheDocument();
     expect(screen.getByText('Restaurant B')).toBeInTheDocument();
     expect(screen.queryByText('Taxi Ride')).not.toBeInTheDocument();
+    
+    // Reset source filter
+    fireEvent.click(emailCheckbox);
+    fireEvent.click(sourceBtn); // close source dropdown
 
     vi.unstubAllGlobals();
   });

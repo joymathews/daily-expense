@@ -3,6 +3,7 @@ import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import type { GoldTransaction } from '../hooks/use-gmail-integration';
 import { EmailDetailModal } from '../components/gmail/EmailDetailModal';
 import { DeleteConfirmationModal } from '../components/gmail/DeleteConfirmationModal';
+import { MultiSelect } from '../components/MultiSelect';
 
 const GoldTransactions: React.FC = () => {
   const {
@@ -25,9 +26,9 @@ const GoldTransactions: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filters state
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedMethod, setSelectedMethod] = useState<string>('all');
-  const [selectedSource, setSelectedSource] = useState<string>('all');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
 
   // Sort state
   const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc'>('dateDesc');
@@ -86,23 +87,23 @@ const GoldTransactions: React.FC = () => {
 
   // 1. Filter transactions by search query, category, payment method, and source type
   const filteredTransactions = goldTransactions.filter(tx => {
-    // Check Category Filter
-    if (selectedCategory !== 'all' && tx.category !== selectedCategory) {
+    // Check Category Filter (multi-select)
+    if (selectedCategories.length > 0 && !selectedCategories.includes(tx.category)) {
       return false;
     }
 
-    // Check Payment Method Filter
-    if (selectedMethod !== 'all') {
+    // Check Payment Method Filter (multi-select)
+    if (selectedMethods.length > 0) {
       const method = tx.paymentMethod || 'Unknown';
-      if (method !== selectedMethod) {
+      if (!selectedMethods.includes(method)) {
         return false;
       }
     }
 
-    // Check Source Filter
-    if (selectedSource !== 'all') {
-      const source = tx.sourceType || 'email';
-      if (source !== selectedSource) {
+    // Check Source Filter (multi-select)
+    if (selectedSources.length > 0) {
+      const sourceDisplay = tx.sourceType === 'manual' ? 'Manual Entry' : 'Email Ingested';
+      if (!selectedSources.includes(sourceDisplay)) {
         return false;
       }
     }
@@ -204,57 +205,34 @@ const GoldTransactions: React.FC = () => {
           </div>
 
           {/* Category Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="category-filter" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-              Category:
-            </label>
-            <select
-              id="category-filter"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
-            >
-              <option value="all">All Categories</option>
-              {uniqueCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
+          <MultiSelect
+            id="category-filter"
+            label="Category:"
+            options={uniqueCategories}
+            selectedValues={selectedCategories}
+            onChange={setSelectedCategories}
+            placeholder="All Categories"
+          />
 
           {/* Payment Method Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="method-filter" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-              Payment Method:
-            </label>
-            <select
-              id="method-filter"
-              value={selectedMethod}
-              onChange={(e) => setSelectedMethod(e.target.value)}
-              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
-            >
-              <option value="all">All Payment Methods</option>
-              {uniqueMethods.map(method => (
-                <option key={method} value={method}>{method}</option>
-              ))}
-            </select>
-          </div>
+          <MultiSelect
+            id="method-filter"
+            label="Payment Method:"
+            options={uniqueMethods}
+            selectedValues={selectedMethods}
+            onChange={setSelectedMethods}
+            placeholder="All Payment Methods"
+          />
 
           {/* Ingestion Source Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="source-filter" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-              Source:
-            </label>
-            <select
-              id="source-filter"
-              value={selectedSource}
-              onChange={(e) => setSelectedSource(e.target.value)}
-              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
-            >
-              <option value="all">All Ingestion Sources</option>
-              <option value="email">Email Ingested</option>
-              <option value="manual">Manual Entry</option>
-            </select>
-          </div>
+          <MultiSelect
+            id="source-filter"
+            label="Source:"
+            options={['Email Ingested', 'Manual Entry']}
+            selectedValues={selectedSources}
+            onChange={setSelectedSources}
+            placeholder="All Ingestion Sources"
+          />
         </div>
 
         {/* Row 2: Date Filters */}
