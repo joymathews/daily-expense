@@ -6,6 +6,7 @@ interface DeleteConfirmationModalProps {
   onConfirm: () => void;
   sourceStage: 'bronze' | 'silver' | 'gold';
   isManual?: boolean;
+  lineage?: { bronzeId?: string; silverId?: string; goldId?: string };
 }
 
 export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({

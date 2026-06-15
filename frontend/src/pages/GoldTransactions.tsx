@@ -29,6 +29,7 @@ const GoldTransactions: React.FC = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
 
   // Sort state
   const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc' | 'categoryAsc' | 'categoryDesc'>('dateDesc');
@@ -40,6 +41,10 @@ const GoldTransactions: React.FC = () => {
 
   const uniqueMethods = Array.from(
     new Set(goldTransactions.map(tx => tx.paymentMethod || 'Unknown'))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const uniqueCurrencies = Array.from(
+    new Set(goldTransactions.map(tx => tx.currency).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b));
 
   // Modal control states
@@ -108,6 +113,11 @@ const GoldTransactions: React.FC = () => {
       }
     }
 
+    // Check Currency Filter (multi-select)
+    if (selectedCurrencies.length > 0 && !selectedCurrencies.includes(tx.currency)) {
+      return false;
+    }
+
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
 
@@ -171,23 +181,8 @@ const GoldTransactions: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-white border border-gray-150/60 rounded-3xl p-6 shadow-sm space-y-4">
-        {/* Row 1: Keyword, Sorting, and Filters */}
+        {/* Row 1: Sorting and Filters */}
         <div className="flex flex-wrap items-center gap-4">
-          {/* Keyword Search */}
-          <div className="flex flex-col min-w-[200px] flex-grow md:max-w-xs">
-            <label htmlFor="search-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-              Keyword Search:
-            </label>
-            <input
-              id="search-input"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by keyword..."
-              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
-            />
-          </div>
-
           {/* Sorting */}
           <div className="flex flex-col min-w-[150px]">
             <label htmlFor="sort-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
@@ -239,10 +234,35 @@ const GoldTransactions: React.FC = () => {
             onChange={setSelectedSources}
             placeholder="All Ingestion Sources"
           />
+
+          {/* Currency Filter */}
+          <MultiSelect
+            id="currency-filter"
+            label="Currency:"
+            options={uniqueCurrencies}
+            selectedValues={selectedCurrencies}
+            onChange={setSelectedCurrencies}
+            placeholder="All Currencies"
+          />
         </div>
 
-        {/* Row 2: Date Filters */}
+        {/* Row 2: Keyword Search and Date Filters */}
         <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-gray-100">
+          {/* Keyword Search */}
+          <div className="flex flex-col min-w-[200px] flex-grow md:max-w-xs">
+            <label htmlFor="search-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+              Keyword Search:
+            </label>
+            <input
+              id="search-input"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by keyword..."
+              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
+            />
+          </div>
+
           <div className="flex items-center gap-3">
             <div className="flex flex-col">
               <label htmlFor="start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
@@ -320,12 +340,13 @@ const GoldTransactions: React.FC = () => {
                 <th className="px-6 py-4 text-left">Method</th>
                 <th className="px-6 py-4 text-left">Notes</th>
                 <th className="px-6 py-4 text-right">Amount</th>
+                <th className="px-6 py-4 text-center">Currency</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2.5">
                       <div className="w-8 h-8 border-4 border-indigo-650 border-t-transparent rounded-full animate-spin"></div>
                       <p className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest animate-pulse">Loading Ledger Items...</p>
@@ -334,7 +355,7 @@ const GoldTransactions: React.FC = () => {
                 </tr>
               ) : sortedTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No verified ledger items found</p>
                   </td>
                 </tr>
@@ -392,9 +413,14 @@ const GoldTransactions: React.FC = () => {
                       {tx.notes || '-'}
                     </td>
 
-                    {/* Amount + Currency */}
+                    {/* Amount */}
                     <td className={`px-6 py-4 font-extrabold text-right whitespace-nowrap ${tx.transactionType === 'refund' ? 'text-emerald-600' : 'text-gray-800'}`}>
-                      {tx.transactionType === 'refund' ? '-' : ''}{tx.amount.toFixed(2)} {tx.currency}
+                      {tx.transactionType === 'refund' ? '-' : ''}{tx.amount.toFixed(2)}
+                    </td>
+
+                    {/* Currency */}
+                    <td className="px-6 py-4 font-bold text-center text-gray-650 whitespace-nowrap">
+                      {tx.currency}
                     </td>
                   </tr>
                 ))

@@ -900,7 +900,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(screen.getByText('Merchant A'));
 
     // Check modal displays payment method input with value UPI
-    const paymentMethodInput = screen.getByLabelText(/Payment Method/i);
+    const paymentMethodInput = screen.getByLabelText('Payment Method', { selector: 'select' });
     expect(paymentMethodInput).toHaveValue('UPI');
 
     // Edit the payment method
@@ -919,7 +919,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(screen.getByText('Merchant B'));
 
     // Check modal displays gold transaction payment method input with value HDFC credit card
-    const pmInputGold = screen.getByLabelText(/Payment Method/i);
+    const pmInputGold = screen.getByLabelText('Payment Method', { selector: 'select' });
     expect(pmInputGold).toHaveValue('HDFC credit card');
 
     // Edit gold payment method
@@ -1173,9 +1173,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(headerTexts).toContain('Method');
     expect(headerTexts).toContain('Status / Action');
     
-    // Verify specific column ordering (Date is the first data column, followed by Merchant)
+    // Verify specific column ordering (Date is the first data column, followed by Source, then Merchant)
     expect(headerTexts[1]).toBe('Date');
-    expect(headerTexts[2]).toBe('Merchant');
+    expect(headerTexts[2]).toBe('Source');
+    expect(headerTexts[3]).toBe('Merchant');
     
     // Check that stacked columns and separate Status and Action columns DO NOT exist
     expect(headerTexts).not.toContain('Category & Method');
@@ -1255,9 +1256,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(headerTexts).not.toContain('Lineage / Comments');
     expect(headerTexts).not.toContain('Action');
     
-    // Verify specific column ordering (Date is first data column, followed by Merchant)
+    // Verify specific column ordering (Date is first data column, followed by Source, then Merchant)
     expect(headerTexts[0]).toBe('Date');
-    expect(headerTexts[1]).toBe('Merchant');
+    expect(headerTexts[1]).toBe('Source');
+    expect(headerTexts[2]).toBe('Merchant');
     
     // Check that stacked column DOES NOT exist
     expect(headerTexts).not.toContain('Category & Method');
@@ -1266,8 +1268,8 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('2026-06-12')).toBeInTheDocument();
     expect(screen.getByText('Gold Stacked Method')).toBeInTheDocument();
 
-    // Verify that the comment/notes are not visible on the table page initially
-    expect(screen.queryByText('Verified comment')).not.toBeInTheDocument();
+    // Verify that the comment/notes are visible on the table page since Notes is a column
+    expect(screen.getByText('Verified comment')).toBeInTheDocument();
 
     // Click the Merchant cell to open the modal
     fireEvent.click(screen.getByText('Special Gold Merchant'));
@@ -1318,7 +1320,7 @@ describe('Requirement Traceability Matrix Verification', () => {
       { id: 'silver_1', rawEmailId: 'email_1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-01', status: 'approved', paymentMethod: 'UPI' }
     ];
     const mockGold = [
-      { id: 'gold_1', pendingTxId: 'silver_1', userId: 'user1', merchant: 'Merchant A Confirmed', amount: 100, currency: 'INR', transactionDate: '2023-01-01', category: 'Food', paymentMethod: 'UPI', bronzeEmailId: 'email_1' }
+      { id: 'gold_1', pendingTxId: 'silver_1', userId: 'user1', merchant: 'Merchant A Confirmed', amount: 100, currency: 'INR', transactionDate: '2023-01-01', category: 'Food', paymentMethod: 'UPI', bronzeInputId: 'email_1' }
     ];
 
     const mockFetch = vi.fn().mockImplementation((url) => {
@@ -1408,7 +1410,7 @@ describe('Requirement Traceability Matrix Verification', () => {
       { id: 'silver_2', rawEmailId: 'email_2', merchantRaw: 'Merchant B', amount: 200, currency: 'INR', transactionDate: '2023-01-01', status: 'pending', paymentMethod: 'UPI' }
     ];
     const mockGold = [
-      { id: 'gold_1', pendingTxId: 'silver_1', userId: 'user1', merchant: 'Merchant A Confirmed', amount: 100, currency: 'INR', transactionDate: '2023-01-01', category: 'Food', paymentMethod: 'UPI', bronzeEmailId: 'email_1' }
+      { id: 'gold_1', pendingTxId: 'silver_1', userId: 'user1', merchant: 'Merchant A Confirmed', amount: 100, currency: 'INR', transactionDate: '2023-01-01', category: 'Food', paymentMethod: 'UPI', bronzeInputId: 'email_1' }
     ];
 
     const deletedEmails = [
@@ -2178,10 +2180,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText('Business trip')).toBeInTheDocument();
 
     // Verify totals summary widget elements
-    expect(screen.getByText('INR')).toBeInTheDocument();
-    expect(screen.getByText('50.00')).toBeInTheDocument();
-    expect(screen.getByText('USD')).toBeInTheDocument();
-    expect(screen.getByText('15.50')).toBeInTheDocument();
+    expect(screen.getAllByText('INR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('50.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('USD').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('15.50').length).toBeGreaterThan(0);
 
     vi.unstubAllGlobals();
   });
@@ -2952,7 +2954,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
 
     // Ledger table should contain the refund row and the negative amount
-    expect(await screen.findByText('-50.00 USD')).toBeInTheDocument();
+    expect(await screen.findByText('-50.00')).toBeInTheDocument();
 
     // The currency totals widget should offset the refund: 120 - 50 = 70 USD
     expect(screen.getByText('70.00')).toBeInTheDocument();
@@ -3117,7 +3119,7 @@ describe('Requirement Traceability Matrix Verification', () => {
               {
                 id: 'gold_tx_123',
                 pendingTxId: 'silver_tx_123',
-                bronzeEmailId: 'bronze_log_123',
+                bronzeInputId: 'bronze_log_123',
                 merchant: 'Uber Corrected',
                 amount: 15.50,
                 currency: 'USD',
@@ -3286,7 +3288,7 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Verify initial currency totals
     expect(screen.getByText('70.00')).toBeInTheDocument(); // INR total (50 + 20)
-    expect(screen.getByText('15.50')).toBeInTheDocument(); // USD total
+    expect(screen.getAllByText('15.50').length).toBeGreaterThan(0); // USD total
 
     // 1. Filter by Category: Food
     const categoryBtn = screen.getByLabelText(/Category:/i);
@@ -3316,7 +3318,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.queryByText('Supermarket A')).not.toBeInTheDocument();
 
     // Verify currency totals (INR 20.00 visible)
-    expect(screen.getByText('20.00')).toBeInTheDocument();
+    expect(screen.getAllByText('20.00').length).toBeGreaterThan(0);
     expect(screen.queryByText('70.00')).not.toBeInTheDocument();
 
     // 3. Reset filters (uncheck Food & Cash)
@@ -3367,7 +3369,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.queryByText('Restaurant B')).not.toBeInTheDocument();
 
     // Verify totals (USD 15.50 visible)
-    expect(screen.getByText('15.50')).toBeInTheDocument();
+    expect(screen.getAllByText('15.50').length).toBeGreaterThan(0);
     expect(screen.queryByText('70.00')).not.toBeInTheDocument();
 
     // Uncheck Manual Entry, check Email Ingested
@@ -3474,11 +3476,11 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByTestId('email-detail-modal')).toBeInTheDocument();
     expect(screen.getByLabelText(/Merchant/i)).toHaveValue('Uber');
     expect(screen.getByLabelText(/Amount/i)).toHaveValue(15.5);
-    expect(screen.getByLabelText(/Currency/i)).toHaveValue('USD');
+    expect(screen.getByLabelText('Currency', { selector: 'input' })).toHaveValue('USD');
 
     // Change amount to 10.50 and currency to EUR
     fireEvent.change(screen.getByLabelText(/Amount/i), { target: { value: '10.5' } });
-    fireEvent.change(screen.getByLabelText(/Currency/i), { target: { value: 'EUR' } });
+    fireEvent.change(screen.getByLabelText('Currency', { selector: 'input' }), { target: { value: 'EUR' } });
 
     // Save Changes first
     const saveBtn = screen.getByRole('button', { name: /Save Updates/i });
@@ -3577,10 +3579,10 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     // Expect modal is open
     expect(screen.getByTestId('email-detail-modal')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Currency/i)).toHaveValue('INR');
+    expect(screen.getByLabelText('Currency', { selector: 'input' })).toHaveValue('INR');
 
     // Modify currency value to USD
-    fireEvent.change(screen.getByLabelText(/Currency/i), { target: { value: 'USD' } });
+    fireEvent.change(screen.getByLabelText('Currency', { selector: 'input' }), { target: { value: 'USD' } });
 
     // Click Save Changes button
     const saveBtn = screen.getByRole('button', { name: /Save Corrections/i });
@@ -3593,6 +3595,185 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Verify updated currency code is passed in body updates
     const lastUpdateCallArgs = JSON.parse(updateGoldMock.mock.calls[0][1].body);
     expect(lastUpdateCallArgs.currency).toBe('USD');
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-46] / [FUNC-GMAIL-47] / [NFR-USAB-24]:
+   * Verify uniform filtering (keyword search, sort, Category, Method, Source, Currency) and
+   * the dedicated Currency column display in Silver staging, Gold pipeline queue, and Gold ledger pages.
+   */
+  it('displays dedicated currency columns and filters by currency code across Silver, Gold pipeline, and Gold ledger tables', async () => {
+    const mockSilver = [
+      {
+        id: 'silver-1',
+        bronzeInputId: 'email-1',
+        rawEmailId: 'email-1',
+        sourceType: 'email',
+        merchantRaw: 'Uber',
+        merchantNormalized: 'Uber',
+        amount: 15.50,
+        currency: 'USD',
+        transactionDate: '2026-06-12',
+        inferredCategory: 'Transport',
+        paymentMethod: 'Credit Card',
+        status: 'pending',
+        emailSubject: 'Uber Ride Receipt'
+      },
+      {
+        id: 'silver-2',
+        bronzeInputId: 'email-2',
+        rawEmailId: 'email-2',
+        sourceType: 'manual',
+        merchantRaw: 'Groceries',
+        merchantNormalized: 'Groceries',
+        amount: 45.00,
+        currency: 'INR',
+        transactionDate: '2026-06-13',
+        inferredCategory: 'Groceries',
+        paymentMethod: 'Cash',
+        status: 'pending',
+        emailSubject: ''
+      }
+    ];
+
+    const mockGold = [
+      {
+        id: 'gold-1',
+        pendingTxId: 'silver-1',
+        userId: 'user-1',
+        sourceType: 'email',
+        merchant: 'Uber',
+        amount: 15.50,
+        currency: 'USD',
+        transactionDate: '2026-06-12',
+        category: 'Transport',
+        notes: 'uber ride',
+        paymentMethod: 'Credit Card'
+      },
+      {
+        id: 'gold-2',
+        pendingTxId: 'silver-2',
+        userId: 'user-1',
+        sourceType: 'manual',
+        merchant: 'Groceries',
+        amount: 45.00,
+        currency: 'INR',
+        transactionDate: '2026-06-13',
+        category: 'Groceries',
+        notes: 'weekly groceries',
+        paymentMethod: 'Cash'
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockSilver }) });
+      }
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      if (url.includes('/api/pipeline/llm-accuracy-stats')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ stats: { overallAccuracy: 100, fields: {} } }) });
+      }
+      if (url.includes('/api/pipeline/llm-logs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ log: null }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // 1. Navigate to Medallion Transaction Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // 2. Select Silver tab
+    const silverTabBtn = await screen.findByRole('button', { name: /Silver \(Staging Queue\)/i });
+    fireEvent.click(silverTabBtn);
+
+    // Verify both items are rendered
+    expect(await screen.findByText('Uber')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getAllByText('Groceries').length).toBeGreaterThan(0);
+ 
+    // Verify Amount and separate Currency columns are rendered
+    expect(screen.getAllByText('15.50').length).toBeGreaterThan(0);
+    expect(screen.getByText('45.00')).toBeInTheDocument();
+    expect(screen.getAllByText('USD').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('INR').length).toBeGreaterThan(0);
+ 
+    // Filter Silver by Currency = INR
+    const silverCurrencyBtn = screen.getByLabelText('Currency:');
+    fireEvent.click(silverCurrencyBtn);
+    const inrCheckbox = screen.getByLabelText('INR');
+    fireEvent.click(inrCheckbox);
+ 
+    // After filtering by INR, Uber (USD) should be gone, Groceries (INR) should be present
+    await waitFor(() => {
+      expect(screen.queryByText('Uber')).not.toBeInTheDocument();
+      expect(within(screen.getByRole('table')).getAllByText('Groceries').length).toBeGreaterThan(0);
+    });
+ 
+    // Reset currency filter by unchecking
+    fireEvent.click(inrCheckbox);
+    fireEvent.click(silverCurrencyBtn); // close dropdown
+ 
+    // 3. Switch to Gold Pipeline Tab
+    const goldTabBtn = screen.getByRole('button', { name: /Gold \(Confirmed Ledger\)/i });
+    fireEvent.click(goldTabBtn);
+ 
+    // Verify both items in gold pipeline table
+    expect(await screen.findByText('Uber')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getAllByText('Groceries').length).toBeGreaterThan(0);
+ 
+    // Filter Gold Pipeline by Category = Transport
+    const goldCategoryBtn = screen.getByLabelText('Category:');
+    fireEvent.click(goldCategoryBtn);
+    const transportCheckbox = screen.getByLabelText('Transport');
+    fireEvent.click(transportCheckbox);
+ 
+    // After filtering by Transport, Groceries should be gone from the table
+    await waitFor(() => {
+      expect(within(screen.getByRole('table')).queryByText('Groceries')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Uber').length).toBeGreaterThan(0);
+    });
+ 
+    // Reset categories filter by unchecking
+    fireEvent.click(transportCheckbox);
+    fireEvent.click(goldCategoryBtn); // close dropdown
+ 
+    // 4. Navigate to main Ledger page
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+ 
+    // Verify items and columns are correct in Ledger table
+    expect(await screen.findByText('Uber')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getAllByText('Groceries').length).toBeGreaterThan(0);
+ 
+    // Filter Ledger page by Currency = USD
+    const ledgerCurrencyBtn = screen.getByLabelText('Currency:');
+    fireEvent.click(ledgerCurrencyBtn);
+    const usdCheckbox = screen.getByLabelText('USD');
+    fireEvent.click(usdCheckbox);
+ 
+    // After filtering, Groceries (INR) is gone from the table
+    await waitFor(() => {
+      expect(within(screen.getByRole('table')).queryByText('Groceries')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Uber').length).toBeGreaterThan(0);
+    });
 
     vi.unstubAllGlobals();
   });

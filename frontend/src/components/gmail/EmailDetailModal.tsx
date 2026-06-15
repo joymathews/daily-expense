@@ -92,7 +92,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const [rawBodyForGoldLineage, setRawBodyForGoldLineage] = useState('');
   const [llmLog, setLlmLog] = useState<any | null>(null);
 
-  const bronzeInputIdForLog = selectedGoldTransaction?.bronzeEmailId || selectedEmail?.id;
+  const bronzeInputIdForLog = selectedGoldTransaction?.bronzeInputId || selectedEmail?.id;
 
   useEffect(() => {
     if (bronzeInputIdForLog && fetchLlmLog) {
@@ -202,8 +202,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 
     if (selectedGoldTransaction) {
       goldRecord = selectedGoldTransaction;
-      if (selectedGoldTransaction.bronzeEmailId) {
-        bronzeRecord = rawEmails.find(e => e.id === selectedGoldTransaction.bronzeEmailId) || null;
+      if (selectedGoldTransaction.bronzeInputId) {
+        bronzeRecord = rawEmails.find(e => e.id === selectedGoldTransaction.bronzeInputId) || null;
       }
       if (selectedGoldTransaction.pendingTxId) {
         silverRecord = silverTransactions.find(tx => tx.id === selectedGoldTransaction.pendingTxId) || null;
@@ -213,7 +213,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       // Find in Silver Staging
       silverRecord = silverTransactions.find(tx => tx.rawEmailId === selectedEmail.id) || null;
       // Find in Gold confirmed
-      goldRecord = goldTransactions.find(tx => tx.bronzeEmailId === selectedEmail.id || (silverRecord && tx.pendingTxId === silverRecord.id)) || null;
+      goldRecord = goldTransactions.find(tx => tx.bronzeInputId === selectedEmail.id || (silverRecord && tx.pendingTxId === silverRecord.id)) || null;
     }
 
     return { bronzeRecord, silverRecord, goldRecord };
@@ -235,16 +235,16 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setRawBodyForGoldLineage('');
       
       // Load raw body for lineage if we have a bronze ID
-      if (selectedGoldTransaction.bronzeEmailId) {
+      if (selectedGoldTransaction.bronzeInputId) {
         fetchAuthSession()
           .then(session => {
             const token = session.tokens?.idToken?.toString();
-            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
             return fetch(`/api/gmail/raw-emails`, { headers });
           })
           .then(res => res.json())
           .then(data => {
-            const match = (data.emails || []).find((e: any) => e.id === selectedGoldTransaction.bronzeEmailId);
+            const match = (data.emails || []).find((e: any) => e.id === selectedGoldTransaction.bronzeInputId);
             if (match) {
               setRawBodyForGoldLineage(match.rawBody || '');
             }

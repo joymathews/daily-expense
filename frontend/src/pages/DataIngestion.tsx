@@ -60,7 +60,7 @@ const DataIngestion: React.FC = () => {
   const [category, setCategory] = useState('Other');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [notes, setNotes] = useState('');
-  const [transactionType, setTransactionType] = useState('expense');
+  const [transactionType, setTransactionType] = useState<'expense' | 'refund'>('expense');
   const [parentTransactionId, setParentTransactionId] = useState('');
 
   const parentCandidates = goldTransactions.filter(tx => tx.transactionType !== 'refund');
@@ -413,7 +413,7 @@ const DataIngestion: React.FC = () => {
                   id="manual-type"
                   value={transactionType}
                   onChange={(e) => {
-                    setTransactionType(e.target.value);
+                    setTransactionType(e.target.value as 'expense' | 'refund');
                     if (e.target.value !== 'refund') {
                       setParentTransactionId('');
                     }

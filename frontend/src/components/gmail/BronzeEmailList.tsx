@@ -28,32 +28,28 @@ interface BronzeEmailListProps {
   rejectBronzeInput?: (id: string) => Promise<void> | void;
 }
 
-export const BronzeEmailList: React.FC<BronzeEmailListProps> = ({
-  visibleRawEmails,
-  checkedEmailIds,
-  unprocessedEmails,
-  isLoading,
-  isEmailProcessed,
-  toggleEmailCheck,
-  toggleSelectAll,
-  handleBatchExtract,
-  handleBatchReject,
-  setSelectedEmail,
-  markAsTransaction,
-  markAsNonTransaction,
-  extractSelectedEmails,
-  bronzeSubTab,
-  setActiveTab,
-  rawEmails,
-  bronzeFilter,
-  setBronzeFilter,
-  onDeleteClick,
-  startDate,
-  setStartDate,
-  endDate,
-  setEndDate,
-  rejectBronzeInput,
-}) => {
+export const BronzeEmailList: React.FC<BronzeEmailListProps> = (props) => {
+  const {
+    visibleRawEmails,
+    checkedEmailIds,
+    unprocessedEmails,
+    isLoading,
+    isEmailProcessed,
+    toggleEmailCheck,
+    toggleSelectAll,
+    handleBatchExtract,
+    handleBatchReject,
+    setSelectedEmail,
+    bronzeSubTab,
+    setActiveTab,
+    rawEmails,
+    bronzeFilter,
+    setBronzeFilter,
+    startDate,
+    setStartDate,
+    endDate,
+    setEndDate,
+  } = props;
   return (
     <div>
       <div className="border-b border-gray-100 bg-gray-50/70 flex flex-col md:flex-row justify-between items-stretch md:items-center px-4 py-2 gap-3">

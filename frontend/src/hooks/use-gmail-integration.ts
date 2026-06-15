@@ -168,7 +168,7 @@ export const useGmailIntegration = () => {
   const [selectedEmail, setSelectedEmail] = useState<GmailMessage | null>(null);
 
   // Helper to fetch authorization headers dynamically
-  const getAuthHeaders = async () => {
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
     try {
       const session = await fetchAuthSession();
       const token = session.tokens?.idToken?.toString();
@@ -878,12 +878,12 @@ export const useGmailIntegration = () => {
                 fetchedEmails.push(mapped);
                 setEmails([...fetchedEmails]);
                 setRawEmails([...fetchedEmails]);
-                setFetchProgress(prev => ({
+                setFetchProgress({
                   status: 'fetching',
                   current: i + 1,
                   total: messageIds.length,
                   currentSubject: email.subject,
-                }));
+                });
               }
             }
           } catch (detailErr) {

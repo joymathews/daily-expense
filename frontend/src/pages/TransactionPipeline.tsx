@@ -17,7 +17,6 @@ const TransactionPipeline: React.FC = () => {
     silverTransactions,
     goldTransactions,
     deletedRawEmails,
-    deletedSilverTransactions,
     deletedGoldTransactions,
     isLoading,
     activeTab,
@@ -83,7 +82,7 @@ const TransactionPipeline: React.FC = () => {
 
   const handleBronzeDeleteClick = (email: typeof rawEmails[0]) => {
     const silver = silverTransactions.find(tx => tx.rawEmailId === email.id);
-    const gold = goldTransactions.find(tx => tx.bronzeEmailId === email.id || (silver && tx.pendingTxId === silver.id));
+    const gold = goldTransactions.find(tx => tx.bronzeInputId === email.id || (silver && tx.pendingTxId === silver.id));
     handleDeleteClick('bronze', {
       bronzeId: email.id,
       silverId: silver?.id,
@@ -92,7 +91,7 @@ const TransactionPipeline: React.FC = () => {
   };
 
   const handleSilverDeleteClick = (tx: typeof silverTransactions[0]) => {
-    const gold = goldTransactions.find(g => g.pendingTxId === tx.id || g.bronzeEmailId === tx.rawEmailId);
+    const gold = goldTransactions.find(g => g.pendingTxId === tx.id || g.bronzeInputId === tx.rawEmailId);
     handleDeleteClick('silver', {
       bronzeId: tx.rawEmailId,
       silverId: tx.id,
@@ -102,7 +101,7 @@ const TransactionPipeline: React.FC = () => {
 
   const handleGoldDeleteClick = (tx: typeof goldTransactions[0]) => {
     handleDeleteClick('gold', {
-      bronzeId: tx.bronzeEmailId,
+      bronzeId: tx.bronzeInputId,
       silverId: tx.pendingTxId,
       goldId: tx.id,
     });
@@ -126,7 +125,7 @@ const TransactionPipeline: React.FC = () => {
     if (email.status === 'processed') return true;
     if (email.extracted) return true;
     const inSilver = silverTransactions.some(tx => tx.rawEmailId === email.id);
-    const inGold = goldTransactions.some(tx => tx.bronzeEmailId === email.id);
+    const inGold = goldTransactions.some(tx => tx.bronzeInputId === email.id);
     return inSilver || inGold;
   };
 
@@ -180,15 +179,6 @@ const TransactionPipeline: React.FC = () => {
     setCheckedSilverIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
-  };
-
-  const toggleSelectAllSilver = () => {
-    const selectables = silverTransactions.filter(t => t.status !== 'error' && t.status !== 'approved' && t.status !== 'rejected');
-    if (checkedSilverIds.length === selectables.length) {
-      setCheckedSilverIds([]);
-    } else {
-      setCheckedSilverIds(selectables.map(t => t.id));
-    }
   };
 
   const handleBatchApprove = async () => {
@@ -410,7 +400,7 @@ const TransactionPipeline: React.FC = () => {
           <SilverStagingList
             silverTransactions={silverTransactions}
             checkedSilverIds={checkedSilverIds}
-            toggleSelectAllSilver={toggleSelectAllSilver}
+            setCheckedSilverIds={setCheckedSilverIds}
             toggleSilverCheck={toggleSilverCheck}
             handleBatchApprove={handleBatchApprove}
             handleReviewSilver={handleReviewSilver}
