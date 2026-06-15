@@ -31,7 +31,7 @@ const GoldTransactions: React.FC = () => {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
 
   // Sort state
-  const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc'>('dateDesc');
+  const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc' | 'categoryAsc' | 'categoryDesc'>('dateDesc');
 
   // Dynamically extract unique categories and methods from gold transactions
   const uniqueCategories = Array.from(
@@ -139,6 +139,10 @@ const GoldTransactions: React.FC = () => {
         return getSignedAmount(a) - getSignedAmount(b);
       case 'amountDesc':
         return getSignedAmount(b) - getSignedAmount(a);
+      case 'categoryAsc':
+        return a.category.localeCompare(b.category);
+      case 'categoryDesc':
+        return b.category.localeCompare(a.category);
       default:
         return 0;
     }
@@ -201,6 +205,8 @@ const GoldTransactions: React.FC = () => {
               <option value="merchantDesc">Merchant (Z-A)</option>
               <option value="amountDesc">Amount (High to Low)</option>
               <option value="amountAsc">Amount (Low to High)</option>
+              <option value="categoryAsc">Category (A-Z)</option>
+              <option value="categoryDesc">Category (Z-A)</option>
             </select>
           </div>
 

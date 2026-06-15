@@ -79,6 +79,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   // Staging / Gold shared inputs state
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState(0);
+  const [currency, setCurrency] = useState('');
   const [category, setCategory] = useState('');
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -131,7 +132,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const isAmountInvalid = isSilver && (amount === undefined || amount === null || isNaN(amount) || amount === 0);
   const isDateInvalid = isSilver && (!date.trim() || date === 'N/A');
   const isMethodInvalid = isSilver && (!paymentMethod.trim() || paymentMethod === 'Unknown' || paymentMethod === 'N/A');
-  const hasValidationErrors = isMerchantInvalid || isAmountInvalid || isDateInvalid || isMethodInvalid;
+  const isCurrencyInvalid = isSilver && !currency.trim();
+  const hasValidationErrors = isMerchantInvalid || isAmountInvalid || isDateInvalid || isMethodInvalid || isCurrencyInvalid;
 
   const handleUpdateSilver = async () => {
     if (selectedEmail?.extracted && updateSilverTransaction) {
@@ -139,6 +141,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         merchantRaw: merchant,
         merchantNormalized: merchant,
         amount: amount,
+        currency: currency,
         transactionDate: date,
         paymentMethod: paymentMethod,
         inferredCategory: category,
@@ -146,7 +149,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         parentTransactionId: parentTransactionId || null as any,
       });
       
-      const isErr = !merchant.trim() || !date.trim() || date === 'N/A' || amount === 0 || !paymentMethod.trim() || paymentMethod === 'Unknown' || paymentMethod === 'N/A';
+      const isErr = !merchant.trim() || !date.trim() || date === 'N/A' || amount === 0 || !paymentMethod.trim() || paymentMethod === 'Unknown' || paymentMethod === 'N/A' || !currency.trim();
       const updatedStatus = isErr ? 'error' : 'pending';
 
       setSelectedEmail({
@@ -155,6 +158,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
           ...selectedEmail.extracted,
           merchant,
           amount,
+          currency,
           date,
           category,
           paymentMethod,
@@ -220,6 +224,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
     if (selectedGoldTransaction) {
       setMerchant(selectedGoldTransaction.merchant);
       setAmount(selectedGoldTransaction.amount);
+      setCurrency(selectedGoldTransaction.currency || '');
       setCategory(selectedGoldTransaction.category);
       setDate(selectedGoldTransaction.transactionDate || '');
       setNotes(selectedGoldTransaction.notes || '');
@@ -249,6 +254,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
     } else if (selectedEmail && selectedEmail.extracted) {
       setMerchant(selectedEmail.extracted.merchant);
       setAmount(selectedEmail.extracted.amount);
+      setCurrency(selectedEmail.extracted.currency || '');
       setCategory(selectedEmail.extracted.category);
       setDate(selectedEmail.extracted.date);
       setNotes('');
@@ -258,6 +264,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
     } else {
       setMerchant('');
       setAmount(0);
+      setCurrency('');
       setCategory('');
       setDate('');
       setNotes('');
@@ -276,6 +283,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       await updateGoldTransaction(selectedGoldTransaction.id, {
         merchant,
         amount,
+        currency,
         category,
         transactionDate: date,
         notes,
@@ -289,7 +297,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
         selectedEmail.extracted.id,
         merchant,
         amount,
-        selectedEmail.extracted.currency,
+        currency,
         date,
         category,
         notes,
@@ -492,6 +500,20 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
                   />
                   {isAmountInvalid && <span className="text-[10px] text-rose-600 font-bold mt-1 block">Valid non-zero amount is required</span>}
+                </div>
+                <div>
+                  <label htmlFor="modal-currency" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Currency</label>
+                  <input 
+                    id="modal-currency"
+                    type="text" 
+                    className={`w-full px-3 py-2 bg-white border focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all shadow-sm ${
+                      isCurrencyInvalid ? 'border-rose-300 bg-rose-50/5' : 'border-gray-200'
+                    }`}
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                    placeholder="e.g. INR, USD"
+                  />
+                  {isCurrencyInvalid && <span className="text-[10px] text-rose-600 font-bold mt-1 block">Currency code is required</span>}
                 </div>
                 <div>
                   <label htmlFor="modal-category" className="block font-bold text-gray-500 uppercase tracking-wide mb-1">Category</label>

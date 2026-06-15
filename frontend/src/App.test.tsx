@@ -2256,6 +2256,18 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(rows[0]).toHaveTextContent('Apple Store');
     expect(rows[1]).toHaveTextContent('Coffee Shop');
 
+    // Sort by Category Ascending (Food < Gadgets)
+    fireEvent.change(sortSelect, { target: { value: 'categoryAsc' } });
+    rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0]).toHaveTextContent('Coffee Shop');
+    expect(rows[1]).toHaveTextContent('Apple Store');
+
+    // Sort by Category Descending (Gadgets > Food)
+    fireEvent.change(sortSelect, { target: { value: 'categoryDesc' } });
+    rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0]).toHaveTextContent('Apple Store');
+    expect(rows[1]).toHaveTextContent('Coffee Shop');
+
     vi.unstubAllGlobals();
   });
 
@@ -3371,6 +3383,216 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Reset source filter
     fireEvent.click(emailCheckbox);
     fireEvent.click(sourceBtn); // close source dropdown
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-45] / [NFR-USAB-23]:
+   * Verify that users can review and correct the currency code in the Silver staging review modal
+   * and that saving promotes the transaction with the updated currency code.
+   */
+  it('supports reviewing and correcting currency code in the Silver staging review modal', async () => {
+    const mockEmail = {
+      id: 'email-1',
+      sender: 'rides@uber.com',
+      subject: 'Uber Ride Receipt',
+      date: '2026-06-12T10:00:00Z',
+      snippet: 'Uber transaction snippet',
+      body: 'Charged USD 15.50 for ride.',
+      hasTransaction: true,
+      status: 'unprocessed'
+    };
+
+    const mockSilver = {
+      id: 'silver-1',
+      bronzeInputId: 'email-1',
+      rawEmailId: 'email-1',
+      sourceType: 'email',
+      merchantRaw: 'Uber',
+      merchantNormalized: 'Uber',
+      amount: 15.50,
+      currency: 'USD',
+      transactionDate: '2026-06-12',
+      inferredCategory: 'Transport',
+      paymentMethod: 'Credit Card',
+      status: 'pending'
+    };
+
+    const updateSilverMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'updated' }) });
+    const approveMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'approved' }) });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/silver-transactions/silver-1')) {
+        return updateSilverMock(url, init);
+      }
+      if (url.includes('/api/pipeline/approve')) {
+        return approveMock(url, init);
+      }
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [mockEmail] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [mockSilver] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [{ id: 'm1', name: 'Credit Card' }] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      if (url.includes('/api/pipeline/llm-accuracy-stats')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ stats: { overallAccuracy: 100, fields: {} } }) });
+      }
+      if (url.includes('/api/pipeline/llm-logs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ log: null }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Go to Transaction Pipeline staging queue
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Open pending Silver item by clicking Silver tab first
+    const silverTabBtn = await screen.findByRole('button', { name: /Silver \(Staging Queue\)/i });
+    fireEvent.click(silverTabBtn);
+
+    const silverMerchantCell = await screen.findByText('Uber');
+    fireEvent.click(silverMerchantCell);
+
+    // Verify modal is open and has correct default values
+    expect(screen.getByTestId('email-detail-modal')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Merchant/i)).toHaveValue('Uber');
+    expect(screen.getByLabelText(/Amount/i)).toHaveValue(15.5);
+    expect(screen.getByLabelText(/Currency/i)).toHaveValue('USD');
+
+    // Change amount to 10.50 and currency to EUR
+    fireEvent.change(screen.getByLabelText(/Amount/i), { target: { value: '10.5' } });
+    fireEvent.change(screen.getByLabelText(/Currency/i), { target: { value: 'EUR' } });
+
+    // Save Changes first
+    const saveBtn = screen.getByRole('button', { name: /Save Updates/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(updateSilverMock).toHaveBeenCalled();
+    });
+
+    // Check payload passed to updateSilverTransaction API has currency EUR and amount 10.5
+    const lastUpdateCallArgs = JSON.parse(updateSilverMock.mock.calls[0][1].body);
+    expect(lastUpdateCallArgs.amount).toBe(10.5);
+    expect(lastUpdateCallArgs.currency).toBe('EUR');
+
+    // Click Approve & Promote
+    const approveBtn = screen.getByRole('button', { name: /Approve & Save/i });
+    fireEvent.click(approveBtn);
+
+    await waitFor(() => {
+      expect(approveMock).toHaveBeenCalled();
+    });
+
+    // Check payload passed to approveTransaction API contains currency EUR and amount 10.5
+    const lastApproveCallArgs = JSON.parse(approveMock.mock.calls[0][1].body);
+    expect(lastApproveCallArgs.amount).toBe(10.5);
+    expect(lastApproveCallArgs.currency).toBe('EUR');
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-45] / [NFR-USAB-23]:
+   * Verify that users can review and correct the currency code in the Gold ledger detail/correction modal,
+   * and saving persists the corrected currency to the Gold table record.
+   */
+  it('supports reviewing and correcting currency code in the Gold ledger detail corrections modal', async () => {
+    const mockGold = {
+      id: 'gold-1',
+      pendingTxId: 'silver-1',
+      userId: 'user-1',
+      sourceType: 'email',
+      merchant: 'Taxi',
+      amount: 20.00,
+      currency: 'INR',
+      transactionDate: '2026-06-11',
+      category: 'Transport',
+      notes: 'taxi ride',
+      paymentMethod: 'Cash'
+    };
+
+    const updateGoldMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'updated' }) });
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/gold-transactions/gold-1')) {
+        return updateGoldMock(url, init);
+      }
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [mockGold] }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [{ id: 'm1', name: 'Cash' }] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      if (url.includes('/api/pipeline/llm-accuracy-stats')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ stats: { overallAccuracy: 100, fields: {} } }) });
+      }
+      if (url.includes('/api/pipeline/llm-logs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ log: null }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Go to Gold Ledger page
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Expect Taxi in list
+    expect(await screen.findByText('Taxi')).toBeInTheDocument();
+
+    // Click merchant cell to open edit modal
+    fireEvent.click(screen.getByText('Taxi'));
+
+    // Expect modal is open
+    expect(screen.getByTestId('email-detail-modal')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Currency/i)).toHaveValue('INR');
+
+    // Modify currency value to USD
+    fireEvent.change(screen.getByLabelText(/Currency/i), { target: { value: 'USD' } });
+
+    // Click Save Changes button
+    const saveBtn = screen.getByRole('button', { name: /Save Corrections/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(updateGoldMock).toHaveBeenCalled();
+    });
+
+    // Verify updated currency code is passed in body updates
+    const lastUpdateCallArgs = JSON.parse(updateGoldMock.mock.calls[0][1].body);
+    expect(lastUpdateCallArgs.currency).toBe('USD');
 
     vi.unstubAllGlobals();
   });
