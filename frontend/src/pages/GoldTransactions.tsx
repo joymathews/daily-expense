@@ -24,8 +24,22 @@ const GoldTransactions: React.FC = () => {
   // Search keyword state
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Filters state
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedMethod, setSelectedMethod] = useState<string>('all');
+  const [selectedSource, setSelectedSource] = useState<string>('all');
+
   // Sort state
   const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc'>('dateDesc');
+
+  // Dynamically extract unique categories and methods from gold transactions
+  const uniqueCategories = Array.from(
+    new Set(goldTransactions.map(tx => tx.category).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const uniqueMethods = Array.from(
+    new Set(goldTransactions.map(tx => tx.paymentMethod || 'Unknown'))
+  ).sort((a, b) => a.localeCompare(b));
 
   // Modal control states
   const [selectedGoldTransaction, setSelectedGoldTransaction] = useState<GoldTransaction | null>(null);
@@ -70,8 +84,29 @@ const GoldTransactions: React.FC = () => {
     });
   };
 
-  // 1. Filter transactions by search query
+  // 1. Filter transactions by search query, category, payment method, and source type
   const filteredTransactions = goldTransactions.filter(tx => {
+    // Check Category Filter
+    if (selectedCategory !== 'all' && tx.category !== selectedCategory) {
+      return false;
+    }
+
+    // Check Payment Method Filter
+    if (selectedMethod !== 'all') {
+      const method = tx.paymentMethod || 'Unknown';
+      if (method !== selectedMethod) {
+        return false;
+      }
+    }
+
+    // Check Source Filter
+    if (selectedSource !== 'all') {
+      const source = tx.sourceType || 'email';
+      if (source !== selectedSource) {
+        return false;
+      }
+    }
+
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
 
@@ -131,75 +166,129 @@ const GoldTransactions: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-white border border-gray-150/60 rounded-3xl p-6 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center gap-4 justify-between">
-          <div className="flex flex-wrap items-center gap-4 flex-grow">
-            {/* Keyword Search */}
-            <div className="flex flex-col min-w-[200px] flex-grow md:max-w-xs">
-              <label htmlFor="search-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                Keyword Search:
+        {/* Row 1: Keyword, Sorting, and Filters */}
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Keyword Search */}
+          <div className="flex flex-col min-w-[200px] flex-grow md:max-w-xs">
+            <label htmlFor="search-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+              Keyword Search:
+            </label>
+            <input
+              id="search-input"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by keyword..."
+              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
+            />
+          </div>
+
+          {/* Sorting */}
+          <div className="flex flex-col min-w-[150px]">
+            <label htmlFor="sort-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+              Sort By:
+            </label>
+            <select
+              id="sort-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="dateDesc">Date (Newest First)</option>
+              <option value="dateAsc">Date (Oldest First)</option>
+              <option value="merchantAsc">Merchant (A-Z)</option>
+              <option value="merchantDesc">Merchant (Z-A)</option>
+              <option value="amountDesc">Amount (High to Low)</option>
+              <option value="amountAsc">Amount (Low to High)</option>
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex flex-col min-w-[150px]">
+            <label htmlFor="category-filter" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+              Category:
+            </label>
+            <select
+              id="category-filter"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="all">All Categories</option>
+              {uniqueCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Payment Method Filter */}
+          <div className="flex flex-col min-w-[150px]">
+            <label htmlFor="method-filter" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+              Payment Method:
+            </label>
+            <select
+              id="method-filter"
+              value={selectedMethod}
+              onChange={(e) => setSelectedMethod(e.target.value)}
+              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="all">All Payment Methods</option>
+              {uniqueMethods.map(method => (
+                <option key={method} value={method}>{method}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Ingestion Source Filter */}
+          <div className="flex flex-col min-w-[150px]">
+            <label htmlFor="source-filter" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+              Source:
+            </label>
+            <select
+              id="source-filter"
+              value={selectedSource}
+              onChange={(e) => setSelectedSource(e.target.value)}
+              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="all">All Ingestion Sources</option>
+              <option value="email">Email Ingested</option>
+              <option value="manual">Manual Entry</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Row 2: Date Filters */}
+        <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col">
+              <label htmlFor="start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                Start Date:
               </label>
               <input
-                id="search-input"
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by keyword..."
-                className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
               />
             </div>
-
-            {/* Date Filters */}
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col">
-                <label htmlFor="start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Start Date:
-                </label>
-                <input
-                  id="start-date"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
-                />
-              </div>
-              <div className="flex flex-col">
-                <label htmlFor="end-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                  End Date:
-                </label>
-                <input
-                  id="end-date"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Sorting */}
-            <div className="flex flex-col min-w-[150px]">
-              <label htmlFor="sort-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                Sort By:
+            <div className="flex flex-col">
+              <label htmlFor="end-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                End Date:
               </label>
-              <select
-                id="sort-select"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
-              >
-                <option value="dateDesc">Date (Newest First)</option>
-                <option value="dateAsc">Date (Oldest First)</option>
-                <option value="merchantAsc">Merchant (A-Z)</option>
-                <option value="merchantDesc">Merchant (Z-A)</option>
-                <option value="amountDesc">Amount (High to Low)</option>
-                <option value="amountAsc">Amount (Low to High)</option>
-              </select>
+              <input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
+              />
             </div>
           </div>
         </div>
 
         {/* Aggregate Totals Summary */}
-        <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-4">
+        <div className="pt-4 border-t border-gray-100 flex flex-wrap gap-4">
           <div className="w-full">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Total Expenses Summary</span>
             <div className="flex flex-wrap gap-3">

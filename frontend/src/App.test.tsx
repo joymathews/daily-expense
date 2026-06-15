@@ -3225,6 +3225,114 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GOLD-PAGE-11] / [NFR-USAB-22]:
+   * Verify that users can filter transactions by Category, Payment Method, and Ingestion Source.
+   * Verify that filtering dynamically updates the high-density table view and recalculates currency totals.
+   */
+  it('supports filtering gold ledger transactions by category, payment method, and ingestion source with responsive UI updates', async () => {
+    const mockGold = [
+      { id: 'gold-1', silverTxId: 'silver-1', userId: 'user-1', sourceType: 'email', merchant: 'Supermarket A', amount: 50.00, currency: 'INR', transactionDate: '2026-06-10', category: 'Food', notes: 'groceries', paymentMethod: 'UPI' },
+      { id: 'gold-2', silverTxId: null, userId: 'user-1', sourceType: 'manual', merchant: 'Taxi Ride', amount: 15.50, currency: 'USD', transactionDate: '2026-06-11', category: 'Transport', notes: 'Business trip', paymentMethod: 'Cash' },
+      { id: 'gold-3', silverTxId: 'silver-3', userId: 'user-1', sourceType: 'email', merchant: 'Restaurant B', amount: 20.00, currency: 'INR', transactionDate: '2026-06-12', category: 'Food', notes: 'Dinner', paymentMethod: 'Cash' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: mockGold }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [] }) });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentMethods: [] }) });
+      }
+      if (url.includes('/api/ingestion/payment-rules')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ paymentRules: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Navigate to Ledger page
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Verify all 3 transactions are initially visible
+    expect(await screen.findByText('Supermarket A')).toBeInTheDocument();
+    expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
+    expect(screen.getByText('Restaurant B')).toBeInTheDocument();
+
+    // Verify initial currency totals
+    expect(screen.getByText('70.00')).toBeInTheDocument(); // INR total (50 + 20)
+    expect(screen.getByText('15.50')).toBeInTheDocument(); // USD total
+
+    // 1. Filter by Category: Food
+    const categorySelect = screen.getByLabelText(/Category:/i);
+    fireEvent.change(categorySelect, { target: { value: 'Food' } });
+
+    // Supermarket A and Restaurant B should remain, Taxi Ride should disappear
+    expect(screen.getByText('Supermarket A')).toBeInTheDocument();
+    expect(screen.getByText('Restaurant B')).toBeInTheDocument();
+    expect(screen.queryByText('Taxi Ride')).not.toBeInTheDocument();
+
+    // Verify updated currency totals (INR 70.00 visible, USD 15.50 should be gone)
+    expect(screen.getByText('70.00')).toBeInTheDocument();
+    expect(screen.queryByText('15.50')).not.toBeInTheDocument();
+
+    // 2. Filter by Payment Method: Cash (while Category is still Food)
+    const methodSelect = screen.getByLabelText(/Payment Method:/i);
+    fireEvent.change(methodSelect, { target: { value: 'Cash' } });
+
+    // Restaurant B (Food + Cash) should remain, Supermarket A (Food + UPI) should disappear
+    expect(screen.getByText('Restaurant B')).toBeInTheDocument();
+    expect(screen.queryByText('Supermarket A')).not.toBeInTheDocument();
+
+    // Verify currency totals (INR 20.00 visible)
+    expect(screen.getByText('20.00')).toBeInTheDocument();
+    expect(screen.queryByText('70.00')).not.toBeInTheDocument();
+
+    // 3. Reset filters (Category = all, Method = all)
+    fireEvent.change(categorySelect, { target: { value: 'all' } });
+    fireEvent.change(methodSelect, { target: { value: 'all' } });
+
+    // Verify all visible again
+    expect(screen.getByText('Supermarket A')).toBeInTheDocument();
+    expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
+    expect(screen.getByText('Restaurant B')).toBeInTheDocument();
+
+    // 4. Filter by Source: Manual Entry
+    const sourceSelect = screen.getByLabelText(/Source:/i);
+    fireEvent.change(sourceSelect, { target: { value: 'manual' } });
+
+    // Taxi Ride (manual) should remain, Supermarket A & Restaurant B (email) should disappear
+    expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
+    expect(screen.queryByText('Supermarket A')).not.toBeInTheDocument();
+    expect(screen.queryByText('Restaurant B')).not.toBeInTheDocument();
+
+    // Verify totals (USD 15.50 visible)
+    expect(screen.getByText('15.50')).toBeInTheDocument();
+    expect(screen.queryByText('70.00')).not.toBeInTheDocument();
+
+    // 5. Filter by Source: Email Ingested
+    fireEvent.change(sourceSelect, { target: { value: 'email' } });
+
+    // Supermarket A & Restaurant B should remain, Taxi Ride should disappear
+    expect(screen.getByText('Supermarket A')).toBeInTheDocument();
+    expect(screen.getByText('Restaurant B')).toBeInTheDocument();
+    expect(screen.queryByText('Taxi Ride')).not.toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
