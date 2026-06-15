@@ -32,11 +32,9 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = (props) => {
   const {
     visibleRawEmails,
     checkedEmailIds,
-    unprocessedEmails,
     isLoading,
     isEmailProcessed,
     toggleEmailCheck,
-    toggleSelectAll,
     handleBatchExtract,
     handleBatchReject,
     setSelectedEmail,
@@ -63,6 +61,29 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = (props) => {
         );
       })
     : visibleRawEmails;
+
+  // Only the unprocessed emails within the current search results are selectable
+  const displayedUnprocessedEmails = displayedEmails.filter(
+    (e) => e.status === 'unprocessed' || (!e.status && !isEmailProcessed(e))
+  );
+
+  const toggleDisplayedSelectAll = () => {
+    const allDisplayedChecked =
+      displayedUnprocessedEmails.length > 0 &&
+      displayedUnprocessedEmails.every((e) => checkedEmailIds.includes(e.id));
+
+    if (allDisplayedChecked) {
+      // Deselect only the currently displayed unprocessed emails, keep any others intact
+      displayedUnprocessedEmails.forEach((e) => {
+        if (checkedEmailIds.includes(e.id)) toggleEmailCheck(e.id);
+      });
+    } else {
+      // Select only the displayed unprocessed emails not yet checked
+      displayedUnprocessedEmails.forEach((e) => {
+        if (!checkedEmailIds.includes(e.id)) toggleEmailCheck(e.id);
+      });
+    }
+  };
 
   return (
     <div>
@@ -216,9 +237,12 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = (props) => {
               <th className="px-4 py-3 text-center w-10">
                 <input
                   type="checkbox"
-                  checked={unprocessedEmails.length > 0 && unprocessedEmails.every(e => checkedEmailIds.includes(e.id))}
-                  onChange={toggleSelectAll}
-                  disabled={unprocessedEmails.length === 0}
+                  checked={
+                    displayedUnprocessedEmails.length > 0 &&
+                    displayedUnprocessedEmails.every((e) => checkedEmailIds.includes(e.id))
+                  }
+                  onChange={toggleDisplayedSelectAll}
+                  disabled={displayedUnprocessedEmails.length === 0}
                   className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
                 />
               </th>
