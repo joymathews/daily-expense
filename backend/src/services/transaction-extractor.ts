@@ -6,7 +6,7 @@ export interface ExtractedTransaction {
   category: string;
   description?: string;
   paymentMethod?: string;
-  transactionType?: 'expense' | 'refund';
+  transactionType?: 'expense' | 'refund' | 'transfer';
 }
 
 export interface ITransactionExtractor {

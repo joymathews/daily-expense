@@ -70,6 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           const pendingStaging = silverTxs.filter((tx: any) => tx.status === 'pending' || tx.status === 'error');
           const rejectedStaging = silverTxs.filter((tx: any) => tx.status === 'rejected');
           const total = goldTxs.reduce((sum: number, tx: any) => {
+            if (tx.transactionType === 'transfer') return sum; // transfers are neutral
             const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
             return sum + signedAmt;
           }, 0);

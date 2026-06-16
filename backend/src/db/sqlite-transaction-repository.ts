@@ -87,6 +87,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       await this.run('DROP TABLE IF EXISTS bronze_raw_inputs;');
     }
 
+    // Migration guard: upgrade transaction_type CHECK constraint to include 'transfer'
+    // SQLite cannot ALTER a CHECK constraint in-place, so we recreate affected tables.
+    await this.migrateTransactionTypeConstraintIfNeeded();
+
     // 1. Bronze table: Raw Ingestion (Generic)
     await this.run(`
       CREATE TABLE IF NOT EXISTS bronze_raw_inputs (
@@ -123,7 +127,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         confidence_score REAL,
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
         payment_method TEXT,
-        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
         parent_transaction_id TEXT,
         deleted_at TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -147,7 +151,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         category TEXT NOT NULL,
         notes TEXT,
         payment_method TEXT,
-        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
         parent_transaction_id TEXT,
         deleted_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -170,7 +174,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         extracted_date TEXT,
         extracted_category TEXT,
         extracted_payment_method TEXT,
-        extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund')),
+        extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund', 'transfer')),
         confidence_score REAL,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
@@ -218,6 +222,133 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         defaults_seeded INTEGER DEFAULT 0
       );
     `);
+  }
+
+  /**
+   * Detects whether the silver/gold/llm_logs tables were created with the old
+   * two-value CHECK constraint ('expense','refund') and, if so, recreates them
+   * preserving all rows, so the new 'transfer' value is accepted.
+   *
+   * IMPORTANT: Foreign keys MUST be disabled before dropping tables so that
+   * SQLite does not reject the DROP of silver (referenced by gold). FK enforcement
+   * is restored immediately after the migration commits.
+   */
+  private async migrateTransactionTypeConstraintIfNeeded(): Promise<void> {
+    const silverDdl = await this.get<{ sql: string }>(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='silver_extracted_transactions';"
+    );
+    if (!silverDdl?.sql) return; // Table doesn't exist yet; CREATE IF NOT EXISTS will handle it
+
+    const needsMigration = silverDdl.sql.includes("'expense', 'refund')") &&
+      !silverDdl.sql.includes("'transfer'");
+    if (!needsMigration) return;
+
+    // Disable FK enforcement for the duration of the migration.
+    // PRAGMA foreign_keys cannot be changed inside a transaction in SQLite,
+    // so we set it before BEGIN and restore it after COMMIT/ROLLBACK.
+    await this.run('PRAGMA foreign_keys = OFF;');
+    await this.run('BEGIN TRANSACTION');
+    try {
+      // --- Silver ---
+      await this.run(`CREATE TABLE silver_extracted_transactions_new (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        bronze_input_id TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'email',
+        merchant_raw TEXT NOT NULL,
+        merchant_normalized TEXT,
+        amount_cents INTEGER NOT NULL,
+        currency TEXT NOT NULL,
+        transaction_date TEXT NOT NULL,
+        inferred_category TEXT,
+        confidence_score REAL,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
+        payment_method TEXT,
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
+        parent_transaction_id TEXT,
+        deleted_at TEXT,
+        extracted_at TEXT DEFAULT (datetime('now', 'utc')),
+        FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+        UNIQUE(user_id, bronze_input_id),
+        UNIQUE(user_id, id)
+      );`);
+      await this.run(`INSERT INTO silver_extracted_transactions_new
+        SELECT id, user_id, bronze_input_id, source_type, merchant_raw, merchant_normalized,
+               amount_cents, currency, transaction_date, inferred_category, confidence_score,
+               status, payment_method, transaction_type, parent_transaction_id, deleted_at, extracted_at
+        FROM silver_extracted_transactions;`);
+      await this.run('DROP TABLE silver_extracted_transactions;');
+      await this.run('ALTER TABLE silver_extracted_transactions_new RENAME TO silver_extracted_transactions;');
+
+      // --- Gold ---
+      await this.run(`CREATE TABLE gold_transactions_new (
+        id TEXT PRIMARY KEY,
+        silver_tx_id TEXT UNIQUE,
+        user_id TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'email',
+        merchant TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        currency TEXT NOT NULL,
+        transaction_date TEXT NOT NULL,
+        category TEXT NOT NULL,
+        notes TEXT,
+        payment_method TEXT,
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
+        parent_transaction_id TEXT,
+        deleted_at TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'utc')),
+        updated_at TEXT DEFAULT (datetime('now', 'utc')),
+        FOREIGN KEY (user_id, silver_tx_id) REFERENCES silver_extracted_transactions(user_id, id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id, parent_transaction_id) REFERENCES gold_transactions_new(user_id, id) ON DELETE SET NULL,
+        UNIQUE(user_id, id)
+      );`);
+      await this.run(`INSERT INTO gold_transactions_new
+        SELECT id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency,
+               transaction_date, category, notes, payment_method, transaction_type,
+               parent_transaction_id, deleted_at, created_at, updated_at
+        FROM gold_transactions;`);
+      await this.run('DROP TABLE gold_transactions;');
+      await this.run('ALTER TABLE gold_transactions_new RENAME TO gold_transactions;');
+
+      // --- LLM Extraction Logs ---
+      const llmDdl = await this.get<{ sql: string }>(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='llm_extraction_logs';"
+      );
+      if (llmDdl?.sql?.includes("'expense', 'refund')") && !llmDdl.sql.includes("'transfer'")) {
+        await this.run(`CREATE TABLE llm_extraction_logs_new (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          bronze_input_id TEXT NOT NULL UNIQUE,
+          extracted_merchant TEXT,
+          extracted_amount_cents INTEGER,
+          extracted_currency TEXT,
+          extracted_date TEXT,
+          extracted_category TEXT,
+          extracted_payment_method TEXT,
+          extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund', 'transfer')),
+          confidence_score REAL,
+          extracted_at TEXT DEFAULT (datetime('now', 'utc')),
+          FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+          UNIQUE(user_id, bronze_input_id),
+          UNIQUE(user_id, id)
+        );`);
+        await this.run(`INSERT INTO llm_extraction_logs_new
+          SELECT id, user_id, bronze_input_id, extracted_merchant, extracted_amount_cents,
+                 extracted_currency, extracted_date, extracted_category, extracted_payment_method,
+                 extracted_transaction_type, confidence_score, extracted_at
+          FROM llm_extraction_logs;`);
+        await this.run('DROP TABLE llm_extraction_logs;');
+        await this.run('ALTER TABLE llm_extraction_logs_new RENAME TO llm_extraction_logs;');
+      }
+
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    } finally {
+      // Always restore FK enforcement after migration, success or failure.
+      await this.run('PRAGMA foreign_keys = ON;');
+    }
   }
 
   async emailExists(gmailId: string, userId: string): Promise<boolean> {

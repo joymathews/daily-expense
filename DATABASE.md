@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS silver_extracted_transactions (
   confidence_score REAL,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
   payment_method TEXT,
-  transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+  transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
   parent_transaction_id TEXT,
   deleted_at TEXT,
   extracted_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS silver_extracted_transactions (
 | **`confidence_score`**| `REAL` | `Nullable` | Numeric value (0.0 to 1.0) indicating LLM extraction confidence. |
 | **`status`** | `TEXT` | `CHECK (pending, approved, rejected, error)` | Current review status. `'pending'` represents extracted and validated items; `'error'` highlights missing required fields; `'approved'` matches items promoted to Gold; `'rejected'` items are staging-dismissed. |
 | **`payment_method`** | `TEXT` | `Nullable` | Normalized payment channel (e.g. `Credit Card`, `UPI`). |
-| **`transaction_type`**| `TEXT` | `DEFAULT 'expense'` | Represents whether this is an `'expense'` (payment) or a `'refund'` (offset reversal). |
+| **`transaction_type`**| `TEXT` | `DEFAULT 'expense'` | Represents whether this is an `'expense'` (payment), a `'refund'` (offset reversal), or a `'transfer'` (movement between the user's own accounts). Transfers are excluded from all expense totals and aggregates. |
 | **`parent_transaction_id`**| `TEXT`| `Nullable` | In the case of a refund, references the matching parent purchase ID to correctly calculate credit balances. |
 | **`deleted_at`** | `TEXT` | `Nullable` | Soft-delete ISO-8601 timestamp for trash recovery. |
 | **`extracted_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Creation timestamp indicating when parsing was executed. |
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS gold_transactions (
   category TEXT NOT NULL,
   notes TEXT,
   payment_method TEXT,
-  transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund')),
+  transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
   parent_transaction_id TEXT,
   deleted_at TEXT,
   created_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS gold_transactions (
 | **`category`** | `TEXT` | `NOT NULL` | Confirmed transaction category (e.g. `Travel`, `Shopping`). |
 | **`notes`** | `TEXT` | `Nullable` | Freeform notes, annotations, or comments appended by the user during review. |
 | **`payment_method`** | `TEXT` | `Nullable` | Standardized payment channel verified by the user. |
-| **`transaction_type`**| `TEXT` | `DEFAULT 'expense'` | Transaction type designation (`'expense'` or `'refund'`). Refunds are evaluated as negative deductions from category aggregates. |
+| **`transaction_type`**| `TEXT` | `DEFAULT 'expense'` | Transaction type designation (`'expense'`, `'refund'`, or `'transfer'`). Refunds are evaluated as negative deductions from category aggregates. Transfers represent own-account movements and are entirely excluded from all expense totals, dashboard metrics, and currency aggregate summaries. |
 | **`parent_transaction_id`**| `TEXT`| `FOREIGN KEY` | References another verified transaction inside `gold_transactions`. Used to chain credit offsets to parent purchases. |
 | **`deleted_at`** | `TEXT` | `Nullable` | Soft-delete ISO-8601 timestamp. Supports trash and recovery. |
 | **`created_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Timestamp tracking when the entry was finalized and approved. |

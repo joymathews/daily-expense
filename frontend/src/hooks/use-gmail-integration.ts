@@ -35,7 +35,7 @@ export interface GmailMessage {
     category: string;
     status: 'pending' | 'approved' | 'rejected' | 'error';
     paymentMethod?: string;
-    transactionType?: 'expense' | 'refund';
+    transactionType?: 'expense' | 'refund' | 'transfer';
     parentTransactionId?: string;
   };
   deletedAt?: string;
@@ -63,7 +63,7 @@ export interface SilverTransaction {
   emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
-  transactionType?: 'expense' | 'refund';
+  transactionType?: 'expense' | 'refund' | 'transfer';
   parentTransactionId?: string;
 }
 
@@ -90,7 +90,7 @@ export interface GoldTransaction {
   emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
-  transactionType?: 'expense' | 'refund';
+  transactionType?: 'expense' | 'refund' | 'transfer';
   parentTransactionId?: string;
 }
 

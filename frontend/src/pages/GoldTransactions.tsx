@@ -132,7 +132,11 @@ const GoldTransactions: React.FC = () => {
     );
   });
 
-  const getSignedAmount = (t: GoldTransaction) => t.transactionType === 'refund' ? -t.amount : t.amount;
+  const getSignedAmount = (t: GoldTransaction) => {
+    if (t.transactionType === 'refund') return -t.amount;
+    if (t.transactionType === 'transfer') return 0;
+    return t.amount;
+  };
 
   // 2. Sort transactions
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
@@ -391,6 +395,11 @@ const GoldTransactions: React.FC = () => {
                             Refund
                           </span>
                         )}
+                        {tx.transactionType === 'transfer' && (
+                          <span className="bg-indigo-100 text-indigo-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-indigo-250/30">
+                            Transfer
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -414,7 +423,11 @@ const GoldTransactions: React.FC = () => {
                     </td>
 
                     {/* Amount */}
-                    <td className={`px-6 py-4 font-extrabold text-right whitespace-nowrap ${tx.transactionType === 'refund' ? 'text-emerald-600' : 'text-gray-800'}`}>
+                    <td className={`px-6 py-4 font-extrabold text-right whitespace-nowrap ${
+                      tx.transactionType === 'refund' ? 'text-emerald-600' :
+                      tx.transactionType === 'transfer' ? 'text-indigo-500' :
+                      'text-gray-800'
+                    }`}>
                       {tx.transactionType === 'refund' ? '-' : ''}{tx.amount.toFixed(2)}
                     </td>
 

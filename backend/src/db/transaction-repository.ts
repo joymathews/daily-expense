@@ -32,7 +32,7 @@ export interface PendingTransaction {
   sourceReceivedAt?: string;
   paymentMethod?: string;
   paymentMethodRaw?: string;
-  transactionType?: 'expense' | 'refund';
+  transactionType?: 'expense' | 'refund' | 'transfer';
   parentTransactionId?: string;
 }
 
@@ -54,7 +54,7 @@ export interface Transaction {
   sourceReceivedAt?: string;
   bronzeInputId?: string;
   paymentMethod?: string;
-  transactionType?: 'expense' | 'refund';
+  transactionType?: 'expense' | 'refund' | 'transfer';
   parentTransactionId?: string;
 }
 

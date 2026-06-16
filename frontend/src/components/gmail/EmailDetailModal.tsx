@@ -16,7 +16,7 @@ interface EmailDetailModalProps {
     category: string,
     notes?: string,
     paymentMethod?: string,
-    transactionType?: 'expense' | 'refund',
+    transactionType?: 'expense' | 'refund' | 'transfer',
     parentTransactionId?: string
   ) => Promise<void>;
   
@@ -188,8 +188,9 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   // Resolve parent transaction candidates for linkages
   const parentCandidates = React.useMemo(() => {
     return goldTransactions.filter(
-      (tx) => 
-        tx.transactionType !== 'refund' && 
+      (tx) =>
+        tx.transactionType !== 'refund' &&
+        tx.transactionType !== 'transfer' &&
         (!selectedGoldTransaction || tx.id !== selectedGoldTransaction.id)
     );
   }, [goldTransactions, selectedGoldTransaction]);
@@ -417,6 +418,11 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                             Refund
                           </span>
                         )}
+                        {resolvedLineage.silverRecord.transactionType === 'transfer' && (
+                          <span className="ml-1.5 bg-indigo-100 text-indigo-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                            Transfer
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-gray-450">
                         Category: {resolvedLineage.silverRecord.inferredCategory || 'N/A'} | Status: {resolvedLineage.silverRecord.status} | Method: {resolvedLineage.silverRecord.paymentMethod || 'Unknown'}
@@ -444,6 +450,11 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                         {resolvedLineage.goldRecord.transactionType === 'refund' && (
                           <span className="ml-1.5 bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
                             Refund
+                          </span>
+                        )}
+                        {resolvedLineage.goldRecord.transactionType === 'transfer' && (
+                          <span className="ml-1.5 bg-indigo-100 text-indigo-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                            Transfer
                           </span>
                         )}
                       </div>
@@ -579,6 +590,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   >
                     <option value="expense">Expense</option>
                     <option value="refund">Refund</option>
+                    <option value="transfer">Transfer (Own Account)</option>
                   </select>
                 </div>
                 {transactionType === 'refund' && (

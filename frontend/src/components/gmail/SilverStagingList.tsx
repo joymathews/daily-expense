@@ -100,7 +100,11 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
     );
   });
 
-  const getSignedAmount = (t: SilverTransaction) => t.transactionType === 'refund' ? -t.amount : t.amount;
+  const getSignedAmount = (t: SilverTransaction) => {
+    if (t.transactionType === 'refund') return -t.amount;
+    if (t.transactionType === 'transfer') return 0;
+    return t.amount;
+  };
 
   // Sorting logic
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
@@ -328,6 +332,11 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
                       {tx.transactionType === 'refund' && (
                         <span className="bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-emerald-250/30">
                           Refund
+                        </span>
+                      )}
+                      {tx.transactionType === 'transfer' && (
+                        <span className="bg-indigo-100 text-indigo-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-indigo-250/30">
+                          Transfer
                         </span>
                       )}
                     </div>

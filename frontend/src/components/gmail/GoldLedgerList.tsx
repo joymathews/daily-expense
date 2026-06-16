@@ -81,7 +81,11 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
     );
   });
 
-  const getSignedAmount = (t: GoldTransaction) => t.transactionType === 'refund' ? -t.amount : t.amount;
+  const getSignedAmount = (t: GoldTransaction) => {
+    if (t.transactionType === 'refund') return -t.amount;
+    if (t.transactionType === 'transfer') return 0;
+    return t.amount;
+  };
 
   // Sorting logic
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
@@ -267,6 +271,11 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
                           Refund
                         </span>
                       )}
+                      {tx.transactionType === 'transfer' && (
+                        <span className="bg-indigo-100 text-indigo-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-indigo-250/30">
+                          Transfer
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-2 py-2.5 text-center">
@@ -282,7 +291,11 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
                   <td className="px-2 py-2.5 text-left text-gray-555 max-w-[180px] truncate" title={tx.notes}>
                     {tx.notes || '-'}
                   </td>
-                  <td className={`px-2 py-2.5 font-extrabold text-right whitespace-nowrap ${tx.transactionType === 'refund' ? 'text-emerald-600' : 'text-gray-800'}`}>
+                  <td className={`px-2 py-2.5 font-extrabold text-right whitespace-nowrap ${
+                    tx.transactionType === 'refund' ? 'text-emerald-600' :
+                    tx.transactionType === 'transfer' ? 'text-indigo-500' :
+                    'text-gray-800'
+                  }`}>
                     {tx.transactionType === 'refund' ? '-' : ''}{tx.amount.toFixed(2)}
                   </td>
                   <td className="px-2 py-2.5 text-center font-bold text-gray-555 whitespace-nowrap">

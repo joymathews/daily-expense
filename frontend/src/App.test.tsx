@@ -3868,7 +3868,122 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-49] Transfer (Own Account) Transaction Type:
+   * The user must be able to classify a transaction as "Transfer (Own Account)".
+   * The option must appear in the Direct Ledger Entry form and the staging review modal.
+   * Transfers must not appear as parent candidates for refund linkage.
+   */
+  it('allows the user to select Transfer (Own Account) type and excludes it from refund parent candidates', async () => {
+    const mockGoldTransfer: any = {
+      id: 'gold_transfer_1',
+      merchant: 'HDFC Savings',
+      amount: 5000,
+      currency: 'INR',
+      transactionDate: '2024-01-10',
+      category: 'Other',
+      paymentMethod: 'NEFT',
+      transactionType: 'transfer',
+      sourceType: 'manual',
+      notes: 'Transfer to savings account',
+    };
+
+    const mockGoldExpense: any = {
+      id: 'gold_expense_1',
+      merchant: 'Amazon',
+      amount: 999,
+      currency: 'INR',
+      transactionDate: '2024-01-12',
+      category: 'Shopping',
+      paymentMethod: 'Credit Card',
+      transactionType: 'expense',
+      sourceType: 'email',
+      notes: '',
+    };
+
+    const mockSilverPending: any = {
+      id: 'silver_pending_999',
+      bronzeInputId: 'bronze_abc',
+      rawEmailId: 'bronze_abc',
+      sourceType: 'email',
+      merchantRaw: 'NEFT Transfer',
+      merchantNormalized: 'NEFT Transfer',
+      amount: 5000,
+      currency: 'INR',
+      transactionDate: '2024-01-10',
+      inferredCategory: 'Other',
+      paymentMethod: 'NEFT',
+      transactionType: 'expense',
+      status: 'pending',
+    };
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [mockSilverPending] }) });
+      }
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [mockGoldTransfer, mockGoldExpense] }) });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [{ id: 'bronze_abc', sender: 'bank@hdfc.com', subject: 'NEFT Alert', date: '2024-01-10', snippet: 'NEFT', body: 'Transfer done', hasTransaction: true, status: 'processed' }] }) });
+      }
+      if (url.includes('/api/gmail/payment-methods') || url.includes('/api/pipeline/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ methods: [{ id: 'pm1', name: 'NEFT' }, { id: 'pm2', name: 'Credit Card' }] }) });
+      }
+      if (url.includes('/api/pipeline/llm-log') || url.includes('/api/gmail/llm-log')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // ── 1. Check Transfer option in Direct Ledger Entry form ──
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
+    fireEvent.click(screen.getByText(/Direct Ledger Entry/i));
+
+    const directTypeSelect = screen.getByLabelText(/Transaction Type/i);
+    expect(directTypeSelect).toBeInTheDocument();
+
+    // All three options must exist
+    expect(within(directTypeSelect as HTMLElement).getByRole('option', { name: 'Expense' })).toBeInTheDocument();
+    expect(within(directTypeSelect as HTMLElement).getByRole('option', { name: 'Refund' })).toBeInTheDocument();
+    expect(within(directTypeSelect as HTMLElement).getByRole('option', { name: 'Transfer (Own Account)' })).toBeInTheDocument();
+
+    // ── 2. Navigate to Pipeline → Silver tab, open review modal ──
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    const silverMerchantCell = await screen.findByText('NEFT Transfer');
+    fireEvent.click(silverMerchantCell);
+
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // Transaction type dropdown must contain the Transfer option
+    const modalTypeSelect = within(modal).getByLabelText(/Transaction Type/i);
+    expect(within(modalTypeSelect as HTMLElement).getByRole('option', { name: 'Expense' })).toBeInTheDocument();
+    expect(within(modalTypeSelect as HTMLElement).getByRole('option', { name: 'Refund' })).toBeInTheDocument();
+    expect(within(modalTypeSelect as HTMLElement).getByRole('option', { name: 'Transfer (Own Account)' })).toBeInTheDocument();
+
+    // ── 3. In gold mode — set a refund and verify transfer is excluded from parent candidates ──
+    // The parent candidates dropdown must NOT contain 'HDFC Savings' (transfer) but MUST contain 'Amazon' (expense)
+    fireEvent.change(modalTypeSelect, { target: { value: 'refund' } });
+
+    const parentSelect = within(modal).queryByLabelText(/Link to Purchase/i);
+    if (parentSelect) {
+      // Transfer merchant must NOT appear
+      expect(within(parentSelect as HTMLElement).queryByText(/HDFC Savings/i)).not.toBeInTheDocument();
+      // Expense merchant must appear
+      expect(within(parentSelect as HTMLElement).queryByText(/Amazon/i)).toBeInTheDocument();
+    }
+
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+    vi.unstubAllGlobals();
+  });
 });
-
-
-

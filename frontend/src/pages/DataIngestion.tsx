@@ -60,10 +60,12 @@ const DataIngestion: React.FC = () => {
   const [category, setCategory] = useState('Other');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [notes, setNotes] = useState('');
-  const [transactionType, setTransactionType] = useState<'expense' | 'refund'>('expense');
+  const [transactionType, setTransactionType] = useState<'expense' | 'refund' | 'transfer'>('expense');
   const [parentTransactionId, setParentTransactionId] = useState('');
 
-  const parentCandidates = goldTransactions.filter(tx => tx.transactionType !== 'refund');
+  const parentCandidates = goldTransactions.filter(
+    tx => tx.transactionType !== 'refund' && tx.transactionType !== 'transfer'
+  );
 
   // Payment Standardization state
   const [newMethodName, setNewMethodName] = useState('');
@@ -413,7 +415,7 @@ const DataIngestion: React.FC = () => {
                   id="manual-type"
                   value={transactionType}
                   onChange={(e) => {
-                    setTransactionType(e.target.value as 'expense' | 'refund');
+                    setTransactionType(e.target.value as 'expense' | 'refund' | 'transfer');
                     if (e.target.value !== 'refund') {
                       setParentTransactionId('');
                     }
@@ -422,6 +424,7 @@ const DataIngestion: React.FC = () => {
                 >
                   <option value="expense">Expense</option>
                   <option value="refund">Refund</option>
+                  <option value="transfer">Transfer (Own Account)</option>
                 </select>
               </div>
 
