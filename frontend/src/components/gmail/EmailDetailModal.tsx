@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { GmailMessage, GoldTransaction, SilverTransaction, PaymentMethod } from '../../hooks/use-gmail-integration';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { formatToUserTimezone } from '../../utils/date-formatter';
 
 interface EmailDetailModalProps {
   selectedEmail: GmailMessage | null;
@@ -319,7 +320,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 
   const emailSubject = isGoldMode ? (selectedGoldTransaction?.emailSubject || 'Ledger Record') : selectedEmail?.subject;
   const emailSender = isGoldMode ? (selectedGoldTransaction?.emailSender || 'N/A') : selectedEmail?.sender;
-  const emailDate = isGoldMode ? (selectedGoldTransaction?.emailReceivedAt || 'N/A') : selectedEmail?.date;
+  const emailDate = formatToUserTimezone(isGoldMode ? (selectedGoldTransaction?.emailReceivedAt || 'N/A') : selectedEmail?.date, true);
 
 
 
@@ -391,7 +392,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                         {resolvedLineage.bronzeRecord.subject}
                       </div>
                       <div className="text-[10px] text-gray-450 truncate">
-                        Sender: {resolvedLineage.bronzeRecord.sender} | Date: {resolvedLineage.bronzeRecord.date}
+                        Sender: {resolvedLineage.bronzeRecord.sender} | Date: {formatToUserTimezone(resolvedLineage.bronzeRecord.date, true)}
                       </div>
                     </div>
                   ) : (

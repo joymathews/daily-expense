@@ -1,5 +1,6 @@
 import React from 'react';
 import type { GmailMessage } from '../../hooks/use-gmail-integration';
+import { formatToUserTimezone } from '../../utils/date-formatter';
 
 interface EmailListProps {
   emails: GmailMessage[];
@@ -94,7 +95,7 @@ export const EmailList: React.FC<EmailListProps> = ({
                     <div className="text-[9px] text-gray-400 line-clamp-1 italic">{email.snippet}</div>
                   </td>
                   <td onClick={() => setSelectedEmail(email)} className="px-4 py-2 whitespace-nowrap text-right text-[9px] font-bold text-gray-400 uppercase cursor-pointer">
-                    {new Date(email.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    {formatToUserTimezone(email.date, true)}
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap text-center">
                     {activeTab === 'non-transaction' ? (

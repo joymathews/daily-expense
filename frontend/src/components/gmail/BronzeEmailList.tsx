@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { GmailMessage } from '../../hooks/use-gmail-integration';
+import { formatToUserTimezone } from '../../utils/date-formatter';
 
 interface BronzeEmailListProps {
   visibleRawEmails: GmailMessage[];
@@ -304,8 +305,8 @@ export const BronzeEmailList: React.FC<BronzeEmailListProps> = (props) => {
                     </div>
                     <div className="text-[11px] text-gray-400 line-clamp-1 italic max-w-lg">{email.snippet}</div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-semibold text-gray-500 uppercase">
-                    {new Date(email.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-semibold text-gray-555 uppercase">
+                    {formatToUserTimezone(email.date, true)}
                   </td>
                 </tr>
               ))

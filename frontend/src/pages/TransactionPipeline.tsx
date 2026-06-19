@@ -6,6 +6,7 @@ import { BronzeEmailList } from '../components/gmail/BronzeEmailList';
 import { SilverStagingList } from '../components/gmail/SilverStagingList';
 import { GoldLedgerList } from '../components/gmail/GoldLedgerList';
 import { DeleteConfirmationModal } from '../components/gmail/DeleteConfirmationModal';
+import { formatToUserTimezone } from '../utils/date-formatter';
 
 const TransactionPipeline: React.FC = () => {
   const {
@@ -462,7 +463,7 @@ const TransactionPipeline: React.FC = () => {
                         <tr key={email.id} className="hover:bg-gray-50/30">
                           <td className="px-4 py-3 font-semibold text-gray-800">{email.sender}</td>
                           <td className="px-4 py-3 text-gray-600 truncate max-w-xs">{email.subject}</td>
-                          <td className="px-4 py-3 text-gray-555">{email.date}</td>
+                          <td className="px-4 py-3 text-gray-555">{formatToUserTimezone(email.date, true)}</td>
                           <td className="px-4 py-3 text-rose-500 font-medium">{email.deletedAt}</td>
                           <td className="px-4 py-3 text-right">
                             <button
