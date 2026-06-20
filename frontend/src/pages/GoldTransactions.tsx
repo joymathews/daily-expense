@@ -28,6 +28,7 @@ const GoldTransactions: React.FC = () => {
     fetchLlmLog,
     billingCycleStartDay,
     expectedSalary,
+    fixedCharges,
   } = useGmailIntegration();
 
   // Search keyword state
@@ -209,7 +210,11 @@ const GoldTransactions: React.FC = () => {
 
   // Compute salary allocation using active cycle range
   const billingCycleRange = getActiveCycleRange(billingCycleStartDay);
-  const salaryAllocation = computeSalaryAllocation(goldTransactions, billingCycleRange, expectedSalary);
+  const salaryAllocation = computeSalaryAllocation(goldTransactions, billingCycleRange, expectedSalary, fixedCharges);
+
+  const activeFixedCharges = (fixedCharges || []).filter(fc => {
+    return fc.startDate <= billingCycleRange.end && fc.endDate >= billingCycleRange.start;
+  });
 
   const getTimelineDateRange = () => {
     if (startDate && endDate) {
@@ -309,6 +314,25 @@ const GoldTransactions: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Active Fixed Charges itemized list */}
+            {activeFixedCharges.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100 text-left">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
+                  Includes Fixed Charges:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {activeFixedCharges.map(fc => (
+                    <span 
+                      key={fc.id} 
+                      className="inline-flex items-center bg-gray-50 border border-gray-150 px-2.5 py-1 rounded-xl text-xs font-bold text-gray-650"
+                    >
+                      {fc.name} (₹{fc.amount.toFixed(2)})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -894,7 +918,6 @@ const GoldTransactions: React.FC = () => {
                 <th className="px-6 py-4 text-left">Merchant</th>
                 <th className="px-6 py-4 text-left">Category</th>
                 <th className="px-6 py-4 text-left">Method</th>
-                <th className="px-6 py-4 text-left">Notes</th>
                 <th className="px-6 py-4 text-right">Amount</th>
                 <th className="px-6 py-4 text-center">Currency</th>
               </tr>
@@ -902,7 +925,7 @@ const GoldTransactions: React.FC = () => {
             <tbody className="divide-y divide-gray-50 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center">
+                  <td colSpan={7} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2.5">
                       <div className="w-8 h-8 border-4 border-indigo-650 border-t-transparent rounded-full animate-spin"></div>
                       <p className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest animate-pulse">Loading Ledger Items...</p>
@@ -911,7 +934,7 @@ const GoldTransactions: React.FC = () => {
                 </tr>
               ) : sortedTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center">
+                  <td colSpan={7} className="px-6 py-16 text-center">
                     <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No verified ledger items found</p>
                   </td>
                 </tr>
@@ -952,6 +975,11 @@ const GoldTransactions: React.FC = () => {
                             Transfer
                           </span>
                         )}
+                        {tx.transactionType === 'fixed' && (
+                          <span className="bg-blue-50 text-blue-750 text-[8px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wider border border-blue-100">
+                            Fixed Charge
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -969,16 +997,12 @@ const GoldTransactions: React.FC = () => {
                       </span>
                     </td>
 
-                    {/* Notes */}
-                    <td className="px-6 py-4 text-gray-500 max-w-[240px] truncate" title={tx.notes}>
-                      {tx.notes || '-'}
-                    </td>
-
                     {/* Amount */}
                     <td className={`px-6 py-4 font-extrabold text-right whitespace-nowrap ${
                       tx.transactionType === 'refund' ? 'text-emerald-600' :
                       tx.transactionType === 'transfer' ? 'text-indigo-500' :
-                      'text-gray-800'
+                      tx.transactionType === 'fixed' ? 'text-blue-600/70' :
+                      'text-gray-805'
                     }`}>
                       {tx.transactionType === 'refund' ? '-' : ''}{tx.amount.toFixed(2)}
                     </td>

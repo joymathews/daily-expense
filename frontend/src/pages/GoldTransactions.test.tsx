@@ -204,4 +204,45 @@ describe('GoldTransactions Page Relocated Widgets', () => {
     fireEvent.click(expandTimelineBtn);
     expect(screen.getByText('18 Jun')).toBeInTheDocument();
   });
+
+  /**
+   * [FUNC-ANALYSIS-9] / [FUNC-ANALYSIS-2]:
+   * Verify that active fixed charges templates are itemized in the breakdown text
+   * and correctly factored into the Salary Allocation Breakdown progress bar totals.
+   */
+  it('incorporates active fixed charges templates into the salary allocation breakdown aggregates and displays them', () => {
+    const fixedChargesMock = [
+      { id: 'fc-1', userId: 'user-1', name: 'House Rent Fixed', amount: 15000, currency: 'INR', category: 'Rent', startDate: '2026-06-01', endDate: '2026-12-01' },
+      { id: 'fc-2', userId: 'user-1', name: 'SIP Plan', amount: 5000, currency: 'INR', category: 'Investment', startDate: '2026-06-01', endDate: '2026-08-01' }
+    ];
+
+    // Inject fixedChargesMock into defaultMockHookValue mock return
+    const customMockHookValue = {
+      ...defaultMockHookValue,
+      fixedCharges: fixedChargesMock,
+    };
+    vi.mocked(useGmailIntegration).mockReturnValue(customMockHookValue as any);
+
+    render(
+      <BrowserRouter>
+        <GoldTransactions />
+      </BrowserRouter>
+    );
+
+    // Verify fixed charges list section header is present
+    expect(screen.getByText(/Includes Fixed Charges:/i)).toBeInTheDocument();
+
+    // Verify individual items are listed
+    expect(screen.getByText(/House Rent Fixed \(₹15000.00\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/SIP Plan \(₹5000.00\)/i)).toBeInTheDocument();
+
+    // Verify percentages are recalculated including fixed charges:
+    // Expected Salary: 100000
+    // Mutual Fund: Ledger: Investment (25000) + Fixed Template: SIP Plan (5000) = 30000 -> 30.0%
+    // Consumption: Ledger: Uber (500) + Starbucks (1500) - Refund (1000) = 1000 + Fixed Template: House Rent Fixed (15000) = 16000 -> 16.0%
+    // Savings: 100000 - 30000 - 16000 = 54000 -> 54.0%
+    expect(screen.getByText(/₹30000.00 \(30.0%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/₹16000.00 \(16.0%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/₹54000.00 \(54.0%\)/i)).toBeInTheDocument();
+  });
 });

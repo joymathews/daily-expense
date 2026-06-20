@@ -251,6 +251,9 @@ describe('Transaction Processing Pipeline Integration', () => {
       deleteFetcherEmail: jest.fn().mockResolvedValue(undefined),
       getUserPreferences: jest.fn().mockResolvedValue({ billingCycleStartDay: 17, expectedSalary: 100000 }),
       updateUserPreferences: jest.fn().mockResolvedValue(undefined),
+      getFixedCharges: jest.fn().mockResolvedValue([]),
+      saveFixedCharge: jest.fn().mockResolvedValue(undefined),
+      deleteFixedCharge: jest.fn().mockResolvedValue(undefined),
     };
 
     const ingestion = new TransactionIngestionService(mockRepo, extractor);

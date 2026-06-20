@@ -32,7 +32,7 @@ export interface PendingTransaction {
   sourceReceivedAt?: string;
   paymentMethod?: string;
   paymentMethodRaw?: string;
-  transactionType?: 'expense' | 'refund' | 'transfer';
+  transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed';
   parentTransactionId?: string;
 }
 
@@ -54,7 +54,7 @@ export interface Transaction {
   sourceReceivedAt?: string;
   bronzeInputId?: string;
   paymentMethod?: string;
-  transactionType?: 'expense' | 'refund' | 'transfer';
+  transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed';
   parentTransactionId?: string;
 }
 
@@ -113,6 +113,23 @@ export interface ITransactionRepository {
   // User preferences
   getUserPreferences(userId: string): Promise<{ billingCycleStartDay: number; expectedSalary: number }>;
   updateUserPreferences(userId: string, cycleStartDay: number, expectedSalary: number): Promise<void>;
+
+  // Fixed charges
+  getFixedCharges(userId: string): Promise<FixedCharge[]>;
+  saveFixedCharge(charge: FixedCharge): Promise<void>;
+  deleteFixedCharge(id: string, userId: string): Promise<void>;
+}
+
+export interface FixedCharge {
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  currency: string;
+  category: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD (mandatory)
+  createdAt?: string;
 }
 
 export interface PaymentMethod {

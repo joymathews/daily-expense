@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { ITransactionRepository, RawInput, PendingTransaction, Transaction } from './transaction-repository';
+import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge } from './transaction-repository';
 import { normalizeCategory } from '../utils/category-helper';
 
 export class SQLiteTransactionRepository implements ITransactionRepository {
@@ -25,7 +25,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
   }
 
   // Wrap runs/queries in Promise utilities for clean async/await code
-  private run(sql: string, params: any[] = []): Promise<void> {
+  public run(sql: string, params: any[] = []): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.run(sql, params, function (err) {
         if (err) reject(err);
@@ -127,7 +127,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         confidence_score REAL,
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
         payment_method TEXT,
-        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer', 'fixed')),
         parent_transaction_id TEXT,
         deleted_at TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -151,7 +151,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         category TEXT NOT NULL,
         notes TEXT,
         payment_method TEXT,
-        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer', 'fixed')),
         parent_transaction_id TEXT,
         deleted_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -174,7 +174,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         extracted_date TEXT,
         extracted_category TEXT,
         extracted_payment_method TEXT,
-        extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund', 'transfer')),
+        extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund', 'transfer', 'fixed')),
         confidence_score REAL,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
@@ -245,6 +245,22 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       );
     `);
     await this.run('CREATE INDEX IF NOT EXISTS idx_fetcher_emails_user ON fetcher_emails(user_id);');
+
+    // 7. Fixed Charges table
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS fixed_charges (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        amount REAL NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'INR',
+        category TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'utc'))
+      );
+    `);
+    await this.run('CREATE INDEX IF NOT EXISTS idx_fixed_charges_user ON fixed_charges(user_id);');
   }
 
   /**
@@ -262,8 +278,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     );
     if (!silverDdl?.sql) return; // Table doesn't exist yet; CREATE IF NOT EXISTS will handle it
 
-    const needsMigration = silverDdl.sql.includes("'expense', 'refund')") &&
-      !silverDdl.sql.includes("'transfer'");
+    const needsMigration = !silverDdl.sql.includes("'fixed'");
     if (!needsMigration) return;
 
     // Disable FK enforcement for the duration of the migration.
@@ -287,7 +302,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         confidence_score REAL,
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'error')),
         payment_method TEXT,
-        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer', 'fixed')),
         parent_transaction_id TEXT,
         deleted_at TEXT,
         extracted_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -316,7 +331,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         category TEXT NOT NULL,
         notes TEXT,
         payment_method TEXT,
-        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer')),
+        transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer', 'fixed')),
         parent_transaction_id TEXT,
         deleted_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -337,7 +352,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       const llmDdl = await this.get<{ sql: string }>(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='llm_extraction_logs';"
       );
-      if (llmDdl?.sql?.includes("'expense', 'refund')") && !llmDdl.sql.includes("'transfer'")) {
+      if (llmDdl?.sql && !llmDdl.sql.includes("'fixed'")) {
         await this.run(`CREATE TABLE llm_extraction_logs_new (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL,
@@ -348,7 +363,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           extracted_date TEXT,
           extracted_category TEXT,
           extracted_payment_method TEXT,
-          extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund', 'transfer')),
+          extracted_transaction_type TEXT DEFAULT 'expense' CHECK (extracted_transaction_type IN ('expense', 'refund', 'transfer', 'fixed')),
           confidence_score REAL,
           extracted_at TEXT DEFAULT (datetime('now', 'utc')),
           FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
@@ -1482,6 +1497,214 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         'INSERT INTO user_preferences (user_id, defaults_seeded, billing_cycle_start_day, expected_salary) VALUES (?, 0, ?, ?)',
         [userId, cycleStartDay, expectedSalary]
       );
+    }
+  }
+
+  async getFixedCharges(userId: string): Promise<FixedCharge[]> {
+    const rows = await this.all<any>(
+      'SELECT id, name, amount, currency, category, start_date, end_date, created_at FROM fixed_charges WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    return rows.map(row => ({
+      id: row.id,
+      userId: userId,
+      name: row.name,
+      amount: row.amount,
+      currency: row.currency,
+      category: row.category,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async saveFixedCharge(charge: FixedCharge): Promise<void> {
+    const getLocalDateString = () => {
+      const d = new Date();
+      const offset = d.getTimezoneOffset();
+      const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+      return localDate.toISOString().split('T')[0];
+    };
+    const today = getLocalDateString();
+
+    const generateOccurrences = (startStr: string, endStr: string): string[] => {
+      const occurrences: string[] = [];
+      const [sYear, sMonth, sDay] = startStr.split('-').map(Number);
+      const [eYear, eMonth, eDay] = endStr.split('-').map(Number);
+      
+      let currentYear = sYear;
+      let currentMonth = sMonth - 1; // 0-indexed
+      
+      const endTarget = new Date(Date.UTC(eYear, eMonth - 1, eDay));
+      
+      while (true) {
+        // Get the maximum day for the current month
+        const maxDays = new Date(Date.UTC(currentYear, currentMonth + 1, 0)).getUTCDate();
+        const actualDay = Math.min(sDay, maxDays);
+        
+        const currentTarget = new Date(Date.UTC(currentYear, currentMonth, actualDay));
+        if (currentTarget > endTarget) {
+          break;
+        }
+        
+        occurrences.push(currentTarget.toISOString().split('T')[0]);
+        
+        // Move to next month
+        currentMonth++;
+        if (currentMonth > 11) {
+          currentMonth = 0;
+          currentYear++;
+        }
+      }
+      return occurrences;
+    };
+
+    // 1. Check if template exists
+    const existing = await this.get<any>(
+      'SELECT id, user_id FROM fixed_charges WHERE id = ?',
+      [charge.id]
+    );
+
+    if (existing && existing.user_id !== charge.userId) {
+      throw new Error('Unauthorized access to fixed charge template');
+    }
+
+    await this.run('BEGIN TRANSACTION');
+    try {
+      if (!existing) {
+        // --- NEW TEMPLATE ---
+        // Insert template
+        await this.run(
+          `INSERT INTO fixed_charges (id, user_id, name, amount, currency, category, start_date, end_date)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [charge.id, charge.userId, charge.name, charge.amount, charge.currency, charge.category, charge.startDate, charge.endDate]
+        );
+
+        // Generate and insert all occurrences
+        const dates = generateOccurrences(charge.startDate, charge.endDate);
+        for (const date of dates) {
+          await this.run(
+            `INSERT INTO gold_transactions (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type)
+             VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, 'Fixed', 'fixed')`,
+            [
+              crypto.randomUUID(),
+              charge.userId,
+              charge.name,
+              Math.round(charge.amount * 100),
+              charge.currency,
+              date,
+              normalizeCategory(charge.category),
+              `Fixed Charge ID: ${charge.id} | Auto-generated`
+            ]
+          );
+        }
+      } else {
+        // --- EDITED TEMPLATE ---
+        // Update template
+        await this.run(
+          `UPDATE fixed_charges SET name = ?, amount = ?, currency = ?, category = ?, start_date = ?, end_date = ?
+           WHERE id = ? AND user_id = ?`,
+          [charge.name, charge.amount, charge.currency, charge.category, charge.startDate, charge.endDate, charge.id, charge.userId]
+        );
+
+        // Fetch associated gold transactions matching this fixed charge template
+        const associatedTxs = await this.all<any>(
+          `SELECT id, transaction_date FROM gold_transactions 
+           WHERE user_id = ? AND notes LIKE ?`,
+          [charge.userId, `%Fixed Charge ID: ${charge.id}%`]
+        );
+
+        // Filter into future and process
+        const futureTxs = associatedTxs.filter(tx => tx.transaction_date >= today);
+
+        // Delete future transactions that are beyond the new end date
+        for (const tx of futureTxs) {
+          if (tx.transaction_date > charge.endDate) {
+            await this.run('DELETE FROM gold_transactions WHERE id = ? AND user_id = ?', [tx.id, charge.userId]);
+          } else {
+            // Update future transactions that are still within range
+            await this.run(
+              `UPDATE gold_transactions SET merchant = ?, amount_cents = ?, currency = ?, category = ?
+               WHERE id = ? AND user_id = ?`,
+              [
+                charge.name,
+                Math.round(charge.amount * 100),
+                charge.currency,
+                normalizeCategory(charge.category),
+                tx.id,
+                charge.userId
+              ]
+            );
+          }
+        }
+
+        // Generate occurrences and insert missing future transactions
+        const theoreticalDates = generateOccurrences(charge.startDate, charge.endDate);
+        const futureTheoreticalDates = theoreticalDates.filter(date => date >= today && date >= charge.startDate);
+
+        for (const date of futureTheoreticalDates) {
+          const alreadyExists = associatedTxs.some(tx => tx.transaction_date === date);
+          if (!alreadyExists) {
+            await this.run(
+              `INSERT INTO gold_transactions (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type)
+               VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, 'Fixed', 'fixed')`,
+              [
+                crypto.randomUUID(),
+                charge.userId,
+                charge.name,
+                Math.round(charge.amount * 100),
+                charge.currency,
+                date,
+                normalizeCategory(charge.category),
+                `Fixed Charge ID: ${charge.id} | Auto-generated`
+              ]
+            );
+          }
+        }
+      }
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
+  }
+
+  async deleteFixedCharge(id: string, userId: string): Promise<void> {
+    const getLocalDateString = () => {
+      const d = new Date();
+      const offset = d.getTimezoneOffset();
+      const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+      return localDate.toISOString().split('T')[0];
+    };
+    const today = getLocalDateString();
+
+    const existing = await this.get<any>(
+      'SELECT id FROM fixed_charges WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    if (!existing) {
+      throw new Error('Fixed charge template not found');
+    }
+
+    await this.run('BEGIN TRANSACTION');
+    try {
+      // Delete template
+      await this.run(
+        'DELETE FROM fixed_charges WHERE id = ? AND user_id = ?',
+        [id, userId]
+      );
+
+      // Delete only future transactions associated with it
+      await this.run(
+        `DELETE FROM gold_transactions 
+         WHERE user_id = ? AND notes LIKE ? AND transaction_date >= ?`,
+        [userId, `%Fixed Charge ID: ${id}%`, today]
+      );
+
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
     }
   }
 

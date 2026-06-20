@@ -601,4 +601,85 @@ router.put('/user-preferences', async (req, res) => {
   }
 });
 
+
+/**
+ * GET /api/pipeline/fixed-charges
+ * Retrieves all fixed charges settings templates for the user.
+ */
+router.get('/fixed-charges', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const fixedCharges = await repository.getFixedCharges(userId);
+    await repository.close();
+    res.status(200).json({ fixedCharges });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch fixed charges' });
+  }
+});
+
+/**
+ * POST /api/pipeline/fixed-charges
+ * Saves a fixed charge settings template (creates or edits).
+ */
+router.post('/fixed-charges', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { id, name, amount, currency, category, startDate, endDate } = req.body;
+
+  if (!name || amount === undefined || !currency || !category || !startDate || !endDate) {
+    return res.status(400).json({ error: 'name, amount, currency, category, startDate, and endDate are required' });
+  }
+
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const chargeId = id || crypto.randomUUID();
+    
+    await repository.saveFixedCharge({
+      id: chargeId,
+      userId,
+      name,
+      amount: numericAmount,
+      currency,
+      category,
+      startDate,
+      endDate,
+    });
+
+    await repository.close();
+    res.status(200).json({ status: 'saved', id: chargeId });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to save fixed charge' });
+  }
+});
+
+/**
+ * DELETE /api/pipeline/fixed-charges/:id
+ * Deletes a fixed charge settings template and cascades to future occurrences.
+ */
+router.delete('/fixed-charges/:id', async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.deleteFixedCharge(id, userId);
+    await repository.close();
+    res.status(200).json({ status: 'deleted' });
+  } catch (error: any) {
+    if (error.message === 'Fixed charge template not found') {
+      res.status(404).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: error.message || 'Failed to delete fixed charge' });
+    }
+  }
+});
+
 export default router;
+

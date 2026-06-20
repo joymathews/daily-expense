@@ -231,7 +231,6 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
               <th className="px-2 py-2.5 text-left">Merchant</th>
               <th className="px-2 py-2.5 text-center">Category</th>
               <th className="px-2 py-2.5 text-center">Method</th>
-              <th className="px-2 py-2.5 text-left">Notes</th>
               <th className="px-2 py-2.5 text-right">Amount</th>
               <th className="px-2 py-2.5 text-center">Currency</th>
             </tr>
@@ -239,7 +238,7 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
           <tbody className="divide-y divide-gray-50 bg-white">
             {sortedTransactions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-2 py-12 text-center">
+                <td colSpan={7} className="px-2 py-12 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No matching validated ledger items found</p>
                 </td>
               </tr>
@@ -282,9 +281,6 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
                     <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded font-bold uppercase text-[9px] border border-slate-100/30 truncate max-w-[120px] whitespace-nowrap" title={tx.paymentMethod}>
                       {tx.paymentMethod || 'Unknown'}
                     </span>
-                  </td>
-                  <td className="px-2 py-2.5 text-left text-gray-555 max-w-[180px] truncate" title={tx.notes}>
-                    {tx.notes || '-'}
                   </td>
                   <td className={`px-2 py-2.5 font-extrabold text-right whitespace-nowrap ${
                     tx.transactionType === 'refund' ? 'text-emerald-600' :

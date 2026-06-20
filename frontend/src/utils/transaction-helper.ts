@@ -11,13 +11,10 @@ export interface HelperTransaction {
   paymentMethod?: string;
 }
 
-/**
- * Returns the signed financial value of a transaction.
- * Expenses are positive, refunds are negative offsets, and transfers are 0.
- */
 export const getSignedAmount = (t: HasAmountAndTransactionType): number => {
   if (t.transactionType === 'refund') return -t.amount;
   if (t.transactionType === 'transfer') return 0;
+  if (t.transactionType === 'fixed') return 0;
   return t.amount;
 };
 
@@ -85,6 +82,17 @@ export const getDatesInRange = (startStr: string, endStr: string): string[] => {
   return dates;
 };
 
+export interface FixedChargeTemplate {
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  currency: string;
+  category: string;
+  startDate: string;
+  endDate: string;
+}
+
 export interface SalaryAllocationResult {
   mutualFundSpend: number;
   consumptionSpend: number;
@@ -101,7 +109,8 @@ export interface SalaryAllocationResult {
 export const computeSalaryAllocation = (
   transactions: HelperTransaction[],
   billingCycleRange: { start: string; end: string },
-  expectedSalary: number
+  expectedSalary: number,
+  fixedCharges?: FixedChargeTemplate[]
 ): SalaryAllocationResult => {
   const allocationTransactions = transactions.filter(tx => {
     if (tx.transactionDate < billingCycleRange.start) return false;
@@ -109,20 +118,42 @@ export const computeSalaryAllocation = (
     return true;
   });
 
-  const mutualFundSpend = allocationTransactions
+  const activeFixedCharges = (fixedCharges || []).filter(fc => {
+    return fc.startDate <= billingCycleRange.end && fc.endDate >= billingCycleRange.start;
+  });
+
+  const fixedMutualFundSpend = activeFixedCharges
+    .filter(fc => {
+      const catLower = (fc.category || '').toLowerCase();
+      return catLower === 'investment' || catLower === 'mutual fund';
+    })
+    .reduce((sum, fc) => sum + fc.amount, 0);
+
+  const fixedConsumptionSpend = activeFixedCharges
+    .filter(fc => {
+      const catLower = (fc.category || '').toLowerCase();
+      return catLower !== 'investment' && catLower !== 'mutual fund';
+    })
+    .reduce((sum, fc) => sum + fc.amount, 0);
+
+  const ledgerMutualFundSpend = allocationTransactions
     .filter(tx => {
       const catLower = (tx.category || '').toLowerCase();
       return catLower === 'investment' || catLower === 'mutual fund';
     })
     .reduce((sum, tx) => sum + getSignedAmount(tx), 0);
 
-  const consumptionSpend = allocationTransactions
+  const mutualFundSpend = ledgerMutualFundSpend + fixedMutualFundSpend;
+
+  const ledgerConsumptionSpend = allocationTransactions
     .filter(tx => {
       if (tx.transactionType === 'transfer') return false;
       const catLower = (tx.category || '').toLowerCase();
       return catLower !== 'investment' && catLower !== 'mutual fund';
     })
     .reduce((sum, tx) => sum + getSignedAmount(tx), 0);
+
+  const consumptionSpend = ledgerConsumptionSpend + fixedConsumptionSpend;
 
   const totalSaved = Math.max(0, expectedSalary - mutualFundSpend - consumptionSpend);
 

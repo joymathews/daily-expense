@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import type { FixedChargeTemplate } from '../utils/transaction-helper';
 
 export interface FetchProgress {
   status: 'idle' | 'started' | 'fetching' | 'completed' | 'error';
@@ -35,7 +36,7 @@ export interface GmailMessage {
     category: string;
     status: 'pending' | 'approved' | 'rejected' | 'error';
     paymentMethod?: string;
-    transactionType?: 'expense' | 'refund' | 'transfer';
+    transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed';
     parentTransactionId?: string;
   };
   deletedAt?: string;
@@ -63,7 +64,7 @@ export interface SilverTransaction {
   emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
-  transactionType?: 'expense' | 'refund' | 'transfer';
+  transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed';
   parentTransactionId?: string;
 }
 
@@ -90,7 +91,7 @@ export interface GoldTransaction {
   emailReceivedAt?: string; // Compatibility
   paymentMethod?: string;
   deletedAt?: string;
-  transactionType?: 'expense' | 'refund' | 'transfer';
+  transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed';
   parentTransactionId?: string;
 }
 
@@ -153,6 +154,7 @@ export const useGmailIntegration = () => {
   const [llmAccuracyStats, setLlmAccuracyStats] = useState<LlmAccuracyStats | null>(null);
   const [billingCycleStartDay, setBillingCycleStartDay] = useState<number>(17);
   const [expectedSalary, setExpectedSalary] = useState<number>(100000);
+  const [fixedCharges, setFixedCharges] = useState<FixedChargeTemplate[]>([]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -438,6 +440,65 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const loadFixedCharges = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pipeline/fixed-charges', {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFixedCharges(data.fixedCharges || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load fixed charges (normal in tests):', err);
+    }
+  };
+
+  const saveFixedCharge = async (charge: Omit<FixedChargeTemplate, 'userId'>) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pipeline/fixed-charges', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify(charge)
+      });
+      if (res.ok) {
+        await loadFixedCharges();
+        await loadGoldTransactions();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to save fixed charge');
+      }
+    } catch (err: any) {
+      console.error('Failed to save fixed charge:', err);
+      throw err;
+    }
+  };
+
+  const deleteFixedCharge = async (id: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/pipeline/fixed-charges/${id}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        await loadFixedCharges();
+        await loadGoldTransactions();
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete fixed charge');
+      }
+    } catch (err: any) {
+      console.error('Failed to delete fixed charge:', err);
+      throw err;
+    }
+  };
+
   const loadAllLayers = async (start = startDate, end = endDate) => {
     setIsLoading(true);
     await Promise.all([
@@ -450,6 +511,7 @@ export const useGmailIntegration = () => {
       loadLlmAccuracyStats(),
       loadFetcherEmails(),
       loadUserPreferences(),
+      loadFixedCharges(),
     ]);
     setIsLoading(false);
   };
@@ -1048,7 +1110,7 @@ export const useGmailIntegration = () => {
     category: string,
     notes?: string,
     paymentMethod?: string,
-    transactionType?: 'expense' | 'refund' | 'transfer',
+    transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed',
     parentTransactionId?: string
   ) => {
     setIsLoading(true);
@@ -1278,7 +1340,7 @@ export const useGmailIntegration = () => {
     category: string;
     paymentMethod: string;
     notes?: string;
-    transactionType?: 'expense' | 'refund' | 'transfer';
+    transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed';
     parentTransactionId?: string;
   }) => {
     setIsLoading(true);
@@ -1384,5 +1446,9 @@ export const useGmailIntegration = () => {
     expectedSalary,
     loadUserPreferences,
     updateUserPreferences,
+    fixedCharges,
+    loadFixedCharges,
+    saveFixedCharge,
+    deleteFixedCharge,
   };
 };

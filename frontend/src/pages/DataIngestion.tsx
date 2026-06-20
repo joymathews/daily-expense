@@ -52,9 +52,89 @@ const DataIngestion: React.FC = () => {
     billingCycleStartDay,
     expectedSalary,
     updateUserPreferences,
+    fixedCharges,
+    saveFixedCharge,
+    deleteFixedCharge,
   } = useGmailIntegration();
 
   const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization' | 'settings'>('gmail');
+
+  // Fixed charges form state
+  const [fcId, setFcId] = useState<string>('');
+  const [fcName, setFcName] = useState<string>('');
+  const [fcAmount, setFcAmount] = useState<string>('');
+  const [fcCurrency, setFcCurrency] = useState<string>('INR');
+  const [fcCategory, setFcCategory] = useState<string>('Other');
+  const [fcStartDate, setFcStartDate] = useState<string>('');
+  const [fcEndDate, setFcEndDate] = useState<string>('');
+  const [fcError, setFcError] = useState<string | null>(null);
+  const [fcSuccess, setFcSuccess] = useState<string | null>(null);
+  const [fcSubmitting, setFcSubmitting] = useState<boolean>(false);
+
+  const handleFcSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFcError(null);
+    setFcSuccess(null);
+
+    if (!fcName.trim()) {
+      setFcError('Name is required');
+      return;
+    }
+    const amt = parseFloat(fcAmount);
+    if (isNaN(amt) || amt <= 0) {
+      setFcError('Amount must be a positive number');
+      return;
+    }
+    if (!fcStartDate) {
+      setFcError('Start Date is required');
+      return;
+    }
+    if (!fcEndDate) {
+      setFcError('End Date is required');
+      return;
+    }
+    if (fcStartDate > fcEndDate) {
+      setFcError('Start Date cannot be after End Date');
+      return;
+    }
+
+    setFcSubmitting(true);
+    try {
+      await saveFixedCharge({
+        id: fcId || undefined as any,
+        name: fcName.trim(),
+        amount: amt,
+        currency: fcCurrency,
+        category: fcCategory,
+        startDate: fcStartDate,
+        endDate: fcEndDate
+      });
+      setFcSuccess(fcId ? 'Fixed charge updated successfully!' : 'Fixed charge template created and upfront ledger items generated!');
+      // Clear form
+      setFcId('');
+      setFcName('');
+      setFcAmount('');
+      setFcCategory('Other');
+      setFcStartDate('');
+      setFcEndDate('');
+    } catch (err: any) {
+      setFcError(err.message || 'Failed to save fixed charge');
+    } finally {
+      setFcSubmitting(false);
+    }
+  };
+
+  const handleEditFc = (fc: any) => {
+    setFcId(fc.id);
+    setFcName(fc.name);
+    setFcAmount(fc.amount.toString());
+    setFcCurrency(fc.currency);
+    setFcCategory(fc.category);
+    setFcStartDate(fc.startDate);
+    setFcEndDate(fc.endDate);
+    setFcError(null);
+    setFcSuccess(null);
+  };
 
   // Settings local state
   const [localCycleDay, setLocalCycleDay] = useState(billingCycleStartDay.toString());
@@ -99,7 +179,7 @@ const DataIngestion: React.FC = () => {
   const [category, setCategory] = useState('Other');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [notes, setNotes] = useState('');
-  const [transactionType, setTransactionType] = useState<'expense' | 'refund' | 'transfer'>('expense');
+  const [transactionType, setTransactionType] = useState<'expense' | 'refund' | 'transfer' | 'fixed'>('expense');
   const [parentTransactionId, setParentTransactionId] = useState('');
 
   const parentCandidates = goldTransactions.filter(
@@ -479,6 +559,7 @@ const DataIngestion: React.FC = () => {
                   <option value="expense">Expense</option>
                   <option value="refund">Refund</option>
                   <option value="transfer">Transfer (Own Account)</option>
+                  <option value="fixed">Fixed Charge</option>
                 </select>
               </div>
 
@@ -834,50 +915,247 @@ const DataIngestion: React.FC = () => {
         {activeSubTab === 'settings' && (
           <div className="bg-white border border-gray-150/70 shadow-sm rounded-2xl p-6 md:p-8 space-y-6 animate-fade-in text-left">
             <h3 className="text-base font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-3">
-              ⚙️ Cycle & Salary Settings
+              ⚙️ Settings & Fixed Charges
             </h3>
-            <form onSubmit={handleSaveSettings} className="max-w-md space-y-4" data-testid="analysis-settings-form">
-              <div className="flex flex-col">
-                <label htmlFor="cycle-day-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
-                  Billing Cycle Start Day (1-28):
-                </label>
-                <input
-                  id="cycle-day-input"
-                  type="number"
-                  min="1"
-                  max="28"
-                  value={localCycleDay}
-                  onChange={(e) => setLocalCycleDay(e.target.value)}
-                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all font-semibold"
-                />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Left Column: Forms */}
+              <div className="space-y-8">
+                {/* Cycle and Salary Settings Form */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+                    Cycle & Salary Configuration
+                  </h4>
+                  <form onSubmit={handleSaveSettings} className="space-y-4" data-testid="analysis-settings-form">
+                    <div className="flex flex-col">
+                      <label htmlFor="cycle-day-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
+                        Billing Cycle Start Day (1-28):
+                      </label>
+                      <input
+                        id="cycle-day-input"
+                        type="number"
+                        min="1"
+                        max="28"
+                        value={localCycleDay}
+                        onChange={(e) => setLocalCycleDay(e.target.value)}
+                        className="bg-gray-50/50 border border-gray-250 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all font-semibold"
+                      />
+                    </div>
+
+                    <div className="flex flex-col">
+                      <label htmlFor="salary-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
+                        Expected Monthly Salary:
+                      </label>
+                      <input
+                        id="salary-input"
+                        type="number"
+                        min="1"
+                        value={localSalary}
+                        onChange={(e) => setLocalSalary(e.target.value)}
+                        className="bg-gray-50/50 border border-gray-250 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all font-semibold"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all uppercase tracking-wider cursor-pointer"
+                    >
+                      Save Preferences
+                    </button>
+                  </form>
+                  {settingsMessage && (
+                    <p className={`text-xs font-bold ${settingsMessage.isError ? 'text-red-500' : 'text-emerald-600'}`}>
+                      {settingsMessage.text}
+                    </p>
+                  )}
+                </div>
+
+                {/* Fixed Charges Template Form */}
+                <div className="space-y-4 pt-4 border-t border-gray-105/50">
+                  <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+                    {fcId ? '✏️ Edit Fixed Charge Template' : '➕ Add Fixed Charge Template'}
+                  </h4>
+                  {fcError && (
+                    <div className="bg-red-50 border border-red-200 text-red-750 text-xs px-3 py-2 rounded-xl font-semibold">
+                      ⚠️ {fcError}
+                    </div>
+                  )}
+                  {fcSuccess && (
+                    <div className="bg-emerald-55/75 border border-emerald-250 text-emerald-805 text-xs px-3 py-2 rounded-xl font-semibold">
+                      🎉 {fcSuccess}
+                    </div>
+                  )}
+                  <form onSubmit={handleFcSubmit} className="space-y-3" data-testid="fixed-charge-form">
+                    <div className="flex flex-col">
+                      <label htmlFor="fc-name" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Name *</label>
+                      <input
+                        id="fc-name"
+                        type="text"
+                        placeholder="e.g. House Rent, Car Loan EMI"
+                        value={fcName}
+                        onChange={(e) => setFcName(e.target.value)}
+                        className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col">
+                        <label htmlFor="fc-amount" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Amount *</label>
+                        <input
+                          id="fc-amount"
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={fcAmount}
+                          onChange={(e) => setFcAmount(e.target.value)}
+                          className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <label htmlFor="fc-currency" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Currency *</label>
+                        <select
+                          id="fc-currency"
+                          value={fcCurrency}
+                          onChange={(e) => setFcCurrency(e.target.value)}
+                          className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 outline-none bg-white cursor-pointer"
+                        >
+                          <option value="INR">INR (₹)</option>
+                          <option value="USD">USD ($)</option>
+                          <option value="EUR">EUR (€)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col">
+                      <label htmlFor="fc-category" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Category *</label>
+                      <input
+                        id="fc-category"
+                        type="text"
+                        list="fc-categories-list"
+                        value={fcCategory}
+                        onChange={(e) => setFcCategory(e.target.value)}
+                        className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 outline-none"
+                      />
+                      <datalist id="fc-categories-list">
+                        {STANDARD_CATEGORIES.map(opt => (
+                          <option key={opt} value={opt} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col">
+                        <label htmlFor="fc-start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date *</label>
+                        <input
+                          id="fc-start-date"
+                          type="date"
+                          value={fcStartDate}
+                          onChange={(e) => setFcStartDate(e.target.value)}
+                          className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer focus:ring-2 focus:ring-indigo-550/30 outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <label htmlFor="fc-end-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">End Date *</label>
+                        <input
+                          id="fc-end-date"
+                          type="date"
+                          value={fcEndDate}
+                          onChange={(e) => setFcEndDate(e.target.value)}
+                          className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer focus:ring-2 focus:ring-indigo-550/30 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="submit"
+                        disabled={fcSubmitting}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md hover:shadow-lg transition-all"
+                      >
+                        {fcSubmitting ? 'Saving...' : fcId ? 'Update Template' : 'Create Template'}
+                      </button>
+                      {fcId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFcId('');
+                            setFcName('');
+                            setFcAmount('');
+                            setFcCategory('Other');
+                            setFcStartDate('');
+                            setFcEndDate('');
+                            setFcError(null);
+                            setFcSuccess(null);
+                          }}
+                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
               </div>
 
-              <div className="flex flex-col">
-                <label htmlFor="salary-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
-                  Expected Monthly Salary:
-                </label>
-                <input
-                  id="salary-input"
-                  type="number"
-                  min="1"
-                  value={localSalary}
-                  onChange={(e) => setLocalSalary(e.target.value)}
-                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all font-semibold"
-                />
-              </div>
+              {/* Right Column: List of Templates */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+                  📋 Active Fixed Charges Templates
+                </h4>
+                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                  {fixedCharges.map((fc) => (
+                    <div 
+                      key={fc.id} 
+                      className="border border-gray-150 rounded-xl p-4 bg-gray-50/30 hover:bg-gray-55 transition-all flex flex-col space-y-3 text-left relative"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h5 className="text-xs font-bold text-gray-800">{fc.name}</h5>
+                          <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mt-0.5">{fc.category}</p>
+                        </div>
+                        <span className="text-xs font-extrabold text-gray-900 bg-white border border-gray-150/60 px-2 py-0.5 rounded-lg">
+                          {fc.amount.toLocaleString('en-IN', { style: 'currency', currency: fc.currency })}
+                        </span>
+                      </div>
 
-              <button
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all uppercase tracking-wider cursor-pointer"
-              >
-                Save Settings
-              </button>
-            </form>
-            {settingsMessage && (
-              <p className={`mt-4 text-xs font-bold ${settingsMessage.isError ? 'text-red-500' : 'text-emerald-600'}`}>
-                {settingsMessage.text}
-              </p>
-            )}
+                      <div className="text-[10px] text-gray-500 font-semibold space-y-1">
+                        <p>📅 Start: {fc.startDate}</p>
+                        <p>📅 End: {fc.endDate}</p>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                        <button
+                          onClick={() => handleEditFc(fc)}
+                          className="text-[10px] font-bold uppercase text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Are you sure you want to delete the "${fc.name}" template? This will delete all future scheduled occurrences from the ledger (past occurrences will be preserved).`)) {
+                              try {
+                                await deleteFixedCharge(fc.id);
+                                setFcSuccess('Template deleted and future transactions removed.');
+                              } catch (err: any) {
+                                setFcError(err.message || 'Failed to delete template');
+                              }
+                            }
+                          }}
+                          className="text-[10px] font-bold uppercase text-red-500 hover:text-red-700 cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {fixedCharges.length === 0 && (
+                    <div className="text-center py-8 text-xs font-medium text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                      No fixed charges templates configured.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

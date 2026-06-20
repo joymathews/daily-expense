@@ -1258,6 +1258,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(headerTexts).toContain('Amount');
     expect(headerTexts).toContain('Category');
     expect(headerTexts).toContain('Method');
+    expect(headerTexts).not.toContain('Notes');
     expect(headerTexts).not.toContain('Lineage / Comments');
     expect(headerTexts).not.toContain('Action');
     
@@ -1272,9 +1273,6 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Check that the date and method are displayed inside the table
     expect(screen.getByText('2026-06-12')).toBeInTheDocument();
     expect(screen.getByText('Gold Stacked Method')).toBeInTheDocument();
-
-    // Verify that the comment/notes are visible on the table page since Notes is a column
-    expect(screen.getByText('Verified comment')).toBeInTheDocument();
 
     // Click the Merchant cell to open the modal
     fireEvent.click(screen.getByText('Special Gold Merchant'));
@@ -2182,10 +2180,6 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Verify presence of table rows
     expect(screen.getByText('Supermarket A')).toBeInTheDocument();
     expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
-
-    // Verify high density display columns
-    expect(screen.getByText('Weekly groceries')).toBeInTheDocument();
-    expect(screen.getByText('Business trip')).toBeInTheDocument();
 
     // Verify totals summary widget elements
     expect(screen.getAllByText('INR').length).toBeGreaterThan(0);

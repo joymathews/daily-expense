@@ -17,7 +17,7 @@ interface EmailDetailModalProps {
     category: string,
     notes?: string,
     paymentMethod?: string,
-    transactionType?: 'expense' | 'refund' | 'transfer',
+    transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed',
     parentTransactionId?: string
   ) => Promise<void>;
   
@@ -592,6 +592,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     <option value="expense">Expense</option>
                     <option value="refund">Refund</option>
                     <option value="transfer">Transfer (Own Account)</option>
+                    <option value="fixed">Fixed Charge</option>
                   </select>
                 </div>
                 {transactionType === 'refund' && (
