@@ -3986,4 +3986,80 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-51] Persistent Fetcher Sender Emails / [NFR-USAB-26] Suggestions Performance
+   * Test verifies previously saved sender emails are rendered in datalist autocomplete
+   * suggestions list, and adding a new sender email fires a POST to persist it.
+   */
+  it('displays persistent fetcher email suggestions in a datalist and saves new senders', async () => {
+    const mockFetcherEmails = ['billing@amazon.com', 'uber@uber.com'];
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/ingestion/fetcher-emails')) {
+        if (init && init.method === 'POST') {
+          const body = JSON.parse(init.body);
+          mockFetcherEmails.push(body.email);
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ fetcherEmail: body.email }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ fetcherEmails: [...mockFetcherEmails] }),
+        });
+      }
+      // General fallbacks for component mount requests
+      if (url.includes('/api/ingestion/payment-methods') || url.includes('/api/pipeline/raw-inputs') || url.includes('/api/pipeline/silver-transactions') || url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], transactions: [], paymentMethods: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Ingestion page
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
+
+    // Input element should have list attribute
+    const senderInput = screen.getByPlaceholderText(/Add sender email.../i);
+    expect(senderInput).toHaveAttribute('list', 'fetcher-emails-list');
+
+    // Datalist should contain mock option elements
+    const datalist = screen.getByTestId('fetcher-emails-datalist');
+    expect(datalist).toBeInTheDocument();
+    
+    // Wait for mock fetcher emails to load and populate datalist options
+    await waitFor(() => {
+      const freshDatalist = screen.getByTestId('fetcher-emails-datalist');
+      const options = freshDatalist.querySelectorAll('option');
+      expect(options.length).toBe(2);
+      expect(options[0].getAttribute('value')).toBe('billing@amazon.com');
+      expect(options[1].getAttribute('value')).toBe('uber@uber.com');
+    });
+
+    // Enter a new email and press enter to trigger saving to the database
+    fireEvent.change(senderInput, { target: { value: 'new-sender@test.com' } });
+    fireEvent.keyDown(senderInput, { key: 'Enter', code: 'Enter' });
+
+    // Verify POST was dispatched to save email
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/ingestion/fetcher-emails', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'new-sender@test.com' })
+      }));
+    });
+
+    // Verify the datalist receives the updated list of option values
+    await waitFor(() => {
+      const freshDatalist = screen.getByTestId('fetcher-emails-datalist');
+      const options = freshDatalist.querySelectorAll('option');
+      expect(options.length).toBe(3);
+      expect(options[2].getAttribute('value')).toBe('new-sender@test.com');
+    });
+
+    vi.unstubAllGlobals();
+  });
 });
+

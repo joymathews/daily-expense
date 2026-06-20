@@ -48,6 +48,7 @@ const DataIngestion: React.FC = () => {
     applyRetroactiveStandardization,
     goldTransactions,
     isLoading,
+    fetcherEmails,
   } = useGmailIntegration();
 
   const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization'>('gmail');
@@ -225,6 +226,7 @@ const DataIngestion: React.FC = () => {
               error={error}
               isFetching={isFetching}
               onFetchClick={handleFetchClick}
+              fetcherEmails={fetcherEmails}
             />
 
             {/* Ingestion Progress Tracker */}

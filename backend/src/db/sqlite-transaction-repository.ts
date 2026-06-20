@@ -222,6 +222,17 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         defaults_seeded INTEGER DEFAULT 0
       );
     `);
+
+    // 6. Fetcher Emails table
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS fetcher_emails (
+        user_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'utc')),
+        PRIMARY KEY (user_id, email)
+      );
+    `);
+    await this.run('CREATE INDEX IF NOT EXISTS idx_fetcher_emails_user ON fetcher_emails(user_id);');
   }
 
   /**
@@ -1406,6 +1417,28 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       paymentMethodAccuracy,
       totalTested: total
     };
+  }
+
+  async getFetcherEmails(userId: string): Promise<string[]> {
+    const rows = await this.all<{ email: string }>(
+      'SELECT email FROM fetcher_emails WHERE user_id = ? ORDER BY email ASC',
+      [userId]
+    );
+    return rows.map(r => r.email);
+  }
+
+  async saveFetcherEmail(userId: string, email: string): Promise<void> {
+    await this.run(
+      'INSERT OR IGNORE INTO fetcher_emails (user_id, email) VALUES (?, ?)',
+      [userId, email]
+    );
+  }
+
+  async deleteFetcherEmail(userId: string, email: string): Promise<void> {
+    await this.run(
+      'DELETE FROM fetcher_emails WHERE user_id = ? AND email = ?',
+      [userId, email]
+    );
   }
 
   close(): Promise<void> {

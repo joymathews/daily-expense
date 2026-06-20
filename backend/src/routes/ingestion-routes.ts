@@ -31,6 +31,13 @@ router.post(['/gmail/fetch', '/fetch'], async (req, res) => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
+    // Auto-save fetcher email list targets to database
+    for (const senderEmail of filters.sender) {
+      if (senderEmail && typeof senderEmail === 'string') {
+        await repository.saveFetcherEmail(userId, senderEmail.trim().toLowerCase());
+      }
+    }
+
     const emails = await gmailService.fetchEmails(accessToken, filters);
 
     // Save to raw table (Bronze Layer)
@@ -61,6 +68,7 @@ router.post(['/gmail/fetch', '/fetch'], async (req, res) => {
  */
 router.post(['/gmail/fetch-list', '/fetch-list'], async (req, res) => {
   const { accessToken, filters } = req.body;
+  const userId = (req as any).auth?.sub;
 
   if (!accessToken) {
     return res.status(400).json({ error: 'Google Access Token is required' });
@@ -76,6 +84,17 @@ router.post(['/gmail/fetch-list', '/fetch-list'], async (req, res) => {
   }
 
   try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    // Auto-save fetcher email list targets to database
+    for (const senderEmail of filters.sender) {
+      if (senderEmail && typeof senderEmail === 'string') {
+        await repository.saveFetcherEmail(userId, senderEmail.trim().toLowerCase());
+      }
+    }
+    await repository.close();
+
     const messageIds = await gmailService.fetchMessageIds(accessToken, filters);
     res.status(200).json({ messageIds });
   } catch (error: any) {
@@ -329,5 +348,72 @@ router.post('/standardize-retroactive', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/ingestion/fetcher-emails
+ */
+router.get('/fetcher-emails', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const emails = await repository.getFetcherEmails(userId);
+    await repository.close();
+    res.status(200).json({ fetcherEmails: emails });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch saved sender emails' });
+  }
+});
+
+/**
+ * POST /api/ingestion/fetcher-emails
+ */
+router.post('/fetcher-emails', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { email } = req.body;
+
+  if (!email || typeof email !== 'string' || email.trim() === '') {
+    return res.status(400).json({ error: 'Email address is required' });
+  }
+
+  const trimmedEmail = email.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(trimmedEmail)) {
+    return res.status(400).json({ error: 'Invalid email address format' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.saveFetcherEmail(userId, trimmedEmail);
+    await repository.close();
+    res.status(201).json({ fetcherEmail: trimmedEmail });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to save sender email' });
+  }
+});
+
+/**
+ * DELETE /api/ingestion/fetcher-emails/:email
+ */
+router.delete('/fetcher-emails/:email', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { email } = req.params;
+
+  if (!email || typeof email !== 'string' || email.trim() === '') {
+    return res.status(400).json({ error: 'Email parameter is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.deleteFetcherEmail(userId, email.trim().toLowerCase());
+    await repository.close();
+    res.status(200).json({ message: 'Fetcher email deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to delete sender email' });
+  }
+});
+
 export default router;
+
 

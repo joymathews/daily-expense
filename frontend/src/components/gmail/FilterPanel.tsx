@@ -16,6 +16,7 @@ interface FilterPanelProps {
   error: string | null;
   isFetching?: boolean;
   onFetchClick?: () => void;
+  fetcherEmails?: string[];
 }
 
 export const FilterPanel: React.FC<FilterPanelProps> = ({
@@ -33,6 +34,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   error,
   isFetching = false,
   onFetchClick,
+  fetcherEmails = [],
 }) => {
   return (
     <div className="w-full bg-white p-4 border border-gray-100 rounded-2xl shadow-sm flex flex-col gap-4">
@@ -52,11 +54,17 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
               id="sender-input"
               type="text" 
               placeholder="Add sender email..."
-              className="w-full px-3 py-1.5 bg-gray-50/50 border border-gray-200 focus:bg-white focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all duration-200"
+              list="fetcher-emails-list"
+              className="w-full px-3 py-1.5 bg-gray-55/50 border border-gray-200 focus:bg-white focus:border-indigo-500 rounded-xl outline-none text-xs text-gray-700 transition-all duration-200"
               value={currentSender}
               onChange={(e) => setCurrentSender(e.target.value)}
               onKeyDown={handleKeyDown}
             />
+            <datalist id="fetcher-emails-list" data-testid="fetcher-emails-datalist">
+              {fetcherEmails.map(email => (
+                <option key={email} value={email} />
+              ))}
+            </datalist>
           </div>
           
           <div className="min-w-0">

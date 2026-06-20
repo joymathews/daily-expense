@@ -104,6 +104,11 @@ export interface ITransactionRepository {
   updatePaymentMappingRule(id: string, userId: string, aliasPattern: string, methodId: string): Promise<void>;
   deletePaymentMappingRule(id: string, userId: string): Promise<void>;
   standardizePaymentMethod(userId: string, rawPaymentMethod: string | undefined): Promise<string>;
+
+  // Fetcher email management
+  getFetcherEmails(userId: string): Promise<string[]>;
+  saveFetcherEmail(userId: string, email: string): Promise<void>;
+  deleteFetcherEmail(userId: string, email: string): Promise<void>;
 }
 
 export interface PaymentMethod {

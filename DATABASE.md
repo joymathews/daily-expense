@@ -278,6 +278,28 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 
 ---
 
+### 8. `fetcher_emails` (Persistent Fetcher Sender Emails)
+Stores sender email addresses inputted or used by the user for fetching receipt emails.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS fetcher_emails (
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now', 'utc')),
+  PRIMARY KEY (user_id, email)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`user_id`** | `TEXT` | `PRIMARY KEY (Part 1)` | AWS Cognito user unique ID. Enforces data isolation between users. |
+| **`email`** | `TEXT` | `PRIMARY KEY (Part 2)` | The sender email address. Composite primary key prevents duplicates per user. |
+| **`created_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Audit log of email address creation. |
+
+---
+
 ## Indexes Reference
 
 To optimize performance and query speeds, the following custom database indexes are defined:
@@ -300,3 +322,7 @@ To optimize performance and query speeds, the following custom database indexes 
 6. **`idx_llm_logs_bronze`**:
    - *Query*: `CREATE INDEX IF NOT EXISTS idx_llm_logs_bronze ON llm_extraction_logs(user_id, bronze_input_id);`
    - *Justification*: Optimizes lookup of immutable LLM logs when displaying the side-by-side comparison inside detail modals.
+7. **`idx_fetcher_emails_user`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_fetcher_emails_user ON fetcher_emails(user_id);`
+   - *Justification*: Rapid lookup of stored fetcher email addresses for datalist autocomplete displays.
+

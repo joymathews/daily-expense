@@ -135,6 +135,7 @@ export interface LlmExtractionLog {
 export const useGmailIntegration = () => {
   const [senders, setSenders] = useState<string[]>([]);
   const [currentSender, setCurrentSender] = useState('');
+  const [fetcherEmails, setFetcherEmails] = useState<string[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [paymentRules, setPaymentRules] = useState<PaymentMappingRule[]>([]);
   const [startDate, setStartDate] = useState('');
@@ -380,6 +381,21 @@ export const useGmailIntegration = () => {
     return null;
   };
 
+  const loadFetcherEmails = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/ingestion/fetcher-emails', {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFetcherEmails(data.fetcherEmails || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load fetcher emails:', err);
+    }
+  };
+
   const loadAllLayers = async (start = startDate, end = endDate) => {
     setIsLoading(true);
     await Promise.all([
@@ -390,6 +406,7 @@ export const useGmailIntegration = () => {
       loadPaymentMethods(),
       loadPaymentRules(),
       loadLlmAccuracyStats(),
+      loadFetcherEmails(),
     ]);
     setIsLoading(false);
   };
@@ -401,6 +418,7 @@ export const useGmailIntegration = () => {
   useEffect(() => {
     loadPaymentMethods();
     loadPaymentRules();
+    loadFetcherEmails();
   }, []);
 
   const addPaymentMethod = async (name: string) => {
@@ -559,10 +577,40 @@ export const useGmailIntegration = () => {
     }
   };
 
-  const addSender = () => {
+  const addSender = async () => {
     if (currentSender && !senders.includes(currentSender)) {
+      const emailToAdd = currentSender.trim().toLowerCase();
       setSenders([...senders, currentSender]);
       setCurrentSender('');
+      try {
+        const authHeaders = await getAuthHeaders();
+        await fetch('/api/ingestion/fetcher-emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
+          body: JSON.stringify({ email: emailToAdd }),
+        });
+        await loadFetcherEmails();
+      } catch (err) {
+        console.warn('Failed to save fetcher email:', err);
+      }
+    }
+  };
+
+  const deleteFetcherEmail = async (email: string) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/ingestion/fetcher-emails/${encodeURIComponent(email)}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders },
+      });
+      if (res.ok) {
+        await loadFetcherEmails();
+      }
+    } catch (err) {
+      console.warn('Failed to delete fetcher email:', err);
     }
   };
 
@@ -1287,5 +1335,7 @@ export const useGmailIntegration = () => {
     llmAccuracyStats,
     fetchLlmLog,
     loadLlmAccuracyStats,
+    fetcherEmails,
+    deleteFetcherEmail,
   };
 };
