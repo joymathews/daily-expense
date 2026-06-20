@@ -151,6 +151,8 @@ export const useGmailIntegration = () => {
   const [deletedSilverTransactions, setDeletedSilverTransactions] = useState<SilverTransaction[]>([]);
   const [deletedGoldTransactions, setDeletedGoldTransactions] = useState<GoldTransaction[]>([]);
   const [llmAccuracyStats, setLlmAccuracyStats] = useState<LlmAccuracyStats | null>(null);
+  const [billingCycleStartDay, setBillingCycleStartDay] = useState<number>(17);
+  const [expectedSalary, setExpectedSalary] = useState<number>(100000);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -396,6 +398,46 @@ export const useGmailIntegration = () => {
     }
   };
 
+  const loadUserPreferences = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pipeline/user-preferences', {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBillingCycleStartDay(data.billingCycleStartDay ?? 17);
+        setExpectedSalary(data.expectedSalary ?? 100000);
+      }
+    } catch (err) {
+      console.warn('Failed to load user preferences:', err);
+    }
+  };
+
+  const updateUserPreferences = async (cycleStartDay: number, salary: number) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pipeline/user-preferences', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ billingCycleStartDay: cycleStartDay, expectedSalary: salary })
+      });
+      if (res.ok) {
+        setBillingCycleStartDay(cycleStartDay);
+        setExpectedSalary(salary);
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update preferences');
+      }
+    } catch (err: any) {
+      console.error('Failed to update preferences:', err);
+      throw err;
+    }
+  };
+
   const loadAllLayers = async (start = startDate, end = endDate) => {
     setIsLoading(true);
     await Promise.all([
@@ -407,6 +449,7 @@ export const useGmailIntegration = () => {
       loadPaymentRules(),
       loadLlmAccuracyStats(),
       loadFetcherEmails(),
+      loadUserPreferences(),
     ]);
     setIsLoading(false);
   };
@@ -1005,7 +1048,7 @@ export const useGmailIntegration = () => {
     category: string,
     notes?: string,
     paymentMethod?: string,
-    transactionType?: 'expense' | 'refund',
+    transactionType?: 'expense' | 'refund' | 'transfer',
     parentTransactionId?: string
   ) => {
     setIsLoading(true);
@@ -1235,7 +1278,7 @@ export const useGmailIntegration = () => {
     category: string;
     paymentMethod: string;
     notes?: string;
-    transactionType?: 'expense' | 'refund';
+    transactionType?: 'expense' | 'refund' | 'transfer';
     parentTransactionId?: string;
   }) => {
     setIsLoading(true);
@@ -1337,5 +1380,9 @@ export const useGmailIntegration = () => {
     loadLlmAccuracyStats,
     fetcherEmails,
     deleteFetcherEmail,
+    billingCycleStartDay,
+    expectedSalary,
+    loadUserPreferences,
+    updateUserPreferences,
   };
 };

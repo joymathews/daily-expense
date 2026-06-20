@@ -3,6 +3,14 @@ export interface HasAmountAndTransactionType {
   transactionType?: string | null;
 }
 
+export interface HelperTransaction {
+  amount: number;
+  transactionDate: string;
+  category: string;
+  transactionType?: string | null;
+  paymentMethod?: string;
+}
+
 /**
  * Returns the signed financial value of a transaction.
  * Expenses are positive, refunds are negative offsets, and transfers are 0.
@@ -12,3 +20,156 @@ export const getSignedAmount = (t: HasAmountAndTransactionType): number => {
   if (t.transactionType === 'transfer') return 0;
   return t.amount;
 };
+
+/**
+ * Compute active billing cycle dates based on cycle start day
+ */
+export const getActiveCycleRange = (startDay: number) => {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth(); // 0-indexed (Jan = 0)
+  const currentDay = today.getDate();
+
+  let startDate: Date;
+  let endDate: Date;
+
+  if (currentDay >= startDay) {
+    // Current cycle started in this month
+    startDate = new Date(currentYear, currentMonth, startDay);
+    // Ends next month on the same day
+    endDate = new Date(currentYear, currentMonth + 1, startDay);
+  } else {
+    // Current cycle started in last month
+    startDate = new Date(currentYear, currentMonth - 1, startDay);
+    endDate = new Date(currentYear, currentMonth, startDay);
+  }
+
+  // Format as YYYY-MM-DD (local timezone safe)
+  const formatDate = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  return {
+    start: formatDate(startDate),
+    end: formatDate(endDate)
+  };
+};
+
+/**
+ * Generate a list of continuous YYYY-MM-DD date strings in a range (inclusive)
+ */
+export const getDatesInRange = (startStr: string, endStr: string): string[] => {
+  const dates: string[] = [];
+  if (!startStr || !endStr) return dates;
+  
+  const startParts = startStr.split('-').map(Number);
+  const endParts = endStr.split('-').map(Number);
+  if (startParts.length < 3 || endParts.length < 3) return dates;
+
+  let current = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+  const end = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+  
+  if (current > end) return dates;
+  
+  let limit = 0;
+  while (current <= end && limit < 366) {
+    const year = current.getFullYear();
+    const month = String(current.getMonth() + 1).padStart(2, '0');
+    const day = String(current.getDate()).padStart(2, '0');
+    dates.push(`${year}-${month}-${day}`);
+    current.setDate(current.getDate() + 1);
+    limit++;
+  }
+  return dates;
+};
+
+export interface SalaryAllocationResult {
+  mutualFundSpend: number;
+  consumptionSpend: number;
+  totalSaved: number;
+  mutualFundPercent: number;
+  consumptionPercent: number;
+  unspentPercent: number;
+  allocationTransactions: HelperTransaction[];
+}
+
+/**
+ * Computes salary allocation bucket details
+ */
+export const computeSalaryAllocation = (
+  transactions: HelperTransaction[],
+  billingCycleRange: { start: string; end: string },
+  expectedSalary: number
+): SalaryAllocationResult => {
+  const allocationTransactions = transactions.filter(tx => {
+    if (tx.transactionDate < billingCycleRange.start) return false;
+    if (tx.transactionDate > billingCycleRange.end) return false;
+    return true;
+  });
+
+  const mutualFundSpend = allocationTransactions
+    .filter(tx => {
+      const catLower = (tx.category || '').toLowerCase();
+      return catLower === 'investment' || catLower === 'mutual fund';
+    })
+    .reduce((sum, tx) => sum + getSignedAmount(tx), 0);
+
+  const consumptionSpend = allocationTransactions
+    .filter(tx => {
+      if (tx.transactionType === 'transfer') return false;
+      const catLower = (tx.category || '').toLowerCase();
+      return catLower !== 'investment' && catLower !== 'mutual fund';
+    })
+    .reduce((sum, tx) => sum + getSignedAmount(tx), 0);
+
+  const totalSaved = Math.max(0, expectedSalary - mutualFundSpend - consumptionSpend);
+
+  const mutualFundPercent = expectedSalary > 0 ? (mutualFundSpend / expectedSalary) * 100 : 0;
+  const consumptionPercent = expectedSalary > 0 ? (consumptionSpend / expectedSalary) * 100 : 0;
+  const unspentPercent = Math.max(0, 100 - mutualFundPercent - consumptionPercent);
+
+  return {
+    mutualFundSpend,
+    consumptionSpend,
+    totalSaved,
+    mutualFundPercent,
+    consumptionPercent,
+    unspentPercent,
+    allocationTransactions
+  };
+};
+
+export interface DailyTrendPoint {
+  date: string;
+  amount: number;
+}
+
+/**
+ * Aggregates daily expenditures over a given date range
+ */
+export const computeDailySpendTimeline = (
+  transactions: HelperTransaction[],
+  startDate: string,
+  endDate: string
+): DailyTrendPoint[] => {
+  // Filter out transfers
+  const filtered = transactions.filter(tx => tx.transactionType !== 'transfer');
+
+  // Group by date
+  const dailySpendMap = filtered.reduce((map, tx) => {
+    const date = tx.transactionDate;
+    map[date] = (map[date] || 0) + getSignedAmount(tx);
+    return map;
+  }, {} as Record<string, number>);
+
+  // Get continuous dates
+  const chronologicalDates = getDatesInRange(startDate, endDate);
+  
+  return chronologicalDates.map(date => ({
+    date,
+    amount: dailySpendMap[date] || 0
+  }));
+};
+

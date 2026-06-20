@@ -550,4 +550,55 @@ router.get('/llm-accuracy-stats', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/pipeline/user-preferences
+ * Retrieves user settings (billing cycle start day and expected salary).
+ */
+router.get('/user-preferences', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const preferences = await repository.getUserPreferences(userId);
+    await repository.close();
+    res.status(200).json(preferences);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch user preferences' });
+  }
+});
+
+/**
+ * PUT /api/pipeline/user-preferences
+ * Updates user settings (billing cycle start day and expected salary).
+ */
+router.put('/user-preferences', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  const { billingCycleStartDay, expectedSalary } = req.body;
+
+  if (billingCycleStartDay === undefined || expectedSalary === undefined) {
+    return res.status(400).json({ error: 'billingCycleStartDay and expectedSalary are required' });
+  }
+
+  const startDay = parseInt(billingCycleStartDay, 10);
+  const salary = parseFloat(expectedSalary);
+
+  if (isNaN(startDay) || startDay < 1 || startDay > 28) {
+    return res.status(400).json({ error: 'billingCycleStartDay must be an integer between 1 and 28' });
+  }
+
+  if (isNaN(salary) || salary <= 0) {
+    return res.status(400).json({ error: 'expectedSalary must be a positive number' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.updateUserPreferences(userId, startDay, salary);
+    await repository.close();
+    res.status(200).json({ status: 'updated' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update user preferences' });
+  }
+});
+
 export default router;

@@ -61,6 +61,8 @@
 - [NFR-USAB-27] Collapsible Spend Breakdown Usability & Responsiveness: Expanding, collapsing, or customization actions (like checking/unchecking categories) in the Category Spend Breakdown panel must render and recalculate spend totals instantly (within 100ms) to ensure interactive responsiveness, maintaining consistency with 'Outfit' typography and standard card layout metrics.
 - [NFR-USAB-28] Clear Filters Responsiveness: Clicking the "Clear Filters" button must reset all filter criteria and refresh the transaction table view instantly (within 100ms) to ensure high interactive responsiveness.
 
-
-
-
+## Financial Analysis Performance & Usability [NFR-ANALYSIS]
+- [NFR-ANALYSIS-1] Preference Ingress Performance: Retrieving user preferences and updating preferences must complete within 150ms at the API layer.
+- [NFR-ANALYSIS-2] Responsive SVG Rendering: The daily spend SVG chart must scale dynamically to its container width, rendering correctly on mobile and desktop layout configurations without clipping.
+- [NFR-ANALYSIS-3] Settings Input Validation: Billing cycle start day and salary inputs must enforce client-side and server-side range validation, rejecting invalid requests instantly.
+- [NFR-ANALYSIS-4] SVG Timeline Axes Fidelity: The SVG timeline chart must render explicit X and Y axis lines, ticks, and values/labels with clear contrast and modern typography scaling, preventing overlaps and remaining responsive.

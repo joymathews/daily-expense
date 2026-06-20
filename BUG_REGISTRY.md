@@ -205,3 +205,63 @@ Updated `standardizePaymentMethod` to run the matching logic over all user payme
 ### Verification Test
 * **Test Case**: `backend/tests/gmail.test.ts`
   - *should prioritize more specific payment mapping rules based on number of parts and length [BUG-012]*
+
+---
+
+## [BUG-013] Daily Spend Timeline Chart Date Range & X-Axis Alignment
+
+### Description
+The daily trend timeline chart SVG displays X-axis ticks/labels that are misaligned with actual dates when the transaction points are sparse, or it lacks proper chronological continuity when days have no spend. Also, the test environment fails due to a ReferenceError for `svg`.
+
+### Root Cause
+1. The chart rendering only mapped dates that had transaction records, which made step coordinates space unevenly compared to real-time distance and made date ranges like start/middle/end misalign.
+2. The test file `Analysis.test.tsx` used `svg` without declaring or querying it in the test scope.
+
+### Resolution
+1. Re-engineered `Analysis.tsx` to generate continuous daily points spanning from the start date to the end date, mapping empty spend days to 0.
+2. Cleaned up X-axis tick and label coordinates to align with actual step calculations.
+3. Updated `Analysis.test.tsx` to query the SVG element correctly using `container.querySelector('svg')` before asserting its attributes.
+
+### Verification Test
+* **Test Case**: `frontend/src/pages/Analysis.test.tsx`
+  - *renders SVG daily spend chart and text details [BUG-013]*
+
+---
+
+## [BUG-014] Active Cycle Date Formatting Timezone Shift
+
+### Description
+On the Analysis page, configuring a billing cycle start day of `17` displays the active cycle range starting from the `16th` (e.g. `2026-06-16 TO 2026-07-16` instead of `2026-06-17 TO 2026-07-17`).
+
+### Root Cause
+The `getActiveCycleRange` helper uses `new Date(year, month, day)` to construct local Date instances, but uses `.toISOString().split('T')[0]` to format them. In timezones ahead of UTC (such as `+05:30`), converting the local midnight date `00:00:00` to UTC shifts the date backward by one day (e.g., `2026-06-16T18:30:00Z`).
+
+### Resolution
+Replaced `.toISOString()` usage in date formatting with a timezone-safe local date formatter that constructs `YYYY-MM-DD` using local getters: `d.getFullYear()`, `d.getMonth() + 1`, and `d.getDate()`.
+
+### Verification Test
+* **Test Case**: `frontend/src/pages/Analysis.test.tsx`
+  - *correctly calculates and visualizes allocation buckets* (verifies correct billing cycle dates calculation).
+
+---
+
+## [BUG-015] Daily Spend Date Filter Syncing with Billing Cycle Preference
+
+### Description
+The date range filters in the Daily Spend Timeline are synchronized with the billing cycle preferences. Whenever a user updates their billing cycle start day preference, the trend date filters are reset and overwritten, preventing them from being independent.
+
+### Root Cause
+1. A `useEffect` hook in `Analysis.tsx` tracked `billingCycleStartDay` and updated `filterStartDate` and `filterEndDate` to the newly calculated billing cycle range.
+2. The initial states and the "Reset" button defaulted to the active cycle range rather than a cycle-independent default date range.
+
+### Resolution
+1. Removed the `useEffect` hook that synchronizes daily trend filters on `billingCycleStartDay` changes.
+2. Initialized `filterStartDate` and `filterEndDate` to the current calendar month (1st of the month to the last day of the month) which is independent of billing cycle configurations.
+3. Updated the "Reset" button to restore the trend filters to the current calendar month range.
+
+### Verification Test
+* **Test Case**: `frontend/src/pages/Analysis.test.tsx`
+  - *maintains independent daily trend filters when cycle preferences change [BUG-015]*
+
+
+

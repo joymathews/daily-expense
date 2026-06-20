@@ -49,9 +49,47 @@ const DataIngestion: React.FC = () => {
     goldTransactions,
     isLoading,
     fetcherEmails,
+    billingCycleStartDay,
+    expectedSalary,
+    updateUserPreferences,
   } = useGmailIntegration();
 
-  const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization'>('gmail');
+  const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization' | 'settings'>('gmail');
+
+  // Settings local state
+  const [localCycleDay, setLocalCycleDay] = useState(billingCycleStartDay.toString());
+  const [localSalary, setLocalSalary] = useState(expectedSalary.toString());
+  const [settingsMessage, setSettingsMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  // Sync settings local state when hook values load
+  React.useEffect(() => {
+    setLocalCycleDay(billingCycleStartDay.toString());
+    setLocalSalary(expectedSalary.toString());
+  }, [billingCycleStartDay, expectedSalary]);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsMessage(null);
+
+    const day = parseInt(localCycleDay, 10);
+    const salary = parseFloat(localSalary);
+
+    if (isNaN(day) || day < 1 || day > 28) {
+      setSettingsMessage({ text: 'Billing cycle start day must be between 1 and 28.', isError: true });
+      return;
+    }
+    if (isNaN(salary) || salary <= 0) {
+      setSettingsMessage({ text: 'Expected salary must be a positive number.', isError: true });
+      return;
+    }
+
+    try {
+      await updateUserPreferences(day, salary);
+      setSettingsMessage({ text: 'Settings updated successfully!', isError: false });
+    } catch (err: any) {
+      setSettingsMessage({ text: err.message || 'Failed to save settings.', isError: true });
+    }
+  };
 
   // Manual Transaction Form state
   const [merchant, setMerchant] = useState('');
@@ -202,6 +240,20 @@ const DataIngestion: React.FC = () => {
           }`}
         >
           ⚙️ Payment Standardization
+        </button>
+        <button
+          onClick={() => {
+            setActiveSubTab('settings');
+            setValidationError(null);
+            setSuccessMessage(null);
+          }}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+            activeSubTab === 'settings'
+              ? 'bg-indigo-50 text-indigo-750 shadow-sm'
+              : 'text-gray-500 hover:text-gray-950'
+          }`}
+        >
+          ⚙️ Cycle & Salary Settings
         </button>
       </div>
 
@@ -776,6 +828,56 @@ const DataIngestion: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeSubTab === 'settings' && (
+          <div className="bg-white border border-gray-150/70 shadow-sm rounded-2xl p-6 md:p-8 space-y-6 animate-fade-in text-left">
+            <h3 className="text-base font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-3">
+              ⚙️ Cycle & Salary Settings
+            </h3>
+            <form onSubmit={handleSaveSettings} className="max-w-md space-y-4" data-testid="analysis-settings-form">
+              <div className="flex flex-col">
+                <label htmlFor="cycle-day-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
+                  Billing Cycle Start Day (1-28):
+                </label>
+                <input
+                  id="cycle-day-input"
+                  type="number"
+                  min="1"
+                  max="28"
+                  value={localCycleDay}
+                  onChange={(e) => setLocalCycleDay(e.target.value)}
+                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all font-semibold"
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="salary-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
+                  Expected Monthly Salary:
+                </label>
+                <input
+                  id="salary-input"
+                  type="number"
+                  min="1"
+                  value={localSalary}
+                  onChange={(e) => setLocalSalary(e.target.value)}
+                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all font-semibold"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all uppercase tracking-wider cursor-pointer"
+              >
+                Save Settings
+              </button>
+            </form>
+            {settingsMessage && (
+              <p className={`mt-4 text-xs font-bold ${settingsMessage.isError ? 'text-red-500' : 'text-emerald-600'}`}>
+                {settingsMessage.text}
+              </p>
+            )}
           </div>
         )}
       </div>

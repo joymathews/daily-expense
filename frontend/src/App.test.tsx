@@ -4194,7 +4194,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(cards[1].getAttribute('data-testid')).toBe('category-spend-card-Cabs & Transport');
 
     // Test collapsing the panel
-    const collapseBtn = screen.getByRole('button', { name: /Collapse/i });
+    const collapseBtn = screen.getAllByRole('button', { name: /Collapse/i })[0];
     fireEvent.click(collapseBtn);
     
     // Cards grid should not be visible when collapsed
@@ -4203,7 +4203,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     });
 
     // Test expanding the panel back
-    const expandBtn = screen.getByRole('button', { name: /Expand/i });
+    const expandBtn = screen.getAllByRole('button', { name: /Expand/i })[0];
     fireEvent.click(expandBtn);
     
     await waitFor(() => {
@@ -4240,5 +4240,67 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-ANALYSIS-1] / [FUNC-ANALYSIS-3] / [FUNC-ANALYSIS-4]
+   * Integration test for navigatability and UI layout of the Analysis dashboard.
+   */
+  it('provides navigation to the settings tab on Ingestion page and displays widgets on Ledger page', async () => {
+    const mockGoldTransactions = [
+      {
+        id: 'gold-1',
+        merchant: 'Shopping Corp',
+        amount: 3000,
+        currency: 'INR',
+        transactionDate: '2026-06-18',
+        category: 'Shopping',
+        paymentMethod: 'Credit Card',
+        sourceType: 'manual',
+        transactionType: 'debit',
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGoldTransactions }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-preferences')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ billingCycleStartDay: 17, expectedSalary: 100000 }),
+        });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/pipeline/silver-transactions') || url.includes('/api/ingestion/payment-methods') || url.includes('/api/ingestion/payment-rules') || url.includes('/api/ingestion/fetcher-emails') || url.includes('/api/pipeline/deleted') || url.includes('/api/pipeline/llm-accuracy-stats')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], transactions: [], paymentMethods: [], paymentRules: [], fetcherEmails: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Click on Data Ingestion link
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
+
+    // Click on settings sub-tab
+    fireEvent.click(await screen.findByRole('button', { name: /Cycle & Salary Settings/i }));
+
+    // Verify settings controls are rendered
+    expect(await screen.findByLabelText(/Billing Cycle Start Day \(1-28\):/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Expected Monthly Salary:/i)).toBeInTheDocument();
+
+    // Click on Ledger link
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Verify allocation breakdown renders on Ledger page
+    expect(await screen.findByText(/Salary Allocation Breakdown/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Consumption Expenses/i)).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
+
 

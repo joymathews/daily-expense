@@ -4,7 +4,12 @@ import type { GoldTransaction } from '../hooks/use-gmail-integration';
 import { EmailDetailModal } from '../components/gmail/EmailDetailModal';
 import { DeleteConfirmationModal } from '../components/gmail/DeleteConfirmationModal';
 import { MultiSelect } from '../components/MultiSelect';
-import { getSignedAmount } from '../utils/transaction-helper';
+import {
+  getSignedAmount,
+  getActiveCycleRange,
+  computeSalaryAllocation,
+  computeDailySpendTimeline
+} from '../utils/transaction-helper';
 
 const GoldTransactions: React.FC = () => {
   const {
@@ -21,6 +26,8 @@ const GoldTransactions: React.FC = () => {
     paymentMethods,
     isLoading,
     fetchLlmLog,
+    billingCycleStartDay,
+    expectedSalary,
   } = useGmailIntegration();
 
   // Search keyword state
@@ -44,6 +51,9 @@ const GoldTransactions: React.FC = () => {
   const [isSpendPanelCollapsed, setIsSpendPanelCollapsed] = useState(false);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [isTimelineCollapsed, setIsTimelineCollapsed] = useState(false);
+  const [showAverageLine, setShowAverageLine] = useState(true);
+  const [showTrendLine, setShowTrendLine] = useState(true);
 
 
 
@@ -195,6 +205,33 @@ const GoldTransactions: React.FC = () => {
     return acc;
   }, {} as Record<string, number>);
 
+  // Compute salary allocation using active cycle range
+  const billingCycleRange = getActiveCycleRange(billingCycleStartDay);
+  const salaryAllocation = computeSalaryAllocation(goldTransactions, billingCycleRange, expectedSalary);
+
+  const getTimelineDateRange = () => {
+    if (startDate && endDate) {
+      return { start: startDate, end: endDate };
+    }
+    if (sortedTransactions.length === 0) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const start = `${year}-${month}-01`;
+      const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
+      const end = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+      return { start, end };
+    }
+    const dates = sortedTransactions.map(tx => tx.transactionDate).sort();
+    const start = startDate || dates[0];
+    const end = endDate || dates[dates.length - 1];
+    return { start, end };
+  };
+
+  const timelineRange = getTimelineDateRange();
+  const chartPoints = computeDailySpendTimeline(sortedTransactions, timelineRange.start, timelineRange.end);
+  const maxDailyAmount = chartPoints.length > 0 ? Math.max(...chartPoints.map(p => p.amount)) : 0;
+
   return (
     <div className="w-full max-w-7xl space-y-8 animate-fade-in px-4 font-sans">
       {/* Page Title */}
@@ -206,6 +243,71 @@ const GoldTransactions: React.FC = () => {
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mt-1">
             Confirmed Ledger Items & Verified Financial Accounts
           </p>
+        </div>
+      </div>
+
+      {/* Salary Allocation Split Buckets (Locked strictly to Billing Cycle dates) */}
+      <div className="bg-white border border-gray-150/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between" data-testid="salary-allocation-panel">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-2">📊 Salary Allocation Breakdown</h3>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-5">
+            Active Cycle: {billingCycleRange.start || 'N/A'} to {billingCycleRange.end || 'N/A'}
+          </p>
+
+          <div className="space-y-5">
+            {/* Segmented Stacked Progress Bar */}
+            <div className="w-full h-5 bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
+              {salaryAllocation.mutualFundPercent > 0 && (
+                <div
+                  style={{ width: `${salaryAllocation.mutualFundPercent}%` }}
+                  className="bg-indigo-500 h-full transition-all duration-300"
+                  title={`Invested Wealth: ${salaryAllocation.mutualFundPercent.toFixed(1)}%`}
+                  data-testid="bucket-mutual-funds-bar"
+                />
+              )}
+              {salaryAllocation.consumptionPercent > 0 && (
+                <div
+                  style={{ width: `${salaryAllocation.consumptionPercent}%` }}
+                  className="bg-rose-500 h-full transition-all duration-300"
+                  title={`Consumption Spend: ${salaryAllocation.consumptionPercent.toFixed(1)}%`}
+                  data-testid="bucket-consumption-bar"
+                />
+              )}
+              {salaryAllocation.unspentPercent > 0 && (
+                <div
+                  style={{ width: `${salaryAllocation.unspentPercent}%` }}
+                  className="bg-emerald-500 h-full transition-all duration-300"
+                  title={`Unspent / Savings: ${salaryAllocation.unspentPercent.toFixed(1)}%`}
+                  data-testid="bucket-savings-bar"
+                />
+              )}
+            </div>
+
+            {/* Legend with Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-left">
+              <div className="flex items-center gap-2.5">
+                <div className="w-3 h-3 bg-indigo-500 rounded-full shrink-0"></div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Invested Wealth</span>
+                  <span className="text-sm font-black text-indigo-750 Outfit">₹{salaryAllocation.mutualFundSpend.toFixed(2)} ({salaryAllocation.mutualFundPercent.toFixed(1)}%)</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-3 h-3 bg-rose-500 rounded-full shrink-0"></div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Consumption Expenses</span>
+                  <span className="text-sm font-black text-rose-750 Outfit">₹{salaryAllocation.consumptionSpend.toFixed(2)} ({salaryAllocation.consumptionPercent.toFixed(1)}%)</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-3 h-3 bg-emerald-500 rounded-full shrink-0"></div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Unspent (Liquid Savings)</span>
+                  <span className="text-sm font-black text-emerald-750 Outfit">₹{salaryAllocation.totalSaved.toFixed(2)} ({salaryAllocation.unspentPercent.toFixed(1)}%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -510,6 +612,232 @@ const GoldTransactions: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Daily Spend Timeline (Chart panel driven by main filters context) */}
+      <div className="bg-white border border-gray-150/60 rounded-3xl shadow-sm overflow-hidden flex flex-col" data-testid="analysis-daily-spend-chart">
+        {/* Panel Header */}
+        <div className="bg-gray-50/70 border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider">
+              📈 Daily Spend Timeline
+            </span>
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider ml-3 bg-gray-100 px-2.5 py-0.5 rounded-full">
+              {timelineRange.start} to {timelineRange.end}
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            {!isTimelineCollapsed && (
+              <div className="flex items-center gap-3 border-r border-gray-200 pr-4 mr-1">
+                <label className="inline-flex items-center text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showAverageLine}
+                    onChange={(e) => setShowAverageLine(e.target.checked)}
+                    className="mr-1.5 accent-indigo-650 cursor-pointer"
+                  />
+                  Avg
+                </label>
+                <label className="inline-flex items-center text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showTrendLine}
+                    onChange={(e) => setShowTrendLine(e.target.checked)}
+                    className="mr-1.5 accent-amber-500 cursor-pointer"
+                  />
+                  Trend
+                </label>
+              </div>
+            )}
+            <button
+              onClick={() => setIsTimelineCollapsed(!isTimelineCollapsed)}
+              className="text-[10px] font-bold uppercase tracking-wider text-indigo-650 hover:text-indigo-850 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              {isTimelineCollapsed ? 'Expand ▾' : 'Collapse ▴'}
+            </button>
+          </div>
+        </div>
+
+        {!isTimelineCollapsed && (
+          <div className="p-6">
+            {chartPoints.length === 0 ? (
+              <div className="flex items-center justify-center h-80 border border-dashed border-gray-200 rounded-2xl bg-gray-50/20">
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No transaction spend data for selected filter</p>
+              </div>
+            ) : (
+              <div className="w-full relative pt-2">
+                {/* SVG Render */}
+                <svg viewBox="0 0 1000 220" className="w-full h-80 overflow-visible">
+                  {/* Gradients */}
+                  <defs>
+                    <linearGradient id="chartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#6366f1" />
+                      <stop offset="100%" stopColor="#ffffff" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* SVG Chart Grid Lines & Axes */}
+                  <line x1={70} y1={20} x2={980} y2={20} stroke="#f1f5f9" strokeWidth="1" />
+                  <line x1={70} y1={100} x2={980} y2={100} stroke="#f1f5f9" strokeWidth="1" />
+                  <line x1={70} y1={180} x2={980} y2={180} stroke="#cbd5e1" strokeWidth="1" />
+
+                  <line x1={70} y1={20} x2={70} y2={180} stroke="#cbd5e1" strokeWidth="1" />
+
+                  <line x1={65} y1={20} x2={70} y2={20} stroke="#cbd5e1" strokeWidth="1" />
+                  <line x1={65} y1={100} x2={70} y2={100} stroke="#cbd5e1" strokeWidth="1" />
+                  <line x1={65} y1={180} x2={70} y2={180} stroke="#cbd5e1" strokeWidth="1" />
+
+                  <text x={60} y="23" textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                    ₹{maxDailyAmount.toFixed(0)}
+                  </text>
+                  <text x={60} y="103" textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                    ₹{(maxDailyAmount / 2).toFixed(0)}
+                  </text>
+                  <text x={60} y="183" textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                    ₹0
+                  </text>
+
+                  {(() => {
+                    const chartMinX = 70;
+                    const chartMaxX = 980;
+                    const chartMinY = 20;
+                    const chartMaxY = 180;
+                    const chartWidth = chartMaxX - chartMinX;
+                    const chartHeight = chartMaxY - chartMinY;
+
+                    const stepX = chartPoints.length > 1 ? chartWidth / (chartPoints.length - 1) : chartWidth;
+
+                    const coordinates = chartPoints.map((pt, index) => {
+                      const x = chartMinX + index * stepX;
+                      const y = maxDailyAmount > 0
+                        ? chartMaxY - (pt.amount / maxDailyAmount) * chartHeight
+                        : chartMaxY;
+                      return { x, y };
+                    });
+
+                    const linePath = coordinates.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+                    const areaPath = coordinates.length > 0
+                      ? `${linePath} L ${coordinates[coordinates.length - 1].x} ${chartMaxY} L ${coordinates[0].x} ${chartMaxY} Z`
+                      : '';
+
+                    // Calculate Average daily spend
+                    const totalSpend = chartPoints.reduce((sum, p) => sum + p.amount, 0);
+                    const averageDailySpend = chartPoints.length > 0 ? totalSpend / chartPoints.length : 0;
+                    const averageY = maxDailyAmount > 0 ? chartMaxY - (averageDailySpend / maxDailyAmount) * chartHeight : chartMaxY;
+
+                    // Calculate Linear Regression Trend (y = mx + c)
+                    const n = chartPoints.length;
+                    let slope = 0;
+                    let intercept = 0;
+                    if (n > 1) {
+                      let sumX = 0;
+                      let sumY = 0;
+                      let sumXY = 0;
+                      let sumXX = 0;
+                      for (let i = 0; i < n; i++) {
+                        sumX += i;
+                        sumY += chartPoints[i].amount;
+                        sumXY += i * chartPoints[i].amount;
+                        sumXX += i * i;
+                      }
+                      const denominator = n * sumXX - sumX * sumX;
+                      if (denominator !== 0) {
+                        slope = (n * sumXY - sumX * sumY) / denominator;
+                        intercept = (sumY - slope * sumX) / n;
+                      } else {
+                        slope = 0;
+                        intercept = averageDailySpend;
+                      }
+                    } else if (n === 1) {
+                      slope = 0;
+                      intercept = chartPoints[0].amount;
+                    }
+
+                    const trendStartY = maxDailyAmount > 0 ? chartMaxY - (Math.max(0, intercept) / maxDailyAmount) * chartHeight : chartMaxY;
+                    const trendEndY = maxDailyAmount > 0 ? chartMaxY - (Math.max(0, slope * (n - 1) + intercept) / maxDailyAmount) * chartHeight : chartMaxY;
+
+                    const formatDateLabel = (d: string) => {
+                      if (!d) return '';
+                      const parts = d.split('-');
+                      if (parts.length < 3) return d;
+                      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const day = parseInt(parts[2], 10);
+                      const monthIdx = parseInt(parts[1], 10) - 1;
+                      return `${day} ${months[monthIdx] || ''}`;
+                    };
+
+                    const firstDateLabel = chartPoints.length > 0 ? formatDateLabel(chartPoints[0].date) : '';
+                    const lastDateLabel = chartPoints.length > 1 ? formatDateLabel(chartPoints[chartPoints.length - 1].date) : '';
+                    const middleIndex = chartPoints.length > 2 ? Math.floor(chartPoints.length / 2) : -1;
+                    const middleDateLabel = middleIndex !== -1 ? formatDateLabel(chartPoints[middleIndex].date) : '';
+
+                    return (
+                      <>
+                        {areaPath && <path d={areaPath} fill="url(#chartGrad)" className="opacity-30" />}
+                        {linePath && <path d={linePath} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" />}
+                        
+                        {/* Average Line */}
+                        {showAverageLine && chartPoints.length > 0 && maxDailyAmount > 0 && (
+                          <>
+                            <line x1={chartMinX} y1={averageY} x2={chartMaxX} y2={averageY} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 4" />
+                            <text x={chartMaxX - 5} y={averageY - 6} textAnchor="end" fill="#94a3b8" className="text-[8px] font-bold font-sans">
+                              Avg: ₹{averageDailySpend.toFixed(1)}
+                            </text>
+                          </>
+                        )}
+
+                        {/* Trend Line */}
+                        {showTrendLine && chartPoints.length > 1 && maxDailyAmount > 0 && (
+                          <>
+                            <line x1={chartMinX} y1={trendStartY} x2={chartMaxX} y2={trendEndY} stroke="#f59e0b" strokeWidth="2" strokeDasharray="3 3" />
+                            <text x={chartMinX + 15} y={trendStartY - 6} textAnchor="start" fill="#f59e0b" className="text-[8px] font-bold font-sans">
+                              Trend
+                            </text>
+                          </>
+                        )}
+
+                        {coordinates.map((c, i) => (
+                          <g key={i} className="group cursor-pointer">
+                            <circle cx={c.x} cy={c.y} r="3" fill="#6366f1" />
+                            <circle cx={c.x} cy={c.y} r="6" fill="#6366f1" className="opacity-0 hover:opacity-20 transition-all" />
+                            <title>{`${chartPoints[i].date}: ₹${chartPoints[i].amount.toFixed(2)}`}</title>
+                          </g>
+                        ))}
+
+                        {chartPoints.length > 0 && (
+                          <>
+                            <line x1={chartMinX} y1="180" x2={chartMinX} y2="185" stroke="#cbd5e1" strokeWidth="1" />
+                            <text x={chartMinX} y="198" textAnchor="middle" fill="#64748b" className="text-[8px] font-bold font-sans">
+                              {firstDateLabel}
+                            </text>
+
+                            {middleIndex !== -1 && (
+                              <>
+                                <line x1={chartMinX + middleIndex * stepX} y1="180" x2={chartMinX + middleIndex * stepX} y2="185" stroke="#cbd5e1" strokeWidth="1" />
+                                <text x={chartMinX + middleIndex * stepX} y="198" textAnchor="middle" fill="#64748b" className="text-[8px] font-bold font-sans">
+                                  {middleDateLabel}
+                                </text>
+                              </>
+                            )}
+
+                            {lastDateLabel && (
+                              <>
+                                <line x1={chartMaxX} y1="180" x2={chartMaxX} y2="185" stroke="#cbd5e1" strokeWidth="1" />
+                                <text x={chartMaxX} y="198" textAnchor="middle" fill="#64748b" className="text-[8px] font-bold font-sans">
+                                  {lastDateLabel}
+                                </text>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </svg>
               </div>
             )}
           </div>

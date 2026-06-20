@@ -109,6 +109,10 @@ export interface ITransactionRepository {
   getFetcherEmails(userId: string): Promise<string[]>;
   saveFetcherEmail(userId: string, email: string): Promise<void>;
   deleteFetcherEmail(userId: string, email: string): Promise<void>;
+
+  // User preferences
+  getUserPreferences(userId: string): Promise<{ billingCycleStartDay: number; expectedSalary: number }>;
+  updateUserPreferences(userId: string, cycleStartDay: number, expectedSalary: number): Promise<void>;
 }
 
 export interface PaymentMethod {

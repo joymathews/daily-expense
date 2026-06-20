@@ -223,6 +223,18 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       );
     `);
 
+    // Safe migration: Add billing_cycle_start_day and expected_salary if missing
+    const userPrefsInfo = await this.all<{ name: string }>("PRAGMA table_info(user_preferences);");
+    const hasCycleStartDay = userPrefsInfo.some(col => col.name === 'billing_cycle_start_day');
+    const hasExpectedSalary = userPrefsInfo.some(col => col.name === 'expected_salary');
+    
+    if (!hasCycleStartDay) {
+      await this.run("ALTER TABLE user_preferences ADD COLUMN billing_cycle_start_day INTEGER DEFAULT 17;");
+    }
+    if (!hasExpectedSalary) {
+      await this.run("ALTER TABLE user_preferences ADD COLUMN expected_salary REAL DEFAULT 100000;");
+    }
+
     // 6. Fetcher Emails table
     await this.run(`
       CREATE TABLE IF NOT EXISTS fetcher_emails (
@@ -1439,6 +1451,38 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       'DELETE FROM fetcher_emails WHERE user_id = ? AND email = ?',
       [userId, email]
     );
+  }
+
+  async getUserPreferences(userId: string): Promise<{ billingCycleStartDay: number; expectedSalary: number }> {
+    const row = await this.get<any>(
+      'SELECT billing_cycle_start_day, expected_salary FROM user_preferences WHERE user_id = ?',
+      [userId]
+    );
+    if (!row) {
+      return { billingCycleStartDay: 17, expectedSalary: 100000 };
+    }
+    return {
+      billingCycleStartDay: row.billing_cycle_start_day !== null && row.billing_cycle_start_day !== undefined ? row.billing_cycle_start_day : 17,
+      expectedSalary: row.expected_salary !== null && row.expected_salary !== undefined ? row.expected_salary : 100000
+    };
+  }
+
+  async updateUserPreferences(userId: string, cycleStartDay: number, expectedSalary: number): Promise<void> {
+    const exists = await this.get<any>(
+      'SELECT defaults_seeded FROM user_preferences WHERE user_id = ?',
+      [userId]
+    );
+    if (exists) {
+      await this.run(
+        'UPDATE user_preferences SET billing_cycle_start_day = ?, expected_salary = ? WHERE user_id = ?',
+        [cycleStartDay, expectedSalary, userId]
+      );
+    } else {
+      await this.run(
+        'INSERT INTO user_preferences (user_id, defaults_seeded, billing_cycle_start_day, expected_salary) VALUES (?, 0, ?, ?)',
+        [userId, cycleStartDay, expectedSalary]
+      );
+    }
   }
 
   close(): Promise<void> {
