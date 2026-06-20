@@ -39,6 +39,13 @@ const GoldTransactions: React.FC = () => {
     new Set(goldTransactions.map(tx => tx.category).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b));
 
+  // Spend panel collapse/visibility states
+  const [isSpendPanelCollapsed, setIsSpendPanelCollapsed] = useState(false);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+
+
+
   const uniqueMethods = Array.from(
     new Set(goldTransactions.map(tx => tx.paymentMethod || 'Unknown'))
   ).sort((a, b) => a.localeCompare(b));
@@ -162,6 +169,30 @@ const GoldTransactions: React.FC = () => {
     }
   });
 
+  // Calculate dynamic spend aggregates for filtered transactions
+  // Group by category, then currency (excluding transfers, refund acts as negative offset)
+  const categorySpendTotals = sortedTransactions.reduce((acc, tx) => {
+    if (tx.transactionType === 'transfer') return acc;
+    
+    const cat = tx.category || 'Other';
+    const cur = tx.currency.toUpperCase();
+    const amount = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+    
+    if (!acc[cat]) {
+      acc[cat] = {};
+    }
+    acc[cat][cur] = (acc[cat][cur] || 0) + amount;
+    return acc;
+  }, {} as Record<string, Record<string, number>>);
+
+  const visibleCategories = Object.keys(categorySpendTotals).filter(
+    cat => !hiddenCategories.includes(cat)
+  ).sort((a, b) => {
+    const maxA = Math.max(...Object.values(categorySpendTotals[a] || {}));
+    const maxB = Math.max(...Object.values(categorySpendTotals[b] || {}));
+    return maxB - maxA;
+  });
+
   // 3. Compute currency totals
   const currencyTotals = sortedTransactions.reduce((acc, tx) => {
     const cur = tx.currency.toUpperCase();
@@ -251,48 +282,66 @@ const GoldTransactions: React.FC = () => {
         </div>
 
         {/* Row 2: Keyword Search and Date Filters */}
-        <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-gray-100">
-          {/* Keyword Search */}
-          <div className="flex flex-col min-w-[200px] flex-grow md:max-w-xs">
-            <label htmlFor="search-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-              Keyword Search:
-            </label>
-            <input
-              id="search-input"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by keyword..."
-              className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
-            />
+        <div className="flex flex-wrap items-end justify-between gap-4 pt-4 border-t border-gray-100">
+          <div className="flex flex-wrap items-center gap-4 flex-1">
+            {/* Keyword Search */}
+            <div className="flex flex-col min-w-[200px] flex-grow md:max-w-xs">
+              <label htmlFor="search-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                Keyword Search:
+              </label>
+              <input
+                id="search-input"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by keyword..."
+                className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col">
+                <label htmlFor="start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                  Start Date:
+                </label>
+                <input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
+                />
+              </div>
+              <div className="flex flex-col">
+                <label htmlFor="end-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                  End Date:
+                </label>
+                <input
+                  id="end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col">
-              <label htmlFor="start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                Start Date:
-              </label>
-              <input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
-              />
-            </div>
-            <div className="flex flex-col">
-              <label htmlFor="end-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                End Date:
-              </label>
-              <input
-                id="end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-gray-50/50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all"
-              />
-            </div>
-          </div>
+          {/* Clear Filters Button */}
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedCategories([]);
+              setSelectedMethods([]);
+              setSelectedSources([]);
+              setSelectedCurrencies([]);
+              setStartDate('');
+              setEndDate('');
+            }}
+            className="bg-gray-55/60 hover:bg-gray-100 text-gray-600 hover:text-gray-850 text-[10px] font-bold px-4 py-2 rounded-xl transition-all uppercase tracking-wider cursor-pointer border border-gray-200 shadow-sm self-end"
+          >
+            🧹 Clear Filters
+          </button>
         </div>
 
         {/* Aggregate Totals Summary */}
@@ -320,6 +369,156 @@ const GoldTransactions: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Category Spend Breakdown Panel */}
+      <div className="bg-white border border-gray-150/60 rounded-3xl shadow-sm overflow-hidden flex flex-col">
+        {/* Panel Header */}
+        <div className="bg-gray-50/70 border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider">
+              📊 Category Spend Breakdown
+            </span>
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider ml-3 bg-gray-100 px-2.5 py-0.5 rounded-full">
+              {visibleCategories.length} Shown / {hiddenCategories.length} Hidden
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsCustomizerOpen(!isCustomizerOpen)}
+              className="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-750 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              ⚙️ Customize
+            </button>
+            <button
+              onClick={() => setIsSpendPanelCollapsed(!isSpendPanelCollapsed)}
+              className="text-[10px] font-bold uppercase tracking-wider text-indigo-650 hover:text-indigo-850 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              {isSpendPanelCollapsed ? 'Expand ▾' : 'Collapse ▴'}
+            </button>
+          </div>
+        </div>
+
+        {/* Customizer Checklist Block */}
+        {isCustomizerOpen && (
+          <div className="bg-slate-50/30 border-b border-gray-100 p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                Select Categories to Display:
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setHiddenCategories([])}
+                  className="text-[9px] font-bold uppercase text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                >
+                  Show All
+                </button>
+                <span className="text-gray-300">|</span>
+                <button
+                  onClick={() => setHiddenCategories(uniqueCategories)}
+                  className="text-[9px] font-bold uppercase text-red-500 hover:text-red-700 cursor-pointer"
+                >
+                  Hide All
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {uniqueCategories.map(cat => {
+                const isVisible = !hiddenCategories.includes(cat);
+                return (
+                  <label
+                    key={cat}
+                    className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer select-none ${
+                      isVisible
+                        ? 'bg-indigo-50/80 text-indigo-750 border-indigo-150 hover:bg-indigo-50'
+                        : 'bg-white text-gray-400 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isVisible}
+                      onChange={() => {
+                        if (isVisible) {
+                          setHiddenCategories([...hiddenCategories, cat]);
+                        } else {
+                          setHiddenCategories(hiddenCategories.filter(c => c !== cat));
+                        }
+                      }}
+                      className="mr-1.5 accent-indigo-650 cursor-pointer"
+                    />
+                    {cat}
+                  </label>
+                );
+              })}
+              {uniqueCategories.length === 0 && (
+                <span className="text-xs text-gray-400 italic">No ledger categories available.</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Spend Cards Grid */}
+        {!isSpendPanelCollapsed && (
+          <div className="p-6">
+            {visibleCategories.length === 0 ? (
+              <div className="text-center py-8 bg-gray-50/30 border border-dashed border-gray-200 rounded-2xl">
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                  {Object.keys(categorySpendTotals).length === 0
+                    ? 'No category spends to display'
+                    : 'All category spend cards are hidden. Click "Customize" above to show them.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-fade-in">
+                {visibleCategories.map(cat => {
+                  const currenciesSpend = categorySpendTotals[cat];
+                  return (
+                    <div
+                      key={cat}
+                      data-testid={`category-spend-card-${cat}`}
+                      className="bg-emerald-50/30 hover:bg-emerald-50/50 border border-emerald-100/40 hover:border-emerald-100 rounded-2xl p-4 transition-all duration-200 hover:scale-[1.02] relative group shadow-sm flex flex-col justify-between min-h-[90px]"
+                    >
+                      {/* Hide button inside card */}
+                      <button
+                        onClick={() => setHiddenCategories([...hiddenCategories, cat])}
+                        className="absolute top-2.5 right-2.5 text-emerald-350 hover:text-red-500 font-bold text-sm cursor-pointer transition-colors"
+                        title={`Hide ${cat} spend card`}
+                        aria-label={`Hide ${cat}`}
+                      >
+                        ×
+                      </button>
+
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider block pr-4">
+                          {cat}
+                        </span>
+                        
+                        <div className="space-y-1">
+                          {Object.entries(currenciesSpend).map(([currency, total]) => {
+                            let symbol = currency;
+                            if (currency === 'INR') symbol = '₹';
+                            else if (currency === 'USD') symbol = '$$';
+                            else if (currency === 'EUR') symbol = '€';
+                            else if (currency === 'GBP') symbol = '£';
+                            
+                            return (
+                              <div key={currency} className="flex justify-between items-baseline">
+                                <span className="text-[9px] font-extrabold text-emerald-850/60 uppercase tracking-wider">{currency}</span>
+                                <span className="text-sm font-black text-emerald-600 Outfit">
+                                  {symbol} {total.toFixed(2)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Ledger Table Section */}

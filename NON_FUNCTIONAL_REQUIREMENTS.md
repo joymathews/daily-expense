@@ -58,5 +58,9 @@
 - [NFR-USAB-24] Consistent Filtering & Table Layout Design: The search inputs, sorting options, and MultiSelect filter dropdowns across Silver staging, Gold pipeline, and Gold Ledger page tables must maintain uniform layout styling, HSL tailwind colors, Outfit typography, and update the list data dynamically within 100ms. All tables must cleanly isolate the currency code into its own column, keeping the Amount column strictly numerical.
 - [NFR-USAB-25] Local Timezone Formatting Latency: The UI must format UTC database timestamps (such as received_at) to the browser's local timezone (including both date and time components) within 100ms of the component loading, ensuring immediate locale-specific readability.
 - [NFR-USAB-26] Persistent Fetcher Suggestions Performance: Retrieving the list of saved sender emails from the database and rendering them as autocomplete suggestions inside the fetcher configuration panel must complete within 100ms, and saving a new sender email address to the database must execute within 150ms to ensure a lag-free input experience.
+- [NFR-USAB-27] Collapsible Spend Breakdown Usability & Responsiveness: Expanding, collapsing, or customization actions (like checking/unchecking categories) in the Category Spend Breakdown panel must render and recalculate spend totals instantly (within 100ms) to ensure interactive responsiveness, maintaining consistency with 'Outfit' typography and standard card layout metrics.
+- [NFR-USAB-28] Clear Filters Responsiveness: Clicking the "Clear Filters" button must reset all filter criteria and refresh the transaction table view instantly (within 100ms) to ensure high interactive responsiveness.
+
+
 
 

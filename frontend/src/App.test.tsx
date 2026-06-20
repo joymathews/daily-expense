@@ -2270,6 +2270,29 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(rows[0]).toHaveTextContent('Apple Store');
     expect(rows[1]).toHaveTextContent('Coffee Shop');
 
+    // 3. Test Clear Filters button
+    // Set keyword search to 'apple' so 'Coffee Shop' is hidden
+    fireEvent.change(searchInput, { target: { value: 'apple' } });
+    expect(screen.queryByText('Coffee Shop')).not.toBeInTheDocument();
+
+    // Fill in dates
+    const startDateInput = screen.getByLabelText(/Start Date:/i);
+    const endDateInput = screen.getByLabelText(/End Date:/i);
+    fireEvent.change(startDateInput, { target: { value: '2026-06-01' } });
+    fireEvent.change(endDateInput, { target: { value: '2026-06-30' } });
+
+    // Click the Clear Filters button
+    const clearBtn = screen.getByRole('button', { name: /Clear Filters/i });
+    fireEvent.click(clearBtn);
+
+    // Verify all fields are reset and Coffee Shop is visible again
+    await waitFor(() => {
+      expect(searchInput).toHaveValue('');
+      expect(startDateInput).toHaveValue('');
+      expect(endDateInput).toHaveValue('');
+      expect(screen.getByText('Coffee Shop')).toBeInTheDocument();
+    });
+
     vi.unstubAllGlobals();
   });
 
@@ -4057,6 +4080,146 @@ describe('Requirement Traceability Matrix Verification', () => {
       const options = freshDatalist.querySelectorAll('option');
       expect(options.length).toBe(3);
       expect(options[2].getAttribute('value')).toBe('new-sender@test.com');
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GOLD-PAGE-12] Collapsible Category Spend Breakdown Panel / [NFR-USAB-27] Collapsible Spend Breakdown Usability & Responsiveness
+   * Verifies that the spend breakdown panel aggregates categories, is collapse-capable, and customisable.
+   */
+  it('displays categorywise spend breakdown panel, collapses, and allows custom category visibility', async () => {
+    const mockGoldTransactions = [
+      {
+        id: 'gold_tx_1',
+        merchant: 'Amazon',
+        amount: 1500.00,
+        currency: 'INR',
+        transactionDate: '2026-06-19',
+        category: 'Shopping',
+        paymentMethod: 'HDFC Card',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold_tx_2',
+        merchant: 'Uber',
+        amount: 250.00,
+        currency: 'INR',
+        transactionDate: '2026-06-20',
+        category: 'Cabs & Transport',
+        paymentMethod: 'UPI',
+        sourceType: 'email',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold_tx_3',
+        merchant: 'Uber Refund',
+        amount: 50.00,
+        currency: 'INR',
+        transactionDate: '2026-06-20',
+        category: 'Cabs & Transport',
+        paymentMethod: 'UPI',
+        sourceType: 'email',
+        transactionType: 'refund',
+      },
+      {
+        id: 'gold_tx_4',
+        merchant: 'Self Transfer',
+        amount: 500.00,
+        currency: 'INR',
+        transactionDate: '2026-06-20',
+        category: 'Investment',
+        paymentMethod: 'GPay',
+        sourceType: 'manual',
+        transactionType: 'transfer',
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGoldTransactions }),
+        });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/pipeline/silver-transactions') || url.includes('/api/ingestion/payment-methods') || url.includes('/api/ingestion/payment-rules') || url.includes('/api/ingestion/fetcher-emails') || url.includes('/api/pipeline/deleted') || url.includes('/api/pipeline/llm-accuracy-stats')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], transactions: [], paymentMethods: [], paymentRules: [], fetcherEmails: [] }) });
+      }
+      return Promise.reject(new Error('Unknown url: ' + url));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Transactions page
+    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+
+    // Verify category spend panel header is present
+    expect(screen.getByText(/Category Spend Breakdown/i)).toBeInTheDocument();
+
+    // Verify Shopping card spend is dynamically aggregated (₹ 1500.00)
+    const shoppingCard = await screen.findByTestId('category-spend-card-Shopping');
+    expect(shoppingCard).toBeInTheDocument();
+    expect(within(shoppingCard).getByText(/₹ 1500.00/i)).toBeInTheDocument();
+
+    // Verify Cabs & Transport card spend accounts for the refund (250 - 50 = ₹ 200.00)
+    const cabsCard = screen.getByTestId('category-spend-card-Cabs & Transport');
+    expect(cabsCard).toBeInTheDocument();
+    expect(within(cabsCard).getByText(/₹ 200.00/i)).toBeInTheDocument();
+
+    // Verify Investment card spend is completely excluded (since it is a transfer)
+    expect(screen.queryByTestId('category-spend-card-Investment')).not.toBeInTheDocument();
+
+    // Verify cards are sorted by spend in descending order (Shopping: 1500 first, Cabs & Transport: 200 second)
+    const cards = screen.getAllByTestId(/category-spend-card-/);
+    expect(cards[0].getAttribute('data-testid')).toBe('category-spend-card-Shopping');
+    expect(cards[1].getAttribute('data-testid')).toBe('category-spend-card-Cabs & Transport');
+
+    // Test collapsing the panel
+    const collapseBtn = screen.getByRole('button', { name: /Collapse/i });
+    fireEvent.click(collapseBtn);
+    
+    // Cards grid should not be visible when collapsed
+    await waitFor(() => {
+      expect(screen.queryByTestId('category-spend-card-Shopping')).not.toBeInTheDocument();
+    });
+
+    // Test expanding the panel back
+    const expandBtn = screen.getByRole('button', { name: /Expand/i });
+    fireEvent.click(expandBtn);
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('category-spend-card-Shopping')).toBeInTheDocument();
+    });
+
+    // Test hiding a card via close button inside card
+    const freshShoppingCard = screen.getByTestId('category-spend-card-Shopping');
+    const shoppingCloseBtn = within(freshShoppingCard).getByRole('button', { name: /Hide Shopping/i });
+    fireEvent.click(shoppingCloseBtn);
+
+    // Shopping card should be removed from view
+    await waitFor(() => {
+      expect(screen.queryByTestId('category-spend-card-Shopping')).not.toBeInTheDocument();
+    });
+
+    // Open Customize options
+    const customizeBtn = screen.getByRole('button', { name: /Customize/i });
+    fireEvent.click(customizeBtn);
+
+    // Verify Customize checkbox is present and check it to restore Shopping card visibility
+    await waitFor(() => {
+      const shoppingCheckbox = screen.getByLabelText('Shopping');
+      expect(shoppingCheckbox).not.toBeChecked();
+    });
+
+    const shoppingCheckbox = screen.getByLabelText('Shopping');
+    fireEvent.click(shoppingCheckbox);
+
+    // Shopping card should reappear in view
+    await waitFor(() => {
+      expect(screen.getByTestId('category-spend-card-Shopping')).toBeInTheDocument();
     });
 
     vi.unstubAllGlobals();
