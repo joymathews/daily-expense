@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { GoldTransaction } from '../../hooks/use-gmail-integration';
 import { MultiSelect } from '../MultiSelect';
+import { getSignedAmount } from '../../utils/transaction-helper';
 
 interface GoldLedgerListProps {
   goldTransactions: GoldTransaction[];
@@ -80,12 +81,6 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
       tx.amount.toString().includes(query)
     );
   });
-
-  const getSignedAmount = (t: GoldTransaction) => {
-    if (t.transactionType === 'refund') return -t.amount;
-    if (t.transactionType === 'transfer') return 0;
-    return t.amount;
-  };
 
   // Sorting logic
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {

@@ -372,6 +372,7 @@ describe('Requirement Traceability Matrix Verification', () => {
   /**
    * [FUNC-GMAIL-12] Staging Review Queue: Displays staging parameters.
    * [FUNC-GMAIL-13] Review and Final Ledger Approval: Click "Approve & Save" to promote.
+   * [NFR-USAB-21] Category Selection Interface
    */
   it('displays the staging review queue and allows the user to edit and approve transactions', async () => {
     // Mock the fetch call to return an email with an extracted pending transaction
@@ -538,6 +539,8 @@ describe('Requirement Traceability Matrix Verification', () => {
   /**
    * [FUNC-GMAIL-21] Processed Inputs Visibility: Processed raw inputs are completely hidden from the Bronze list view.
    * [NFR-USAB-1] Ingestion Status Feedback: Status display for raw emails.
+   * [BUG-001] Frontend Mock Fetch Failure in App Integration Tests
+   * [BUG-005] Redundant "Processed" UI Badge & Button on Bronze Screen
    */
   it('excludes processed emails from the bronze list view entirely and updates sub-tab counts accordingly', async () => {
     // Mock the fetch calls
@@ -1192,6 +1195,8 @@ describe('Requirement Traceability Matrix Verification', () => {
 
   /**
    * [FUNC-GMAIL-4] Verified Ledger (Gold) layout verification
+   * [NFR-USAB-3] Typography and Readability
+   * [NFR-USAB-4] Design Consistency and Visual Hierarchy
    */
   it('displays separate date, separate amount, stacked category/method, and action in Gold ledger table (lineage accessible via modal)', async () => {
     const mockGold = [
@@ -1287,6 +1292,7 @@ describe('Requirement Traceability Matrix Verification', () => {
   /**
    * [FUNC-GMAIL-29] Fetcher Filter Layout Isolation: The fetching configuration filter panel must only be displayed in the Bronze tab.
    * [NFR-USAB-5] Layout Contextual Adaptability: The UI layout must adapt contextually and hide the Fetcher Config panel on Silver and Gold tabs.
+   * [BUG-006] Fetcher Config Filter Panel Visible Across All Tabs
    */
   it('displays the Fetcher Config panel only on the Gmail Ingestion tab and hides it on Direct Ledger Entry tab', async () => {
     render(<App />);
@@ -1311,6 +1317,7 @@ describe('Requirement Traceability Matrix Verification', () => {
   /**
    * [FUNC-GMAIL-30] Cross-Stage Medallion Lineage Explorer: Verify lineage details across all three stages.
    * [NFR-USAB-6] Data Lineage Traceability & Visibility: The detail modal must display associated Bronze, Silver, and Gold records.
+   * [FUNC-GOLD-PAGE-8] Medallion Lineage Silver Staging View
    */
   it('displays full cross-stage medallion lineage linkages when opening any record in detail modal', async () => {
     const mockEmails = [
@@ -1636,6 +1643,7 @@ describe('Requirement Traceability Matrix Verification', () => {
 
   /**
    * [FUNC-GMAIL-32] Staging Validation & Error Status:
+   * [NFR-USAB-9] Validation Feedback Responsiveness
    * Verify disabling checkboxes of 'error' status rows in Silver list, warning alert banner,
    * validation input highlights, and confirming that correcting the fields enables approval.
    */
@@ -2189,7 +2197,7 @@ describe('Requirement Traceability Matrix Verification', () => {
   });
 
   /**
-   * [FUNC-GOLD-PAGE-4] / [FUNC-GOLD-PAGE-5] / [NFR-USAB-11]:
+   * [FUNC-GOLD-PAGE-4] / [FUNC-GOLD-PAGE-5] / [NFR-USAB-11] / [FUNC-GOLD-PAGE-13] / [NFR-USAB-28]:
    * Verify searching, filtering, and sorting of Gold ledger items on the Transactions page.
    */
   it('allows searching, filtering, and sorting of gold ledger items', async () => {
@@ -2369,7 +2377,8 @@ describe('Requirement Traceability Matrix Verification', () => {
   });
 
   /**
-   * [FUNC-GMAIL-36] / [BUG-007]:
+   * [FUNC-GMAIL-36] / [BUG-007] / [NFR-USAB-13]:
+   * Rejection Action Responsiveness
    * Verify that rejecting a staging transaction updates its status to 'rejected',
    * excludes it from the pending count, displays it as rejected, and updates the dashboard.
    */
@@ -3167,7 +3176,14 @@ describe('Requirement Traceability Matrix Verification', () => {
     vi.unstubAllGlobals();
   });
 
-  it('displays LLM parser performance metrics on the Dashboard and shows side-by-side comparison inside the lineage detail modal [FUNC-GOLD-PAGE-9] [FUNC-GOLD-PAGE-10] [FUNC-GMAIL-40]', async () => {
+  /**
+   * [FUNC-GOLD-PAGE-9] [FUNC-GOLD-PAGE-10] [FUNC-GMAIL-40]
+   * [FUNC-GMAIL-41] Staging LLM Extracted Data Preview
+   * [NFR-USAB-17] Accuracy Metrics Visual Consistency
+   * [NFR-USAB-18] Lineage Comparison Load Latency
+   * [NFR-USAB-19] Staging Original Preview Load Latency
+   */
+  it('displays LLM parser performance metrics on the Dashboard and shows side-by-side comparison inside the lineage detail modal [FUNC-GOLD-PAGE-9] [FUNC-GOLD-PAGE-10] [FUNC-GMAIL-40] [FUNC-GMAIL-41] [NFR-USAB-17] [NFR-USAB-18] [NFR-USAB-19]', async () => {
     const mockFetch = vi.fn((url: string, options?: any) => {
       if (url.includes('/api/gmail/raw-emails') || url.includes('/api/pipeline/raw-inputs')) {
         return Promise.resolve({

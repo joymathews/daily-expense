@@ -75,7 +75,7 @@ describe('LLM Accuracy Ingestion and Metrics API [FUNC-GMAIL-40]', () => {
     expect(llmLog.extractedPaymentMethod).toBe('UPI HDFC BANK');
   });
 
-  it('calculates LLM accuracy stats and exposes them via REST API [FUNC-GOLD-PAGE-9] [FUNC-GOLD-PAGE-10]', async () => {
+  it('calculates LLM accuracy stats and exposes them via REST API [FUNC-GOLD-PAGE-9] [FUNC-GOLD-PAGE-10] [NFR-LLM-2]', async () => {
     const rawIdMatch = 'raw_match';
     const rawIdDiff = 'raw_diff';
 

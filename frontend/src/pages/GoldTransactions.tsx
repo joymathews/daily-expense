@@ -4,6 +4,7 @@ import type { GoldTransaction } from '../hooks/use-gmail-integration';
 import { EmailDetailModal } from '../components/gmail/EmailDetailModal';
 import { DeleteConfirmationModal } from '../components/gmail/DeleteConfirmationModal';
 import { MultiSelect } from '../components/MultiSelect';
+import { getSignedAmount } from '../utils/transaction-helper';
 
 const GoldTransactions: React.FC = () => {
   const {
@@ -139,12 +140,6 @@ const GoldTransactions: React.FC = () => {
     );
   });
 
-  const getSignedAmount = (t: GoldTransaction) => {
-    if (t.transactionType === 'refund') return -t.amount;
-    if (t.transactionType === 'transfer') return 0;
-    return t.amount;
-  };
-
   // 2. Sort transactions
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
     switch (sortBy) {
@@ -176,7 +171,7 @@ const GoldTransactions: React.FC = () => {
     
     const cat = tx.category || 'Other';
     const cur = tx.currency.toUpperCase();
-    const amount = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+    const amount = getSignedAmount(tx);
     
     if (!acc[cat]) {
       acc[cat] = {};

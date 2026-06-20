@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { SilverTransaction } from '../../hooks/use-gmail-integration';
 import { MultiSelect } from '../MultiSelect';
+import { getSignedAmount } from '../../utils/transaction-helper';
 
 interface SilverStagingListProps {
   silverTransactions: SilverTransaction[];
@@ -99,12 +100,6 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
       tx.amount.toString().includes(query)
     );
   });
-
-  const getSignedAmount = (t: SilverTransaction) => {
-    if (t.transactionType === 'refund') return -t.amount;
-    if (t.transactionType === 'transfer') return 0;
-    return t.amount;
-  };
 
   // Sorting logic
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {

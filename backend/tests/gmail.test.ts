@@ -28,7 +28,7 @@ jest.mock('googleapis', () => {
   };
 });
 
-describe('Gmail API Integration', () => {
+describe('Gmail API Integration [BUG-010]', () => {
   const gmail = google.gmail('v1');
   const testDbPath = path.resolve(__dirname, '../data/test_gmail.db');
   let originalDatabaseUrl: string | undefined;
@@ -910,10 +910,12 @@ describe('Gmail API Integration', () => {
 
   /**
    * [BUG-012] Payment Mapping Priority Conflict.
+   * [FUNC-GMAIL-42] Payment Mapping Priority Ranking.
+   * [NFR-USAB-20] Payment Standardization Priority Latency.
    * Verify that standardizePaymentMethod prioritizes matching rules with more parts,
    * and tie-breaks using pattern length.
    */
-  it('should prioritize more specific payment mapping rules based on number of parts and length [BUG-012]', async () => {
+  it('should prioritize more specific payment mapping rules based on number of parts and length [BUG-012] [FUNC-GMAIL-42] [NFR-USAB-20]', async () => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 

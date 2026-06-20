@@ -2,6 +2,7 @@ import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-reposi
 import { TransactionIngestionService } from '../src/services/transaction-ingestion-service';
 import { ITransactionExtractor, ExtractedTransaction, TransactionExtractorFactory } from '../src/services/transaction-extractor';
 import { ITransactionRepository } from '../src/db/transaction-repository';
+import { OllamaExtractor } from '../src/services/ollama-extractor';
 import crypto from 'crypto';
 
 class MockTransactionExtractor implements ITransactionExtractor {
@@ -411,6 +412,53 @@ describe('Transaction Processing Pipeline Integration', () => {
 
     // Restore environment
     process.env.LLM_PROVIDER = originalProvider;
+  });
+
+  /**
+   * [FUNC-GMAIL-43] LLM Category Extraction Inference
+   * [NFR-GMAIL-6] Category Extraction Robustness
+   */
+  it('should infer category from overall context using Ollama category list and map to fallback if context is unclear', async () => {
+    const extractor = new OllamaExtractor('llama3', 'http://localhost:11434');
+
+    // Mock global fetch
+    const mockFetch = jest.fn().mockImplementation(() => {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          message: {
+            content: JSON.stringify({
+              merchant: 'Uber Inc',
+              amount: 14.50,
+              currency: 'USD',
+              date: '2026-06-12',
+              category: 'Cabs & Transport',
+              paymentMethod: 'UPI',
+              transactionType: 'expense'
+            })
+          }
+        })
+      });
+    });
+    const originalFetch = global.fetch;
+    global.fetch = mockFetch as any;
+
+    try {
+      const result = await extractor.extractTransaction('Uber ride receipt detail');
+      expect(result).not.toBeNull();
+      expect(result?.merchant).toBe('Uber Inc');
+      expect(result?.category).toBe('Cabs & Transport');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:11434/api/chat',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('Cabs & Transport')
+        })
+      );
+    } finally {
+      // Restore fetch
+      global.fetch = originalFetch;
+    }
   });
 
   /**
