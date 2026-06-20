@@ -54,6 +54,8 @@ const GoldTransactions: React.FC = () => {
   const [isTimelineCollapsed, setIsTimelineCollapsed] = useState(false);
   const [showAverageLine, setShowAverageLine] = useState(true);
   const [showTrendLine, setShowTrendLine] = useState(true);
+  const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
+  const [showDailyTimeline, setShowDailyTimeline] = useState(false);
 
 
 
@@ -422,6 +424,30 @@ const GoldTransactions: React.FC = () => {
                 />
               </div>
             </div>
+
+            {/* Visual Panels Visibility Toggles */}
+            <div className="flex items-center gap-4 border-l border-gray-200 pl-4 h-10 self-end">
+              <label className="inline-flex items-center text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                <input
+                  id="toggle-category-breakdown"
+                  type="checkbox"
+                  checked={showCategoryBreakdown}
+                  onChange={(e) => setShowCategoryBreakdown(e.target.checked)}
+                  className="mr-1.5 accent-indigo-650 cursor-pointer"
+                />
+                Show Category Breakdown
+              </label>
+              <label className="inline-flex items-center text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                <input
+                  id="toggle-daily-timeline"
+                  type="checkbox"
+                  checked={showDailyTimeline}
+                  onChange={(e) => setShowDailyTimeline(e.target.checked)}
+                  className="mr-1.5 accent-indigo-650 cursor-pointer"
+                />
+                Show Daily Spend Timeline
+              </label>
+            </div>
           </div>
 
           {/* Clear Filters Button */}
@@ -469,7 +495,8 @@ const GoldTransactions: React.FC = () => {
       </div>
 
       {/* Category Spend Breakdown Panel */}
-      <div className="bg-white border border-gray-150/60 rounded-3xl shadow-sm overflow-hidden flex flex-col">
+      {showCategoryBreakdown && (
+        <div className="bg-white border border-gray-150/60 rounded-3xl shadow-sm overflow-hidden flex flex-col" data-testid="category-spend-breakdown-panel">
         {/* Panel Header */}
         <div className="bg-gray-50/70 border-b border-gray-100 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
@@ -617,9 +644,11 @@ const GoldTransactions: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Daily Spend Timeline (Chart panel driven by main filters context) */}
-      <div className="bg-white border border-gray-150/60 rounded-3xl shadow-sm overflow-hidden flex flex-col" data-testid="analysis-daily-spend-chart">
+      {showDailyTimeline && (
+        <div className="bg-white border border-gray-150/60 rounded-3xl shadow-sm overflow-hidden flex flex-col" data-testid="analysis-daily-spend-chart">
         {/* Panel Header */}
         <div className="bg-gray-50/70 border-b border-gray-100 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
@@ -843,6 +872,7 @@ const GoldTransactions: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Ledger Table Section */}
       <div className="bg-white border border-gray-150/60 rounded-3xl overflow-hidden shadow-sm">

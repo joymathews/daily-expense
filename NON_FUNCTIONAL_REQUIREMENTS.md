@@ -60,6 +60,7 @@
 - [NFR-USAB-26] Persistent Fetcher Suggestions Performance: Retrieving the list of saved sender emails from the database and rendering them as autocomplete suggestions inside the fetcher configuration panel must complete within 100ms, and saving a new sender email address to the database must execute within 150ms to ensure a lag-free input experience.
 - [NFR-USAB-27] Collapsible Spend Breakdown Usability & Responsiveness: Expanding, collapsing, or customization actions (like checking/unchecking categories) in the Category Spend Breakdown panel must render and recalculate spend totals instantly (within 100ms) to ensure interactive responsiveness, maintaining consistency with 'Outfit' typography and standard card layout metrics.
 - [NFR-USAB-28] Clear Filters Responsiveness: Clicking the "Clear Filters" button must reset all filter criteria and refresh the transaction table view instantly (within 100ms) to ensure high interactive responsiveness.
+- [NFR-USAB-29] Panel Toggle Responsiveness: Toggling the visibility of the Category Spend Breakdown and Daily Spend Timeline panels via checkboxes in the filter panel must mount/unmount the respective widgets instantly (within 50ms) without initiating any database or network requests.
 
 ## Financial Analysis Performance & Usability [NFR-ANALYSIS]
 - [NFR-ANALYSIS-1] Preference Ingress Performance: Retrieving user preferences and updating preferences must complete within 150ms at the API layer.

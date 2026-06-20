@@ -124,6 +124,58 @@ describe('GoldTransactions Page Relocated Widgets', () => {
     expect(screen.getByText(/₹74000.00 \(74.0%\)/i)).toBeInTheDocument();
   });
 
+  /**
+   * [FUNC-GOLD-PAGE-12] / [FUNC-ANALYSIS-4] / [NFR-USAB-29]:
+   * Verify that panels are hidden by default, toggling their checkboxes displays/hides them,
+   * and clicking "Clear Filters" does NOT reset the panel checkboxes.
+   */
+  it('hides category and daily spend panels by default, toggles visibility via checkboxes, and does not reset on clear filters', async () => {
+    render(
+      <BrowserRouter>
+        <GoldTransactions />
+      </BrowserRouter>
+    );
+
+    // Panels must be hidden by default
+    expect(screen.queryByTestId('category-spend-breakdown-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('analysis-daily-spend-chart')).not.toBeInTheDocument();
+
+    const categoryCheckbox = screen.getByLabelText(/Show Category Breakdown/i);
+    const timelineCheckbox = screen.getByLabelText(/Show Daily Spend Timeline/i);
+
+    expect(categoryCheckbox).not.toBeChecked();
+    expect(timelineCheckbox).not.toBeChecked();
+
+    // Toggle Category breakdown on
+    fireEvent.click(categoryCheckbox);
+    expect(categoryCheckbox).toBeChecked();
+    expect(screen.getByTestId('category-spend-breakdown-panel')).toBeInTheDocument();
+
+    // Toggle Timeline on
+    fireEvent.click(timelineCheckbox);
+    expect(timelineCheckbox).toBeChecked();
+    expect(screen.getByTestId('analysis-daily-spend-chart')).toBeInTheDocument();
+
+    // Clear filters
+    const clearBtn = screen.getByRole('button', { name: /Clear Filters/i });
+    fireEvent.click(clearBtn);
+
+    // Checkboxes should remain checked and panels should remain visible
+    expect(categoryCheckbox).toBeChecked();
+    expect(timelineCheckbox).toBeChecked();
+    expect(screen.getByTestId('category-spend-breakdown-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('analysis-daily-spend-chart')).toBeInTheDocument();
+
+    // Toggle Category breakdown off
+    fireEvent.click(categoryCheckbox);
+    expect(categoryCheckbox).not.toBeChecked();
+    expect(screen.queryByTestId('category-spend-breakdown-panel')).not.toBeInTheDocument();
+  });
+
+  /**
+   * [FUNC-ANALYSIS-4] / [NFR-USAB-27] / [NFR-USAB-29]:
+   * Verify collapsible Daily Spend Timeline SVG behavior when panels are explicitly made visible.
+   */
   it('renders collapsible Daily Spend Timeline SVG below category breakdown and tracks filters', async () => {
     render(
       <BrowserRouter>
@@ -131,13 +183,16 @@ describe('GoldTransactions Page Relocated Widgets', () => {
       </BrowserRouter>
     );
 
+    // Make both panels visible
+    fireEvent.click(screen.getByLabelText(/Show Category Breakdown/i));
+    fireEvent.click(screen.getByLabelText(/Show Daily Spend Timeline/i));
+
     // Verify SVG timeline exists
-    expect(screen.getByText(/Daily Spend Timeline/i)).toBeInTheDocument();
     expect(screen.getByTestId('analysis-daily-spend-chart')).toBeInTheDocument();
 
     // Expand/collapse timeline
     const collapseTimelineBtn = screen.getAllByRole('button', { name: /Collapse/i })[1]; // Index 1 is timeline, 0 is Category Spend
-    expect(screen.getByText(/Daily Spend Timeline/i)).toBeInTheDocument();
+    expect(screen.getByTestId('analysis-daily-spend-chart')).toBeInTheDocument();
 
     // Collapse
     fireEvent.click(collapseTimelineBtn);

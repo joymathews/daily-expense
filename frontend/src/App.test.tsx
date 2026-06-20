@@ -4172,6 +4172,12 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Navigate to Transactions page
     fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
 
+    // Verify category spend panel is hidden by default
+    expect(screen.queryByText(/Category Spend Breakdown/i)).not.toBeInTheDocument();
+
+    // Toggle on Category spend panel
+    fireEvent.click(screen.getByLabelText(/Show Category Breakdown/i));
+
     // Verify category spend panel header is present
     expect(screen.getByText(/Category Spend Breakdown/i)).toBeInTheDocument();
 
@@ -4237,6 +4243,12 @@ describe('Requirement Traceability Matrix Verification', () => {
     await waitFor(() => {
       expect(screen.getByTestId('category-spend-card-Shopping')).toBeInTheDocument();
     });
+
+    // Verify "Clear Filters" does NOT hide the breakdown card or reset the Show Category Breakdown checkbox
+    const clearBtn = screen.getByRole('button', { name: /Clear Filters/i });
+    fireEvent.click(clearBtn);
+    expect(screen.getByLabelText(/Show Category Breakdown/i)).toBeChecked();
+    expect(screen.getByTestId('category-spend-card-Shopping')).toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });
