@@ -72,7 +72,9 @@ describe('Requirement Traceability Matrix Verification', () => {
    * [FUNC-SKEL-UI-1] Access dashboard via browser.
    * [FUNC-SKEL-UI-2] Personalized greeting and branding.
    * [FUNC-SKEL-UI-3] High-density responsive interface.
+   * [FUNC-GOLD-PAGE-16] Dashboard layout restructuring.
    * [NFR-PERF-2] Dynamic Layout / Responsive design.
+   * [NFR-USAB-32] Structured Dashboard Layout visual hierarchy.
    */
   it('renders dashboard with branding and personalized greeting', () => {
     render(<App />);
@@ -2170,7 +2172,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Click on the Navbar link to go to /transactions
-    const transLink = screen.getByRole('link', { name: /Ledger/i });
+    const transLink = screen.getByRole('link', { name: /^Ledger$/ });
     expect(transLink).toBeInTheDocument();
     fireEvent.click(transLink);
 
@@ -2242,7 +2244,7 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     // Verify Apple Store and Coffee Shop are visible initially
     expect(await screen.findByText('Apple Store')).toBeInTheDocument();
@@ -2354,7 +2356,7 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     // Wait for Merchant to appear and click it
     const merchantCell = await screen.findByText('Old Merchant');
@@ -3085,7 +3087,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
 
     // 4. Navigate to Gold Transactions Page and verify negative rendering
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     // Ledger table should contain the refund row and the negative amount
     expect(await screen.findByText('-50.00')).toBeInTheDocument();
@@ -3153,7 +3155,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Ledger page
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     // Click the manual entry merchant cell to open details
     const merchantCell = await screen.findByText('Manual Merchant B');
@@ -3334,7 +3336,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByTestId('llm-payment-accuracy')).toHaveTextContent('100%');
 
     // Navigate to Ledger page to open modal
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     const merchantCell = await screen.findByText('Uber Corrected');
     fireEvent.click(merchantCell);
@@ -3420,7 +3422,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Ledger page
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     // Verify all 3 transactions are initially visible
     expect(await screen.findByText('Supermarket A')).toBeInTheDocument();
@@ -3710,7 +3712,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Go to Gold Ledger page
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     // Expect Taxi in list
     expect(await screen.findByText('Taxi')).toBeInTheDocument();
@@ -3898,7 +3900,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(goldCategoryBtn); // close dropdown
  
     // 4. Navigate to main Ledger page
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
  
     // Verify items and columns are correct in Ledger table
     expect(await screen.findByText('Uber')).toBeInTheDocument();
@@ -4181,7 +4183,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     render(<App />);
 
     // Navigate to Transactions page
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Ledger$/ }));
 
     // Verify category spend panel is hidden by default
     expect(screen.queryByText(/Category Spend Breakdown/i)).not.toBeInTheDocument();
