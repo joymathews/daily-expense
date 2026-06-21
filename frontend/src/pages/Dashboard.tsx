@@ -33,6 +33,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [activeFixedCharges, setActiveFixedCharges] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hoveredPoint, setHoveredPoint] = useState<{ day: string; date: string; amount: number; x: number; y: number } | null>(null);
+  const [topOverallCategories, setTopOverallCategories] = useState<{ category: string; currency: string; amount: number }[]>([]);
+  const [topCycleCategories, setTopCycleCategories] = useState<{ category: string; currency: string; amount: number }[]>([]);
 
   useEffect(() => {
     const loadMetrics = async () => {
@@ -147,6 +149,46 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             };
           });
           setWeeklyTrendData(trendData);
+
+          // Calculate top 3 categories overall and top 3 categories in cycle
+          const overallCategoryMap: { [key: string]: { [curr: string]: number } } = {};
+          const cycleCategoryMap: { [key: string]: { [curr: string]: number } } = {};
+
+          goldTxs.forEach((tx: any) => {
+            if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return;
+            const amt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+            const cat = tx.category || 'Other';
+            const curr = tx.currency || 'INR';
+
+            // Overall aggregation
+            if (!overallCategoryMap[cat]) overallCategoryMap[cat] = {};
+            overallCategoryMap[cat][curr] = (overallCategoryMap[cat][curr] || 0) + amt;
+
+            // Cycle aggregation
+            if (tx.transactionDate >= range.start && tx.transactionDate <= range.end) {
+              if (!cycleCategoryMap[cat]) cycleCategoryMap[cat] = {};
+              cycleCategoryMap[cat][curr] = (cycleCategoryMap[cat][curr] || 0) + amt;
+            }
+          });
+
+          const getTopCategories = (catMap: typeof overallCategoryMap) => {
+            const list = Object.entries(catMap).map(([category, currMap]) => {
+              const sortedCurrs = Object.entries(currMap)
+                .map(([currency, amount]) => ({ currency, amount }))
+                .sort((a, b) => b.amount - a.amount);
+              const primary = sortedCurrs[0] || { currency: 'INR', amount: 0 };
+              return {
+                category,
+                currency: primary.currency,
+                amount: Math.max(0, primary.amount),
+              };
+            });
+            return list.sort((a, b) => b.amount - a.amount).slice(0, 3);
+          };
+
+          setTopOverallCategories(getTopCategories(overallCategoryMap));
+          setTopCycleCategories(getTopCategories(cycleCategoryMap));
+
           setIsLoading(false);
         })
         .catch((err) => {
@@ -281,6 +323,103 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             </div>
           </div>
         )}
+
+        {/* Category Spend Breakdown (Top 3 Current vs All-time) */}
+        {!isLoading && metrics.goldCount > 0 && (
+          <div className="bg-white border border-gray-100/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between" data-testid="dashboard-category-breakdown">
+            <div>
+              <h3 className="text-sm font-bold text-gray-905 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <span>🏷️</span> Category Spend Highlights
+              </h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-5">
+                Top 3 Category Spending (Current Cycle vs All-time)
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+                {/* Current Cycle Column */}
+                <div className="space-y-4 text-left">
+                  <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                    <span className="text-[10px] font-black text-indigo-650 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider">
+                      Current Cycle Top 3
+                    </span>
+                    <span className="text-[10px] text-gray-450 font-bold uppercase">
+                      Spend
+                    </span>
+                  </div>
+                  {topCycleCategories.length === 0 ? (
+                    <p className="text-xs font-semibold text-gray-400 uppercase italic py-4">No cycle expenses logged</p>
+                  ) : (
+                    <div className="space-y-3.5">
+                      {topCycleCategories.map((item, idx) => {
+                        const maxVal = topCycleCategories[0].amount || 1;
+                        const percent = (item.amount / maxVal) * 100;
+                        return (
+                          <div key={idx} className="group">
+                            <div className="flex justify-between items-center text-xs mb-1">
+                              <span className="font-bold text-gray-650 group-hover:text-indigo-650 transition-colors uppercase tracking-wider">
+                                {idx + 1}. {item.category}
+                              </span>
+                              <span className="font-black text-gray-950 Outfit">
+                                {item.currency === 'INR' ? `₹${item.amount.toFixed(2)}` : `${item.currency} ${item.amount.toFixed(2)}`}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-indigo-500 h-full rounded-full transition-all duration-300"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Overall Column */}
+                <div className="space-y-4 text-left">
+                  <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                    <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded uppercase tracking-wider">
+                      All-Time Top 3
+                    </span>
+                    <span className="text-[10px] text-gray-455 font-bold uppercase">
+                      Spend
+                    </span>
+                  </div>
+                  {topOverallCategories.length === 0 ? (
+                    <p className="text-xs font-semibold text-gray-400 uppercase italic py-4">No expenses logged</p>
+                  ) : (
+                    <div className="space-y-3.5">
+                      {topOverallCategories.map((item, idx) => {
+                        const maxVal = topOverallCategories[0].amount || 1;
+                        const percent = (item.amount / maxVal) * 100;
+                        return (
+                          <div key={idx} className="group">
+                            <div className="flex justify-between items-center text-xs mb-1">
+                              <span className="font-bold text-gray-655 group-hover:text-rose-650 transition-colors uppercase tracking-wider">
+                                {idx + 1}. {item.category}
+                              </span>
+                              <span className="font-black text-gray-955 Outfit">
+                                {item.currency === 'INR' ? `₹${item.amount.toFixed(2)}` : `${item.currency} ${item.amount.toFixed(2)}`}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-rose-500 h-full rounded-full transition-all duration-300"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="w-full bg-white border border-gray-100/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-50 pb-4 mb-2">
             <div>
