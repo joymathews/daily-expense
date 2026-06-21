@@ -4523,18 +4523,19 @@ describe('Requirement Traceability Matrix Verification', () => {
     
     // Check if the visualizer renders the expense trend chart card
     expect(await screen.findByText(/Expense Trend/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Weekly Ledger Visualizer/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Billing Cycle Ledger Visualizer/i)).toBeInTheDocument();
 
-    // Verify dynamic week day labels are present
-    // For June 18 2026 (Thursday), the 7 days ending on Thursday are:
-    // June 12 (Fri), June 13 (Sat), June 14 (Sun), June 15 (Mon), June 16 (Tue), June 17 (Wed), June 18 (Thu)
-    expect(await screen.findByText('Fri')).toBeInTheDocument();
-    expect(await screen.findByText('Sat')).toBeInTheDocument();
-    expect(await screen.findByText('Sun')).toBeInTheDocument();
-    expect(await screen.findByText('Mon')).toBeInTheDocument();
-    expect(await screen.findByText('Tue')).toBeInTheDocument();
-    expect(await screen.findByText('Wed')).toBeInTheDocument();
-    expect(await screen.findByText('Thu')).toBeInTheDocument();
+    // Verify dynamic billing cycle date labels are present
+    expect(await screen.findByText('17/06')).toBeInTheDocument();
+    expect(await screen.findByText('18/06')).toBeInTheDocument();
+    expect(await screen.findByText('19/06')).toBeInTheDocument();
+
+    // Verify day name abbreviations are present
+    expect((await screen.findAllByText('Wed')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Thu')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Fri')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Sat')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Sun')).length).toBeGreaterThan(0);
 
     // Verify spend values:
     // June 18 spend: 3000 (expense) - 500 (refund) = 2500

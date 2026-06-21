@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
-import { getActiveCycleRange, computeSalaryAllocation } from '../utils/transaction-helper';
+import { getActiveCycleRange, computeSalaryAllocation, getDatesInRange } from '../utils/transaction-helper';
 
 interface DashboardProps {
   userEmail: string;
@@ -32,6 +32,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [billingCycleRange, setBillingCycleRange] = useState({ start: '', end: '' });
   const [activeFixedCharges, setActiveFixedCharges] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hoveredPoint, setHoveredPoint] = useState<{ day: string; date: string; amount: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     const loadMetrics = async () => {
@@ -120,14 +121,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             goldTotalAmount: total,
           });
 
-          // Calculate real weekly trend data based on current local date (today)
-          const endDateObj = new Date();
+          // Calculate billing cycle trend data based on cycle range (up to current date)
+          const trendEndLimit = todayStr < range.start ? range.start : (todayStr > range.end ? range.end : todayStr);
+          const cycleDates = getDatesInRange(range.start, trendEndLimit);
           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const trendData = [];
-          for (let i = 6; i >= 0; i--) {
-            const d = new Date(endDateObj.getTime());
-            d.setDate(endDateObj.getDate() - i);
-            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const trendData = cycleDates.map((dateStr: string) => {
+            const dateParts = dateStr.split('-').map(Number);
+            const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
             const dayName = dayNames[d.getDay()];
             const formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 
@@ -140,12 +140,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
                 return sum + signedAmt;
               }, 0);
 
-            trendData.push({
+            return {
               day: dayName,
               date: formattedDate,
               amount: Math.max(0, amount),
-            });
-          }
+            };
+          });
           setWeeklyTrendData(trendData);
           setIsLoading(false);
         })
@@ -159,6 +159,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   }, []);
 
   const maxWeeklyAmount = Math.max(...weeklyTrendData.map(d => d.amount), 100);
+  const totalTrendSpend = weeklyTrendData.reduce((sum, d) => sum + d.amount, 0);
+  const averageDailySpend = weeklyTrendData.length > 0 ? totalTrendSpend / weeklyTrendData.length : 0;
 
   return (
     <div className="w-full max-w-5xl space-y-10 animate-fade-in">
@@ -280,9 +282,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           </div>
         )}
         <div className="w-full bg-white border border-gray-100/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Expense Trend</h3>
-            <p className="text-xs text-gray-400 font-semibold uppercase mt-0.5">Weekly Ledger Visualizer</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-50 pb-4 mb-2">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Expense Trend</h3>
+              <p className="text-xs text-gray-400 font-semibold uppercase mt-0.5">Billing Cycle Ledger Visualizer</p>
+            </div>
+            {weeklyTrendData.length > 0 && (
+              <div className="flex items-center gap-2 bg-indigo-50/50 border border-indigo-100/30 rounded-xl px-3.5 py-1.5 self-start sm:self-auto shadow-sm">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Avg Daily Spend:</span>
+                <span className="text-xs font-black text-indigo-650 Outfit" data-testid="dashboard-avg-spend-value">₹{averageDailySpend.toFixed(2)}</span>
+              </div>
+            )}
           </div>
 
           {metrics.goldCount === 0 ? (
@@ -295,32 +305,168 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
               </p>
             </div>
           ) : (
-            <div className="mt-6 flex items-end justify-between h-44 px-2">
-              {weeklyTrendData.map((d, index) => {
-                const heightPercent = Math.max(8, (d.amount / maxWeeklyAmount) * 100);
-                return (
-                  <div key={index} className="flex flex-col items-center flex-1 group">
-                    <div className="text-[10px] font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity mb-1.5 h-4 flex items-center justify-center">
-                      ₹{d.amount.toFixed(0)}
-                    </div>
-                    {/* The track of the bar */}
-                    <div className="w-8 sm:w-10 h-28 bg-slate-50 border border-slate-100 rounded-xl relative flex items-end overflow-hidden shadow-inner group-hover:border-indigo-100/80 transition-all duration-300">
-                      {/* The filled part of the bar */}
-                      <div 
-                        style={{ height: `${heightPercent}%` }}
-                        className="w-full bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t-sm transition-all duration-500 ease-out group-hover:from-indigo-500 group-hover:to-blue-400 relative shadow-sm"
-                      >
-                        {/* Top highlight shine */}
-                        <div className="w-full h-[2px] bg-white/20 absolute top-0 left-0 right-0"></div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase mt-2 group-hover:text-gray-900 transition-colors block text-center leading-tight">
-                      {d.day}
-                      <span className="block text-[8px] font-medium text-gray-400 mt-0.5">{d.date}</span>
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="w-full relative mt-6">
+              {/* SVG Render */}
+              <svg viewBox="0 0 1000 220" className="w-full h-56 overflow-visible select-none">
+                {/* Gradients */}
+                <defs>
+                  <linearGradient id="dashboardChartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                {/* SVG Chart Grid Lines & Axes */}
+                <line x1={50} y1={20} x2={970} y2={20} stroke="#f1f5f9" strokeWidth="1" />
+                <line x1={50} y1={100} x2={970} y2={100} stroke="#f1f5f9" strokeWidth="1" />
+                <line x1={50} y1={180} x2={970} y2={180} stroke="#cbd5e1" strokeWidth="1.5" />
+
+                {/* Left Y Axis line */}
+                <line x1={50} y1={20} x2={50} y2={180} stroke="#cbd5e1" strokeWidth="1" />
+
+                {/* Left Y Axis Ticks */}
+                <line x1={45} y1={20} x2={50} y2={20} stroke="#cbd5e1" strokeWidth="1" />
+                <line x1={45} y1={100} x2={50} y2={100} stroke="#cbd5e1" strokeWidth="1" />
+                <line x1={45} y1={180} x2={50} y2={180} stroke="#cbd5e1" strokeWidth="1" />
+
+                {/* Y Axis Values */}
+                <text x={40} y={23} textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                  ₹{maxWeeklyAmount.toFixed(0)}
+                </text>
+                <text x={40} y={103} textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                  ₹{(maxWeeklyAmount / 2).toFixed(0)}
+                </text>
+                <text x={40} y={183} textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                  ₹0
+                </text>
+
+                {(() => {
+                  const chartMinX = 50;
+                  const chartMaxX = 970;
+                  const chartMinY = 20;
+                  const chartMaxY = 180;
+                  const chartWidth = chartMaxX - chartMinX;
+                  const chartHeight = chartMaxY - chartMinY;
+
+                  const stepX = weeklyTrendData.length > 1 ? chartWidth / (weeklyTrendData.length - 1) : chartWidth;
+
+                  const coordinates = weeklyTrendData.map((d, index) => {
+                    const x = chartMinX + index * stepX;
+                    const y = maxWeeklyAmount > 0
+                      ? chartMaxY - (d.amount / maxWeeklyAmount) * chartHeight
+                      : chartMaxY;
+                    return { x, y, d };
+                  });
+
+                   const linePath = coordinates.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+                  const areaPath = coordinates.length > 0
+                    ? `${linePath} L ${coordinates[coordinates.length - 1].x} ${chartMaxY} L ${coordinates[0].x} ${chartMaxY} Z`
+                    : '';
+
+                  const averageY = maxWeeklyAmount > 0
+                    ? chartMaxY - (averageDailySpend / maxWeeklyAmount) * chartHeight
+                    : chartMaxY;
+
+                  return (
+                    <>
+                      {/* Filled Area */}
+                      {areaPath && <path d={areaPath} fill="url(#dashboardChartGrad)" />}
+
+                      {/* Average Line */}
+                      {weeklyTrendData.length > 0 && maxWeeklyAmount > 0 && (
+                        <>
+                          <line x1={chartMinX} y1={averageY} x2={chartMaxX} y2={averageY} stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="4 4" />
+                          <text x={chartMaxX - 5} y={averageY - 5} textAnchor="end" fill="#94a3b8" className="text-[8px] font-bold font-sans">
+                            Avg: ₹{averageDailySpend.toFixed(0)}
+                          </text>
+                        </>
+                      )}
+
+                      {/* Line Curve */}
+                      {linePath && (
+                        <path
+                          d={linePath}
+                          fill="none"
+                          stroke="#6366f1"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      )}
+
+                      {/* X Axis Date Labels */}
+                      {coordinates.map((c, i) => (
+                        <g key={i}>
+                          <line x1={c.x} y1="180" x2={c.x} y2="184" stroke="#cbd5e1" strokeWidth="1" />
+                          <text
+                            x={c.x}
+                            y="196"
+                            textAnchor="middle"
+                            fill="#475569"
+                            className="text-[9px] font-extrabold font-sans"
+                          >
+                            {c.d.day}
+                          </text>
+                          <text
+                            x={c.x}
+                            y="207"
+                            textAnchor="middle"
+                            fill="#94a3b8"
+                            className="text-[8px] font-bold font-sans"
+                          >
+                            {c.d.date}
+                          </text>
+                        </g>
+                      ))}
+
+                      {/* Interactive Circles / Markers */}
+                      {coordinates.map((c, i) => (
+                        <g
+                          key={i}
+                          className="cursor-pointer"
+                          onMouseEnter={() => setHoveredPoint({ ...c.d, x: c.x, y: c.y })}
+                          onMouseLeave={() => setHoveredPoint(null)}
+                        >
+                          <circle
+                            cx={c.x}
+                            cy={c.y}
+                            r="4.5"
+                            fill="#ffffff"
+                            stroke="#6366f1"
+                            strokeWidth="2.5"
+                            className="transition-all duration-150 hover:r-[6.5]"
+                          />
+                          <title>{`${c.d.date}: ₹${c.d.amount.toFixed(0)}`}</title>
+                          {/* Invisible larger hover zone */}
+                          <circle
+                            cx={c.x}
+                            cy={c.y}
+                            r="15"
+                            fill="transparent"
+                            className="opacity-0"
+                          />
+                        </g>
+                      ))}
+                    </>
+                  );
+                })()}
+              </svg>
+
+              {/* Dynamic HTML Tooltip */}
+              {hoveredPoint && (
+                <div
+                  style={{
+                    left: `${(hoveredPoint.x / 1000) * 100}%`,
+                    top: `${(hoveredPoint.y / 220) * 100}%`,
+                  }}
+                  className="absolute transform -translate-x-1/2 -translate-y-[calc(100%+14px)] bg-slate-900 text-white text-[10px] sm:text-xs font-bold rounded-lg px-2.5 py-1.5 shadow-xl border border-slate-800 pointer-events-none transition-all duration-100 z-10 flex flex-col items-center min-w-[70px]"
+                >
+                  <span className="text-[8px] text-slate-400 font-semibold">{hoveredPoint.date} ({hoveredPoint.day})</span>
+                  <span className="text-indigo-400 font-extrabold mt-0.5">₹{hoveredPoint.amount.toFixed(0)}</span>
+                  {/* Tooltip arrow */}
+                  <div className="w-1.5 h-1.5 bg-slate-900 rotate-45 transform translate-y-1/2 absolute bottom-0 left-1/2 -translate-x-1/2 border-r border-b border-slate-800"></div>
+                </div>
+              )}
             </div>
           )}
         </div>
