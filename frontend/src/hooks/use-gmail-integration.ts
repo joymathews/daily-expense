@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { getActiveCycleRange } from '../utils/transaction-helper';
 import type { FixedChargeTemplate } from '../utils/transaction-helper';
 
 export interface FetchProgress {
@@ -133,7 +134,11 @@ export interface LlmExtractionLog {
   extractedAt?: string;
 }
 
-export const useGmailIntegration = () => {
+export interface GmailIntegrationOptions {
+  defaultToCycleRange?: boolean;
+}
+
+export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const [senders, setSenders] = useState<string[]>([]);
   const [currentSender, setCurrentSender] = useState('');
   const [fetcherEmails, setFetcherEmails] = useState<string[]>([]);
@@ -141,6 +146,7 @@ export const useGmailIntegration = () => {
   const [paymentRules, setPaymentRules] = useState<PaymentMappingRule[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [hasInitializedDefaultDates, setHasInitializedDefaultDates] = useState(false);
   const [subject, setSubject] = useState('');
   const [emails, setEmails] = useState<GmailMessage[]>([]); // backwards compatibility for tests
   
@@ -408,12 +414,16 @@ export const useGmailIntegration = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setBillingCycleStartDay(data.billingCycleStartDay ?? 17);
-        setExpectedSalary(data.expectedSalary ?? 100000);
+        const startDay = data.billingCycleStartDay ?? 17;
+        const salary = data.expectedSalary ?? 100000;
+        setBillingCycleStartDay(startDay);
+        setExpectedSalary(salary);
+        return { billingCycleStartDay: startDay, expectedSalary: salary };
       }
     } catch (err) {
       console.warn('Failed to load user preferences:', err);
     }
+    return { billingCycleStartDay: 17, expectedSalary: 100000 };
   };
 
   const updateUserPreferences = async (cycleStartDay: number, salary: number) => {
@@ -517,8 +527,29 @@ export const useGmailIntegration = () => {
   };
 
   useEffect(() => {
+    if (options?.defaultToCycleRange && !hasInitializedDefaultDates) {
+      return;
+    }
     loadAllLayers(startDate, endDate);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, hasInitializedDefaultDates, options?.defaultToCycleRange]);
+
+  useEffect(() => {
+    if (options?.defaultToCycleRange && !hasInitializedDefaultDates) {
+      const initialize = async () => {
+        setIsLoading(true);
+        const prefs = await loadUserPreferences();
+        const cycleStartDay = prefs?.billingCycleStartDay ?? 17;
+        const cycleRange = getActiveCycleRange(cycleStartDay);
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        
+        setStartDate(cycleRange.start);
+        setEndDate(todayStr);
+        setHasInitializedDefaultDates(true);
+      };
+      initialize();
+    }
+  }, [options?.defaultToCycleRange, hasInitializedDefaultDates]);
 
   useEffect(() => {
     loadPaymentMethods();

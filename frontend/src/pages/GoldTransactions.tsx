@@ -29,7 +29,7 @@ const GoldTransactions: React.FC = () => {
     billingCycleStartDay,
     expectedSalary,
     fixedCharges,
-  } = useGmailIntegration();
+  } = useGmailIntegration({ defaultToCycleRange: true });
 
   // Search keyword state
   const [searchQuery, setSearchQuery] = useState('');

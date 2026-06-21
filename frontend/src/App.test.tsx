@@ -2177,6 +2177,23 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Verify page headers
     expect(await screen.findByText('Gold Ledger Transactions')).toBeInTheDocument();
 
+    // Verify default date range values on load
+    const startDateInput = screen.getByLabelText(/Start Date:/i);
+    const endDateInput = screen.getByLabelText(/End Date:/i);
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    
+    let expectedStartDate: Date;
+    if (today.getDate() >= 17) {
+      expectedStartDate = new Date(today.getFullYear(), today.getMonth(), 17);
+    } else {
+      expectedStartDate = new Date(today.getFullYear(), today.getMonth() - 1, 17);
+    }
+    const expectedStartStr = `${expectedStartDate.getFullYear()}-${String(expectedStartDate.getMonth() + 1).padStart(2, '0')}-${String(expectedStartDate.getDate()).padStart(2, '0')}`;
+    
+    expect(startDateInput).toHaveValue(expectedStartStr);
+    expect(endDateInput).toHaveValue(todayStr);
+
     // Verify presence of table rows
     expect(screen.getByText('Supermarket A')).toBeInTheDocument();
     expect(screen.getByText('Taxi Ride')).toBeInTheDocument();
