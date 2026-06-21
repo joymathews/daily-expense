@@ -4324,6 +4324,221 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [BUG-016] Fixed Charge Payment Method Configuration:
+   * Verify that the fixed charge settings tab includes the payment method dropdown select element,
+   * that it saves a template with a specific payment method (e.g. Credit Card),
+   * and that the saved template displays the selected payment method in the active templates list.
+   */
+  it('supports selecting a payment method when configuring fixed charges templates [BUG-016]', async () => {
+    const mockPaymentMethods = [
+      { id: 'pm-1', name: 'Credit Card' },
+      { id: 'pm-2', name: 'UPI' },
+      { id: 'pm-3', name: 'Cash' },
+    ];
+    const mockFixedCharges = [
+      {
+        id: 'fc-1',
+        name: 'House Rent',
+        amount: 25000,
+        currency: 'INR',
+        category: 'Rent',
+        paymentMethod: 'UPI',
+        startDate: '2026-06-15',
+        endDate: '2026-08-15',
+      }
+    ];
+
+    let postBody: any = null;
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-preferences')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ billingCycleStartDay: 17, expectedSalary: 100000 }),
+        });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ paymentMethods: mockPaymentMethods }),
+        });
+      }
+      if (url.includes('/api/pipeline/fixed-charges')) {
+        if (init?.method === 'POST') {
+          postBody = JSON.parse(init.body);
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ status: 'saved', id: 'fc-new' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ fixedCharges: mockFixedCharges }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], transactions: [], paymentRules: [], fetcherEmails: [] }) });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Go to Data Ingestion
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
+
+    // Click settings subtab
+    fireEvent.click(await screen.findByRole('button', { name: /Cycle & Salary Settings/i }));
+
+    // Verify template form elements are visible
+    expect(await screen.findByLabelText(/Payment Method \*/i)).toBeInTheDocument();
+    
+    // Check if the saved template displays its payment method
+    expect(await screen.findByText(/Payment Mode: UPI/i)).toBeInTheDocument();
+
+    // Fill form to create a new template
+    fireEvent.change(screen.getByLabelText(/Name \*/i), { target: { value: 'Gym Membership' } });
+    fireEvent.change(screen.getByLabelText(/Amount \*/i), { target: { value: '1500' } });
+    fireEvent.change(screen.getByLabelText(/Category \*/i), { target: { value: 'Fitness' } });
+    fireEvent.change(screen.getByLabelText(/Payment Method \*/i), { target: { value: 'Credit Card' } });
+    fireEvent.change(screen.getByLabelText(/Start Date \*/i), { target: { value: '2026-06-25' } });
+    fireEvent.change(screen.getByLabelText(/End Date \*/i), { target: { value: '2026-08-25' } });
+
+    // Submit form
+    fireEvent.click(screen.getByRole('button', { name: /Create Template/i }));
+
+    // Wait for form handling and mock API callback
+    await screen.findByText(/Fixed charge template created and upfront ledger items generated!/i);
+
+    // Verify postBody contains custom payment method
+    expect(postBody).toBeDefined();
+    expect(postBody.paymentMethod).toBe('Credit Card');
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [BUG-017] Dashboard Weekly Expense Trend Visualizer:
+   * Verify that the Dashboard page fetches gold transactions and correctly aggregates
+   * and renders the weekly expense trend chart using real ledger data.
+   */
+  it('displays the weekly trend chart on the dashboard using real transaction data [BUG-017]', async () => {
+    const RealDate = global.Date;
+    const mockSystemDate = new RealDate('2026-06-21T09:20:00');
+    // @ts-ignore
+    global.Date = class extends RealDate {
+      constructor(...args: any[]) {
+        if (args.length > 0) {
+          // @ts-ignore
+          return new RealDate(...args);
+        }
+        return mockSystemDate;
+      }
+      static now() {
+        return mockSystemDate.getTime();
+      }
+    };
+    const mockGoldTransactions = [
+      {
+        id: 'gold-1',
+        merchant: 'Shopping Corp',
+        amount: 3000,
+        currency: 'INR',
+        transactionDate: '2026-06-18',
+        category: 'Shopping',
+        paymentMethod: 'Credit Card',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold-2',
+        merchant: 'Refund Corp',
+        amount: 500,
+        currency: 'INR',
+        transactionDate: '2026-06-18',
+        category: 'Shopping',
+        paymentMethod: 'Credit Card',
+        sourceType: 'manual',
+        transactionType: 'refund',
+      },
+      {
+        id: 'gold-3',
+        merchant: 'Transfer Corp',
+        amount: 1000,
+        currency: 'INR',
+        transactionDate: '2026-06-17',
+        category: 'Transfer',
+        paymentMethod: 'UPI',
+        sourceType: 'manual',
+        transactionType: 'transfer',
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGoldTransactions }),
+        });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/llm-accuracy-stats')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ totalTested: 10, overallAccuracy: 90 }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], transactions: [], paymentMethods: [], paymentRules: [], fetcherEmails: [] }) });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Verify dashboard metrics are rendered
+    expect(await screen.findByText(/Hi,/i)).toBeInTheDocument();
+    
+    // Check if the visualizer renders the expense trend chart card
+    expect(await screen.findByText(/Expense Trend/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Weekly Ledger Visualizer/i)).toBeInTheDocument();
+
+    // Verify dynamic week day labels are present
+    // For June 18 2026 (Thursday), the 7 days ending on Thursday are:
+    // June 12 (Fri), June 13 (Sat), June 14 (Sun), June 15 (Mon), June 16 (Tue), June 17 (Wed), June 18 (Thu)
+    expect(await screen.findByText('Fri')).toBeInTheDocument();
+    expect(await screen.findByText('Sat')).toBeInTheDocument();
+    expect(await screen.findByText('Sun')).toBeInTheDocument();
+    expect(await screen.findByText('Mon')).toBeInTheDocument();
+    expect(await screen.findByText('Tue')).toBeInTheDocument();
+    expect(await screen.findByText('Wed')).toBeInTheDocument();
+    expect(await screen.findByText('Thu')).toBeInTheDocument();
+
+    // Verify spend values:
+    // June 18 spend: 3000 (expense) - 500 (refund) = 2500
+    // June 17 spend: 0 (since transfer is excluded)
+    expect(await screen.findByText('₹2500')).toBeInTheDocument();
+    expect((await screen.findAllByText('₹0')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('18/06')).toBeInTheDocument();
+    expect(await screen.findByText('17/06')).toBeInTheDocument();
+
+    global.Date = RealDate;
+    vi.unstubAllGlobals();
+  });
 });
 
 

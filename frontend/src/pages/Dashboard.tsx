@@ -19,6 +19,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     goldCount: 0,
     goldTotalAmount: 0,
   });
+  const [weeklyTrendData, setWeeklyTrendData] = useState<{ day: string; date: string; amount: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -35,9 +36,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
       }
 
       Promise.all([
-        fetch('/api/gmail/raw-emails', { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
-        fetch('/api/gmail/silver-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
-        fetch('/api/gmail/gold-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch('/api/pipeline/raw-inputs', { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
+        fetch('/api/pipeline/silver-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch('/api/pipeline/gold-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
       ])
         .then(([raw, silver, gold]) => {
           const goldTxs = gold.transactions || [];
@@ -84,6 +85,34 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             goldCount: goldTxs.length,
             goldTotalAmount: total,
           });
+
+          // Calculate real weekly trend data based on current local date (today)
+          const endDateObj = new Date();
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const trendData = [];
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date(endDateObj.getTime());
+            d.setDate(endDateObj.getDate() - i);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const dayName = dayNames[d.getDay()];
+            const formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+            const amount = goldTxs
+              .filter((tx: any) => tx.transactionDate === dateStr)
+              .reduce((sum: number, tx: any) => {
+                if (tx.transactionType === 'transfer') return sum;
+                if (tx.transactionType === 'fixed') return sum;
+                const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+                return sum + signedAmt;
+              }, 0);
+
+            trendData.push({
+              day: dayName,
+              date: formattedDate,
+              amount: Math.max(0, amount),
+            });
+          }
+          setWeeklyTrendData(trendData);
           setIsLoading(false);
         })
         .catch((err) => {
@@ -94,17 +123,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
 
     loadMetrics();
   }, []);
-
-  // Simulated chart data for visualization
-  const weeklyTrendData = [
-    { day: 'Mon', amount: metrics.goldCount > 0 ? Math.min(metrics.goldTotalAmount * 0.15, 120) : 0 },
-    { day: 'Tue', amount: metrics.goldCount > 0 ? Math.min(metrics.goldTotalAmount * 0.25, 250) : 0 },
-    { day: 'Wed', amount: metrics.goldCount > 0 ? Math.min(metrics.goldTotalAmount * 0.10, 80) : 0 },
-    { day: 'Thu', amount: metrics.goldCount > 0 ? Math.min(metrics.goldTotalAmount * 0.30, 310) : 0 },
-    { day: 'Fri', amount: metrics.goldCount > 0 ? Math.min(metrics.goldTotalAmount * 0.20, 190) : 0 },
-    { day: 'Sat', amount: 0 },
-    { day: 'Sun', amount: 0 },
-  ];
 
   const maxWeeklyAmount = Math.max(...weeklyTrendData.map(d => d.amount), 100);
 
@@ -339,22 +357,28 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
               </p>
             </div>
           ) : (
-            <div className="mt-6 flex items-end justify-between h-40 px-2">
+            <div className="mt-6 flex items-end justify-between h-44 px-2">
               {weeklyTrendData.map((d, index) => {
-                const heightPercent = Math.max(10, (d.amount / maxWeeklyAmount) * 100);
+                const heightPercent = Math.max(8, (d.amount / maxWeeklyAmount) * 100);
                 return (
                   <div key={index} className="flex flex-col items-center flex-1 group">
-                    <div className="text-[10px] font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity mb-2">
-                      ${d.amount.toFixed(0)}
+                    <div className="text-[10px] font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity mb-1.5 h-4 flex items-center justify-center">
+                      ₹{d.amount.toFixed(0)}
                     </div>
-                    <div 
-                      style={{ height: `${heightPercent}%` }}
-                      className="w-8 sm:w-10 bg-indigo-50/50 group-hover:bg-indigo-600/95 border border-indigo-100 rounded-lg transition-all duration-300 relative flex items-end overflow-hidden shadow-sm"
-                    >
-                      <div className="w-full bg-gradient-to-t from-indigo-600 to-indigo-400 h-2/3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    {/* The track of the bar */}
+                    <div className="w-8 sm:w-10 h-28 bg-slate-50 border border-slate-100 rounded-xl relative flex items-end overflow-hidden shadow-inner group-hover:border-indigo-100/80 transition-all duration-300">
+                      {/* The filled part of the bar */}
+                      <div 
+                        style={{ height: `${heightPercent}%` }}
+                        className="w-full bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t-sm transition-all duration-500 ease-out group-hover:from-indigo-500 group-hover:to-blue-400 relative shadow-sm"
+                      >
+                        {/* Top highlight shine */}
+                        <div className="w-full h-[2px] bg-white/20 absolute top-0 left-0 right-0"></div>
+                      </div>
                     </div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase mt-2 group-hover:text-gray-900 transition-colors">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase mt-2 group-hover:text-gray-900 transition-colors block text-center leading-tight">
                       {d.day}
+                      <span className="block text-[8px] font-medium text-gray-400 mt-0.5">{d.date}</span>
                     </span>
                   </div>
                 );

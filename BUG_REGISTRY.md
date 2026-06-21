@@ -263,5 +263,49 @@ The date range filters in the Daily Spend Timeline are synchronized with the bil
 * **Test Case**: `frontend/src/pages/Analysis.test.tsx`
   - *maintains independent daily trend filters when cycle preferences change [BUG-015]*
 
+---
+
+## [BUG-016] Fixed Charge Template Payment Method Hardcoded to 'Fixed' and Omitted from Form
+
+### Description
+The recurring fixed charges templates configuration interface does not allow users to specify a payment method when creating or editing a template. In addition, all upfront generated and synchronized transactions for a fixed charge are stored with a hardcoded payment method of `'Fixed'`, which does not reflect actual payment modes (e.g. UPI, Credit Card, Cash, etc.) used by the user.
+
+### Root Cause
+The frontend configuration form in `DataIngestion.tsx` lacks a selector/input for the payment method. The backend `fixed_charges` SQLite database table is missing a `payment_method` column, and the repository methods `saveFixedCharge` hardcode `'Fixed'` in the `INSERT` and `UPDATE` statements for `gold_transactions`.
+
+### Resolution
+1. Added a nullable `payment_method` column to the `fixed_charges` table schema and run an inline SQLite table migration (`ALTER TABLE`) if missing.
+2. Updated the backend interface `FixedCharge` and frontend interface `FixedChargeTemplate` to include a `paymentMethod` property.
+3. Modified the repository CRUD methods (`getFixedCharges`, `saveFixedCharge`) to persist, query, and utilize the customized `paymentMethod` when creating or modifying templates and their corresponding gold transactions.
+4. Implemented a Select dropdown list in the settings fixed charges configuration form in `DataIngestion.tsx` to let the user choose from standard/custom payment methods, and update state synchronization inside `handleEditFc` and submission handlers.
+
+### Verification Test
+* **Test Case**: `backend/tests/fixed-charges.test.ts`
+  - *should support saving fixed charges templates with a custom payment method and propagating it to gold ledger occurrences [BUG-016]*
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *provides navigation to the settings tab on Ingestion page and displays widgets on Ledger page* (asserts dropdown value selection and template rendering).
+
+---
+
+## [BUG-017] Dashboard Weekly Expense Trend Visualizer Displays Simulated / Empty Data
+
+### Description
+The weekly expense trend visualizer rendered on the Dashboard page does not present real financial metrics from the ledger. Instead, it displays hardcoded simulated percentages of the overall gold total amount, and returns an empty/zero-filled state if the user has no transactions in the current calendar week.
+
+### Root Cause
+In `Dashboard.tsx`, the `weeklyTrendData` array is a static simulated array calculating predefined percentages (e.g. 15%, 25%) of `metrics.goldTotalAmount`. It does not execute chronological date range grouping or filter by transaction date and type.
+
+### Resolution
+Replaced the simulated array logic in `Dashboard.tsx` with dynamic local aggregation:
+1. Fetch gold transactions directly from the modern `/api/pipeline/gold-transactions` endpoint.
+2. Set the end date of the 7-day visualization range to the current local date (today).
+3. Compute the expenditure sums for the 7 calendar days ending on today (adding standard debit/expense transactions, subtracting refunds, and excluding transfers/fixed charges).
+4. Render the bars and dynamically display the weekday name alongside the date (e.g. "Sun 21/06") on the labels under the chart.
+
+### Verification Test
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *displays the weekly trend chart on the dashboard using real transaction data [BUG-017]*
+
+
 
 

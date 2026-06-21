@@ -129,6 +129,7 @@ export interface FixedCharge {
   category: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD (mandatory)
+  paymentMethod?: string;
   createdAt?: string;
 }
 

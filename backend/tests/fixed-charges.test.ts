@@ -287,4 +287,47 @@ describe('Fixed Charges API & Ledger Upfront Generation', () => {
       .set('Authorization', 'Bearer user-b-token');
     expect(deleteResB.status).toBe(404);
   });
+
+  /**
+   * [BUG-016] Fixed Charge Template Payment Method Configuration:
+   * Verify custom payment method is saved and propagated to generated gold transactions.
+   */
+  it('should support saving templates with a custom payment method and propagating it to gold occurrences [BUG-016]', async () => {
+    // 1. Create a template with custom paymentMethod
+    const createRes = await request(app)
+      .post('/api/pipeline/fixed-charges')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        name: 'Internet Bill',
+        amount: 1500,
+        currency: 'INR',
+        category: 'Utilities',
+        paymentMethod: 'Credit Card',
+        startDate: '2026-06-15',
+        endDate: '2026-07-15',
+      });
+    expect(createRes.status).toBe(200);
+
+    // 2. Fetch templates and verify paymentMethod is returned
+    const listRes = await request(app)
+      .get('/api/pipeline/fixed-charges')
+      .set('Authorization', 'Bearer valid-token');
+    
+    expect(listRes.status).toBe(200);
+    const template = listRes.body.fixedCharges.find((fc: any) => fc.name === 'Internet Bill');
+    expect(template).toBeDefined();
+    expect(template.paymentMethod).toBe('Credit Card');
+
+    // 3. Fetch gold transactions and verify paymentMethod matches
+    const ledgerRes = await request(app)
+      .get('/api/pipeline/gold-transactions')
+      .set('Authorization', 'Bearer valid-token');
+
+    const txs = ledgerRes.body.transactions.filter((tx: any) => tx.merchant === 'Internet Bill');
+    expect(txs.length).toBe(2);
+    txs.forEach((tx: any) => {
+      expect(tx.paymentMethod).toBe('Credit Card');
+      expect(tx.transactionType).toBe('fixed');
+    });
+  });
 });

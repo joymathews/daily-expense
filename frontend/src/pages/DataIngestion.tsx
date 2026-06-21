@@ -65,6 +65,7 @@ const DataIngestion: React.FC = () => {
   const [fcAmount, setFcAmount] = useState<string>('');
   const [fcCurrency, setFcCurrency] = useState<string>('INR');
   const [fcCategory, setFcCategory] = useState<string>('Other');
+  const [fcPaymentMethod, setFcPaymentMethod] = useState<string>('Cash');
   const [fcStartDate, setFcStartDate] = useState<string>('');
   const [fcEndDate, setFcEndDate] = useState<string>('');
   const [fcError, setFcError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ const DataIngestion: React.FC = () => {
         amount: amt,
         currency: fcCurrency,
         category: fcCategory,
+        paymentMethod: fcPaymentMethod,
         startDate: fcStartDate,
         endDate: fcEndDate
       });
@@ -115,6 +117,7 @@ const DataIngestion: React.FC = () => {
       setFcName('');
       setFcAmount('');
       setFcCategory('Other');
+      setFcPaymentMethod('Cash');
       setFcStartDate('');
       setFcEndDate('');
     } catch (err: any) {
@@ -130,6 +133,7 @@ const DataIngestion: React.FC = () => {
     setFcAmount(fc.amount.toString());
     setFcCurrency(fc.currency);
     setFcCategory(fc.category);
+    setFcPaymentMethod(fc.paymentMethod || 'Cash');
     setFcStartDate(fc.startDate);
     setFcEndDate(fc.endDate);
     setFcError(null);
@@ -1043,6 +1047,24 @@ const DataIngestion: React.FC = () => {
                       </datalist>
                     </div>
 
+                    <div className="flex flex-col">
+                      <label htmlFor="fc-payment-method" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Payment Method *</label>
+                      <select
+                        id="fc-payment-method"
+                        value={fcPaymentMethod}
+                        onChange={(e) => setFcPaymentMethod(e.target.value)}
+                        className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 outline-none bg-white cursor-pointer"
+                      >
+                        {paymentMethods.length > 0 ? (
+                          paymentMethods.map(m => (
+                            <option key={m.id} value={m.name}>{m.name}</option>
+                          ))
+                        ) : (
+                          <option value="Cash">Cash</option>
+                        )}
+                      </select>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col">
                         <label htmlFor="fc-start-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date *</label>
@@ -1082,6 +1104,7 @@ const DataIngestion: React.FC = () => {
                             setFcName('');
                             setFcAmount('');
                             setFcCategory('Other');
+                            setFcPaymentMethod('Cash');
                             setFcStartDate('');
                             setFcEndDate('');
                             setFcError(null);
@@ -1119,6 +1142,7 @@ const DataIngestion: React.FC = () => {
                       </div>
 
                       <div className="text-[10px] text-gray-500 font-semibold space-y-1">
+                        <p>💳 Payment Mode: {fc.paymentMethod || 'Fixed'}</p>
                         <p>📅 Start: {fc.startDate}</p>
                         <p>📅 End: {fc.endDate}</p>
                       </div>

@@ -91,6 +91,7 @@ export interface FixedChargeTemplate {
   category: string;
   startDate: string;
   endDate: string;
+  paymentMethod?: string;
 }
 
 export interface SalaryAllocationResult {

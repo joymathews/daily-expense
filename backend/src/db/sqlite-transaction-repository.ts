@@ -257,10 +257,18 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         category TEXT NOT NULL,
         start_date TEXT NOT NULL,
         end_date TEXT NOT NULL,
+        payment_method TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc'))
       );
     `);
     await this.run('CREATE INDEX IF NOT EXISTS idx_fixed_charges_user ON fixed_charges(user_id);');
+
+    // Safe migration: Add payment_method to fixed_charges if missing
+    const fixedChargesInfo = await this.all<{ name: string }>("PRAGMA table_info(fixed_charges);");
+    const hasPaymentMethod = fixedChargesInfo.some(col => col.name === 'payment_method');
+    if (!hasPaymentMethod) {
+      await this.run("ALTER TABLE fixed_charges ADD COLUMN payment_method TEXT;");
+    }
   }
 
   /**
@@ -1502,7 +1510,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
 
   async getFixedCharges(userId: string): Promise<FixedCharge[]> {
     const rows = await this.all<any>(
-      'SELECT id, name, amount, currency, category, start_date, end_date, created_at FROM fixed_charges WHERE user_id = ? ORDER BY created_at DESC',
+      'SELECT id, name, amount, currency, category, start_date, end_date, payment_method, created_at FROM fixed_charges WHERE user_id = ? ORDER BY created_at DESC',
       [userId]
     );
     return rows.map(row => ({
@@ -1514,6 +1522,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       category: row.category,
       startDate: row.start_date,
       endDate: row.end_date,
+      paymentMethod: row.payment_method || 'Fixed',
       createdAt: row.created_at,
     }));
   }
@@ -1575,9 +1584,9 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         // --- NEW TEMPLATE ---
         // Insert template
         await this.run(
-          `INSERT INTO fixed_charges (id, user_id, name, amount, currency, category, start_date, end_date)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [charge.id, charge.userId, charge.name, charge.amount, charge.currency, charge.category, charge.startDate, charge.endDate]
+          `INSERT INTO fixed_charges (id, user_id, name, amount, currency, category, start_date, end_date, payment_method)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [charge.id, charge.userId, charge.name, charge.amount, charge.currency, charge.category, charge.startDate, charge.endDate, charge.paymentMethod || 'Fixed']
         );
 
         // Generate and insert all occurrences
@@ -1585,7 +1594,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         for (const date of dates) {
           await this.run(
             `INSERT INTO gold_transactions (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type)
-             VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, 'Fixed', 'fixed')`,
+             VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, 'fixed')`,
             [
               crypto.randomUUID(),
               charge.userId,
@@ -1594,7 +1603,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
               charge.currency,
               date,
               normalizeCategory(charge.category),
-              `Fixed Charge ID: ${charge.id} | Auto-generated`
+              `Fixed Charge ID: ${charge.id} | Auto-generated`,
+              charge.paymentMethod || 'Fixed'
             ]
           );
         }
@@ -1602,9 +1612,9 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
         // --- EDITED TEMPLATE ---
         // Update template
         await this.run(
-          `UPDATE fixed_charges SET name = ?, amount = ?, currency = ?, category = ?, start_date = ?, end_date = ?
+          `UPDATE fixed_charges SET name = ?, amount = ?, currency = ?, category = ?, start_date = ?, end_date = ?, payment_method = ?
            WHERE id = ? AND user_id = ?`,
-          [charge.name, charge.amount, charge.currency, charge.category, charge.startDate, charge.endDate, charge.id, charge.userId]
+          [charge.name, charge.amount, charge.currency, charge.category, charge.startDate, charge.endDate, charge.paymentMethod || 'Fixed', charge.id, charge.userId]
         );
 
         // Fetch associated gold transactions matching this fixed charge template
@@ -1624,13 +1634,14 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           } else {
             // Update future transactions that are still within range
             await this.run(
-              `UPDATE gold_transactions SET merchant = ?, amount_cents = ?, currency = ?, category = ?
+              `UPDATE gold_transactions SET merchant = ?, amount_cents = ?, currency = ?, category = ?, payment_method = ?
                WHERE id = ? AND user_id = ?`,
               [
                 charge.name,
                 Math.round(charge.amount * 100),
                 charge.currency,
                 normalizeCategory(charge.category),
+                charge.paymentMethod || 'Fixed',
                 tx.id,
                 charge.userId
               ]
@@ -1647,7 +1658,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
           if (!alreadyExists) {
             await this.run(
               `INSERT INTO gold_transactions (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type)
-               VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, 'Fixed', 'fixed')`,
+               VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, 'fixed')`,
               [
                 crypto.randomUUID(),
                 charge.userId,
@@ -1656,7 +1667,8 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
                 charge.currency,
                 date,
                 normalizeCategory(charge.category),
-                `Fixed Charge ID: ${charge.id} | Auto-generated`
+                `Fixed Charge ID: ${charge.id} | Auto-generated`,
+                charge.paymentMethod || 'Fixed'
               ]
             );
           }

@@ -625,7 +625,7 @@ router.get('/fixed-charges', async (req, res) => {
  */
 router.post('/fixed-charges', async (req, res) => {
   const userId = (req as any).auth?.sub;
-  const { id, name, amount, currency, category, startDate, endDate } = req.body;
+  const { id, name, amount, currency, category, paymentMethod, startDate, endDate } = req.body;
 
   if (!name || amount === undefined || !currency || !category || !startDate || !endDate) {
     return res.status(400).json({ error: 'name, amount, currency, category, startDate, and endDate are required' });
@@ -648,6 +648,7 @@ router.post('/fixed-charges', async (req, res) => {
       amount: numericAmount,
       currency,
       category,
+      paymentMethod,
       startDate,
       endDate,
     });
