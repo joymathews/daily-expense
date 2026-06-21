@@ -6,8 +6,6 @@ import { DeleteConfirmationModal } from '../components/gmail/DeleteConfirmationM
 import { MultiSelect } from '../components/MultiSelect';
 import {
   getSignedAmount,
-  getActiveCycleRange,
-  computeSalaryAllocation,
   computeDailySpendTimeline
 } from '../utils/transaction-helper';
 
@@ -26,9 +24,6 @@ const GoldTransactions: React.FC = () => {
     paymentMethods,
     isLoading,
     fetchLlmLog,
-    billingCycleStartDay,
-    expectedSalary,
-    fixedCharges,
   } = useGmailIntegration({ defaultToCycleRange: true });
 
   // Search keyword state
@@ -208,13 +203,6 @@ const GoldTransactions: React.FC = () => {
     return acc;
   }, {} as Record<string, number>);
 
-  // Compute salary allocation using active cycle range
-  const billingCycleRange = getActiveCycleRange(billingCycleStartDay);
-  const salaryAllocation = computeSalaryAllocation(goldTransactions, billingCycleRange, expectedSalary, fixedCharges);
-
-  const activeFixedCharges = (fixedCharges || []).filter(fc => {
-    return fc.startDate <= billingCycleRange.end && fc.endDate >= billingCycleRange.start;
-  });
 
   const getTimelineDateRange = () => {
     if (startDate && endDate) {
@@ -253,89 +241,6 @@ const GoldTransactions: React.FC = () => {
         </div>
       </div>
 
-      {/* Salary Allocation Split Buckets (Locked strictly to Billing Cycle dates) */}
-      <div className="bg-white border border-gray-150/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between" data-testid="salary-allocation-panel">
-        <div>
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-2">📊 Salary Allocation Breakdown</h3>
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-5">
-            Active Cycle: {billingCycleRange.start || 'N/A'} to {billingCycleRange.end || 'N/A'}
-          </p>
-
-          <div className="space-y-5">
-            {/* Segmented Stacked Progress Bar */}
-            <div className="w-full h-5 bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
-              {salaryAllocation.mutualFundPercent > 0 && (
-                <div
-                  style={{ width: `${salaryAllocation.mutualFundPercent}%` }}
-                  className="bg-indigo-500 h-full transition-all duration-300"
-                  title={`Invested Wealth: ${salaryAllocation.mutualFundPercent.toFixed(1)}%`}
-                  data-testid="bucket-mutual-funds-bar"
-                />
-              )}
-              {salaryAllocation.consumptionPercent > 0 && (
-                <div
-                  style={{ width: `${salaryAllocation.consumptionPercent}%` }}
-                  className="bg-rose-500 h-full transition-all duration-300"
-                  title={`Consumption Spend: ${salaryAllocation.consumptionPercent.toFixed(1)}%`}
-                  data-testid="bucket-consumption-bar"
-                />
-              )}
-              {salaryAllocation.unspentPercent > 0 && (
-                <div
-                  style={{ width: `${salaryAllocation.unspentPercent}%` }}
-                  className="bg-emerald-500 h-full transition-all duration-300"
-                  title={`Unspent / Savings: ${salaryAllocation.unspentPercent.toFixed(1)}%`}
-                  data-testid="bucket-savings-bar"
-                />
-              )}
-            </div>
-
-            {/* Legend with Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-left">
-              <div className="flex items-center gap-2.5">
-                <div className="w-3 h-3 bg-indigo-500 rounded-full shrink-0"></div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Invested Wealth</span>
-                  <span className="text-sm font-black text-indigo-750 Outfit">₹{salaryAllocation.mutualFundSpend.toFixed(2)} ({salaryAllocation.mutualFundPercent.toFixed(1)}%)</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="w-3 h-3 bg-rose-500 rounded-full shrink-0"></div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Consumption Expenses</span>
-                  <span className="text-sm font-black text-rose-750 Outfit">₹{salaryAllocation.consumptionSpend.toFixed(2)} ({salaryAllocation.consumptionPercent.toFixed(1)}%)</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="w-3 h-3 bg-emerald-500 rounded-full shrink-0"></div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Unspent (Liquid Savings)</span>
-                  <span className="text-sm font-black text-emerald-750 Outfit">₹{salaryAllocation.totalSaved.toFixed(2)} ({salaryAllocation.unspentPercent.toFixed(1)}%)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Fixed Charges itemized list */}
-            {activeFixedCharges.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100 text-left">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                  Includes Fixed Charges:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {activeFixedCharges.map(fc => (
-                    <span 
-                      key={fc.id} 
-                      className="inline-flex items-center bg-gray-50 border border-gray-150 px-2.5 py-1 rounded-xl text-xs font-bold text-gray-650"
-                    >
-                      {fc.name} (₹{fc.amount.toFixed(2)})
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Filter and Search Bar */}
       <div className="bg-white border border-gray-150/60 rounded-3xl p-6 shadow-sm space-y-4">

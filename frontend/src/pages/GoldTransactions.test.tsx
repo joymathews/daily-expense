@@ -96,33 +96,7 @@ describe('GoldTransactions Page Relocated Widgets', () => {
     vi.mocked(useGmailIntegration).mockReturnValue(defaultMockHookValue as any);
   });
 
-  it('renders Salary Allocation Breakdown widget above filters and evaluates cycles correctly', () => {
-    render(
-      <BrowserRouter>
-        <GoldTransactions />
-      </BrowserRouter>
-    );
 
-    // Verify widget title
-    expect(screen.getByText(/Salary Allocation Breakdown/i)).toBeInTheDocument();
-    
-    // Active Cycle range verify: 17th to 17th next month
-    // Since today is June 20, 2026, active cycle starts 2026-06-17 and ends 2026-07-17
-    expect(screen.getByText(/Active Cycle: 2026-06-17 to 2026-07-17/i)).toBeInTheDocument();
-
-    // Verify mutual fund progress bar
-    expect(screen.getByTestId('bucket-mutual-funds-bar')).toBeInTheDocument();
-    
-    // Verify values calculated:
-    // Expected salary: 100000
-    // Mutual fund category = 'Investment' -> tx-1 (25000) -> 25%
-    // Consumption: Uber (500) + Starbucks (1500) - Refund (1000) = 1000 -> 1%
-    // (Note: Transfer tx-5 is excluded from consumption and MF)
-    // Savings: 100000 - 25000 - 1000 = 74000 -> 74%
-    expect(screen.getByText(/₹25000.00 \(25.0%\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/₹1000.00 \(1.0%\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/₹74000.00 \(74.0%\)/i)).toBeInTheDocument();
-  });
 
   /**
    * [FUNC-GOLD-PAGE-12] / [FUNC-ANALYSIS-4] / [NFR-USAB-29]:
@@ -205,44 +179,5 @@ describe('GoldTransactions Page Relocated Widgets', () => {
     expect(screen.getByText('18 Jun')).toBeInTheDocument();
   });
 
-  /**
-   * [FUNC-ANALYSIS-9] / [FUNC-ANALYSIS-2]:
-   * Verify that active fixed charges templates are itemized in the breakdown text
-   * and correctly factored into the Salary Allocation Breakdown progress bar totals.
-   */
-  it('incorporates active fixed charges templates into the salary allocation breakdown aggregates and displays them', () => {
-    const fixedChargesMock = [
-      { id: 'fc-1', userId: 'user-1', name: 'House Rent Fixed', amount: 15000, currency: 'INR', category: 'Rent', startDate: '2026-06-01', endDate: '2026-12-01' },
-      { id: 'fc-2', userId: 'user-1', name: 'SIP Plan', amount: 5000, currency: 'INR', category: 'Investment', startDate: '2026-06-01', endDate: '2026-08-01' }
-    ];
 
-    // Inject fixedChargesMock into defaultMockHookValue mock return
-    const customMockHookValue = {
-      ...defaultMockHookValue,
-      fixedCharges: fixedChargesMock,
-    };
-    vi.mocked(useGmailIntegration).mockReturnValue(customMockHookValue as any);
-
-    render(
-      <BrowserRouter>
-        <GoldTransactions />
-      </BrowserRouter>
-    );
-
-    // Verify fixed charges list section header is present
-    expect(screen.getByText(/Includes Fixed Charges:/i)).toBeInTheDocument();
-
-    // Verify individual items are listed
-    expect(screen.getByText(/House Rent Fixed \(₹15000.00\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/SIP Plan \(₹5000.00\)/i)).toBeInTheDocument();
-
-    // Verify percentages are recalculated including fixed charges:
-    // Expected Salary: 100000
-    // Mutual Fund: Ledger: Investment (25000) + Fixed Template: SIP Plan (5000) = 30000 -> 30.0%
-    // Consumption: Ledger: Uber (500) + Starbucks (1500) - Refund (1000) = 1000 + Fixed Template: House Rent Fixed (15000) = 16000 -> 16.0%
-    // Savings: 100000 - 30000 - 16000 = 54000 -> 54.0%
-    expect(screen.getByText(/₹30000.00 \(30.0%\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/₹16000.00 \(16.0%\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/₹54000.00 \(54.0%\)/i)).toBeInTheDocument();
-  });
 });

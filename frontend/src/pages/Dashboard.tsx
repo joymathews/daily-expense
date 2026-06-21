@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
+import { getActiveCycleRange, computeSalaryAllocation } from '../utils/transaction-helper';
 
 interface DashboardProps {
   userEmail: string;
@@ -20,6 +21,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     goldTotalAmount: 0,
   });
   const [weeklyTrendData, setWeeklyTrendData] = useState<{ day: string; date: string; amount: number }[]>([]);
+  const [salaryAllocation, setSalaryAllocation] = useState({
+    mutualFundSpend: 0,
+    mutualFundPercent: 0,
+    consumptionSpend: 0,
+    consumptionPercent: 0,
+    totalSaved: 0,
+    unspentPercent: 0,
+  });
+  const [billingCycleRange, setBillingCycleRange] = useState({ start: '', end: '' });
+  const [activeFixedCharges, setActiveFixedCharges] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -39,11 +50,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         fetch('/api/pipeline/raw-inputs', { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
         fetch('/api/pipeline/silver-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
         fetch('/api/pipeline/gold-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch('/api/pipeline/user-preferences', { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
+        fetch('/api/pipeline/fixed-charges', { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
       ])
-        .then(([raw, silver, gold]) => {
+        .then(([raw, silver, gold, prefs, fcData]) => {
           const goldTxs = gold.transactions || [];
           const silverTxs = silver.transactions || [];
           const rawEmails = raw.emails || [];
+          const cycleStartDay = prefs.billingCycleStartDay ?? 17;
+          const expectedSalary = prefs.expectedSalary ?? 100000;
+          const fixedChargesList = fcData.fixedCharges || [];
+
+          const range = getActiveCycleRange(cycleStartDay);
+          setBillingCycleRange(range);
+
+          const allocation = computeSalaryAllocation(goldTxs, range, expectedSalary, fixedChargesList);
+          setSalaryAllocation(allocation);
+
+          const activeFCs = (fixedChargesList || []).filter((fc: any) => {
+            return fc.startDate <= range.end && fc.endDate >= range.start;
+          });
+          setActiveFixedCharges(activeFCs);
           
           let bronzeProcessed = 0;
           let bronzeRejected = 0;
@@ -232,6 +259,94 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         </div>
       </div>
       
+      {/* Salary Allocation Split Buckets (Locked strictly to Billing Cycle dates) */}
+      {!isLoading && (
+        <div className="bg-white border border-gray-100/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between" data-testid="salary-allocation-panel">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <span>📊</span> Salary Allocation Breakdown
+            </h3>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-5">
+              Active Cycle: {billingCycleRange.start || 'N/A'} to {billingCycleRange.end || 'N/A'}
+            </p>
+
+            <div className="space-y-5">
+              {/* Segmented Stack Progress Bar */}
+              <div className="w-full h-5 bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
+                {salaryAllocation.mutualFundPercent > 0 && (
+                  <div
+                    style={{ width: `${salaryAllocation.mutualFundPercent}%` }}
+                    className="bg-indigo-500 h-full transition-all duration-300"
+                    title={`Invested Wealth: ${salaryAllocation.mutualFundPercent.toFixed(1)}%`}
+                    data-testid="bucket-mutual-funds-bar"
+                  />
+                )}
+                {salaryAllocation.consumptionPercent > 0 && (
+                  <div
+                    style={{ width: `${salaryAllocation.consumptionPercent}%` }}
+                    className="bg-rose-500 h-full transition-all duration-300"
+                    title={`Consumption Spend: ${salaryAllocation.consumptionPercent.toFixed(1)}%`}
+                    data-testid="bucket-consumption-bar"
+                  />
+                )}
+                {salaryAllocation.unspentPercent > 0 && (
+                  <div
+                    style={{ width: `${salaryAllocation.unspentPercent}%` }}
+                    className="bg-emerald-500 h-full transition-all duration-300"
+                    title={`Unspent / Savings: ${salaryAllocation.unspentPercent.toFixed(1)}%`}
+                    data-testid="bucket-savings-bar"
+                  />
+                )}
+              </div>
+
+              {/* Legend with Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-left">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-3 h-3 bg-indigo-500 rounded-full shrink-0"></div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Invested Wealth</span>
+                    <span className="text-sm font-black text-indigo-750 Outfit">₹{salaryAllocation.mutualFundSpend.toFixed(2)} ({salaryAllocation.mutualFundPercent.toFixed(1)}%)</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-3 h-3 bg-rose-500 rounded-full shrink-0"></div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Consumption Expenses</span>
+                    <span className="text-sm font-black text-rose-750 Outfit">₹{salaryAllocation.consumptionSpend.toFixed(2)} ({salaryAllocation.consumptionPercent.toFixed(1)}%)</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-3 h-3 bg-emerald-500 rounded-full shrink-0"></div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Unspent (Liquid Savings)</span>
+                    <span className="text-sm font-black text-emerald-750 Outfit">₹{salaryAllocation.totalSaved.toFixed(2)} ({salaryAllocation.unspentPercent.toFixed(1)}%)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Fixed Charges itemized list */}
+              {activeFixedCharges.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-100 text-left">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
+                    Includes Fixed Charges:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {activeFixedCharges.map(fc => (
+                      <span 
+                        key={fc.id} 
+                        className="inline-flex items-center bg-gray-50 border border-gray-150 px-2.5 py-1 rounded-xl text-xs font-bold text-gray-650"
+                      >
+                        {fc.name} (₹{fc.amount.toFixed(2)})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LLM Parser Performance Section */}
       {llmAccuracyStats && (
         <div className="bg-white border border-gray-150/60 rounded-3xl p-6 shadow-sm">

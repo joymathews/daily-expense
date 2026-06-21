@@ -4296,6 +4296,12 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ billingCycleStartDay: 17, expectedSalary: 100000 }),
         });
       }
+      if (url.includes('/api/pipeline/fixed-charges')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ fixedCharges: [] }),
+        });
+      }
       if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/pipeline/silver-transactions') || url.includes('/api/ingestion/payment-methods') || url.includes('/api/ingestion/payment-rules') || url.includes('/api/ingestion/fetcher-emails') || url.includes('/api/pipeline/deleted') || url.includes('/api/pipeline/llm-accuracy-stats')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], transactions: [], paymentMethods: [], paymentRules: [], fetcherEmails: [] }) });
       }
@@ -4315,10 +4321,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(await screen.findByLabelText(/Billing Cycle Start Day \(1-28\):/i)).toBeInTheDocument();
     expect(await screen.findByLabelText(/Expected Monthly Salary:/i)).toBeInTheDocument();
 
-    // Click on Ledger link
-    fireEvent.click(screen.getByRole('link', { name: /Ledger/i }));
+    // Click on Dashboard link
+    fireEvent.click(screen.getByRole('link', { name: /Dashboard/i }));
 
-    // Verify allocation breakdown renders on Ledger page
+    // Verify allocation breakdown renders on Dashboard page
     expect(await screen.findByText(/Salary Allocation Breakdown/i)).toBeInTheDocument();
     expect(await screen.findByText(/Consumption Expenses/i)).toBeInTheDocument();
 
@@ -4535,6 +4541,149 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect((await screen.findAllByText('₹0')).length).toBeGreaterThan(0);
     expect(await screen.findByText('18/06')).toBeInTheDocument();
     expect(await screen.findByText('17/06')).toBeInTheDocument();
+
+    global.Date = RealDate;
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-ANALYSIS-2] / [FUNC-ANALYSIS-3] / [FUNC-ANALYSIS-9]:
+   * Verify that the Salary Allocation Breakdown is displayed on the Dashboard page,
+   * evaluates cycle dates correctly based on user preferences, and incorporates active fixed charges.
+   */
+  it('renders Salary Allocation Breakdown widget on the dashboard, evaluates cycles, and incorporates active fixed charges', async () => {
+    const RealDate = global.Date;
+    const mockSystemDate = new RealDate('2026-06-20T09:20:00');
+    // @ts-ignore
+    global.Date = class extends RealDate {
+      constructor(...args: any[]) {
+        if (args.length > 0) {
+          // @ts-ignore
+          return new RealDate(...args);
+        }
+        return mockSystemDate;
+      }
+      static now() {
+        return mockSystemDate.getTime();
+      }
+    };
+
+    const mockGoldTransactions = [
+      {
+        id: 'gold-1',
+        merchant: 'SIP Investment',
+        amount: 25000,
+        currency: 'INR',
+        transactionDate: '2026-06-18',
+        category: 'Investment',
+        paymentMethod: 'UPI',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold-2',
+        merchant: 'Uber',
+        amount: 500,
+        currency: 'INR',
+        transactionDate: '2026-06-18',
+        category: 'Transport',
+        paymentMethod: 'UPI',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold-3',
+        merchant: 'Starbucks',
+        amount: 1500,
+        currency: 'INR',
+        transactionDate: '2026-06-19',
+        category: 'Food',
+        paymentMethod: 'Credit Card',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold-4',
+        merchant: 'Starbucks Refund',
+        amount: 1000,
+        currency: 'INR',
+        transactionDate: '2026-06-19',
+        category: 'Food',
+        paymentMethod: 'Credit Card',
+        sourceType: 'manual',
+        transactionType: 'refund',
+      },
+      {
+        id: 'gold-5',
+        merchant: 'Self Transfer',
+        amount: 5000,
+        currency: 'INR',
+        transactionDate: '2026-06-20',
+        category: 'Transfer',
+        paymentMethod: 'UPI',
+        sourceType: 'manual',
+        transactionType: 'transfer',
+      }
+    ];
+
+    const mockFixedCharges = [
+      { id: 'fc-1', userId: 'user-1', name: 'House Rent Fixed', amount: 15000, currency: 'INR', category: 'Rent', startDate: '2026-06-01', endDate: '2026-12-01' },
+      { id: 'fc-2', userId: 'user-1', name: 'SIP Plan', amount: 5000, currency: 'INR', category: 'Investment', startDate: '2026-06-01', endDate: '2026-08-01' }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGoldTransactions }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-preferences')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ billingCycleStartDay: 17, expectedSalary: 100000 }),
+        });
+      }
+      if (url.includes('/api/pipeline/fixed-charges')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ fixedCharges: mockFixedCharges }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ emails: [], transactions: [], fixedCharges: [], overallAccuracy: 81 })
+      });
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Verify widget title
+    expect(await screen.findByText(/Salary Allocation Breakdown/i)).toBeInTheDocument();
+
+    // Verify cycle range text (Today is June 20, 2026, startDay = 17 -> June 17 to July 17)
+    expect(screen.getByText(/Active Cycle: 2026-06-17 to 2026-07-17/i)).toBeInTheDocument();
+
+    // Verify progress bars
+    expect(screen.getByTestId('bucket-mutual-funds-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('bucket-consumption-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('bucket-savings-bar')).toBeInTheDocument();
+
+    // Recalculated values including fixed charges:
+    // Expected Salary: 100000
+    // Mutual Fund: Ledger: Investment (25000) + Fixed SIP Plan (5000) = 30000 -> 30%
+    // Consumption: Ledger: Uber (500) + Starbucks (1500) - Refund (1000) = 1000 + Fixed House Rent (15000) = 16000 -> 16%
+    // Savings: 100000 - 30000 - 16000 = 54000 -> 54%
+    expect(screen.getByText(/₹30000.00 \(30.0%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/₹16000.00 \(16.0%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/₹54000.00 \(54.0%\)/i)).toBeInTheDocument();
+
+    // Verify fixed charges section
+    expect(screen.getByText(/Includes Fixed Charges:/i)).toBeInTheDocument();
+    expect(screen.getByText(/House Rent Fixed \(₹15000.00\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/SIP Plan \(₹5000.00\)/i)).toBeInTheDocument();
 
     global.Date = RealDate;
     vi.unstubAllGlobals();
