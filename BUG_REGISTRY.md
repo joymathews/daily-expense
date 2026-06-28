@@ -306,6 +306,21 @@ Replaced the simulated array logic in `Dashboard.tsx` with dynamic local aggrega
 * **Test Case**: `frontend/src/App.test.tsx`
   - *displays the weekly trend chart on the dashboard using real transaction data [BUG-017]*
 
+---
 
+## [BUG-018] Custom Categories Missing from Autocomplete Suggestions in Modals and Forms
 
+### Description
+When a user adds a new custom category (e.g. by typing it in a transaction or manual entry form), the new category appears in the Category filter dropdown because it dynamically queries the ledger transaction list. However, when the user opens the transaction details/edit modal or fixed charge creation forms, the category autocomplete input datalist suggestions list only displays standard hardcoded categories, and the newly added custom category is missing.
 
+### Root Cause
+In `EmailDetailModal.tsx` and `DataIngestion.tsx`, the datalist suggestions options are hardcoded to map over a local/imported static `STANDARD_CATEGORIES` list. The UI components do not merge standard categories with existing unique custom categories from the `goldTransactions` and `silverTransactions` lists.
+
+### Resolution
+1. Move `STANDARD_CATEGORIES` to a central location (`frontend/src/utils/transaction-helper.ts`) and export it.
+2. In `EmailDetailModal.tsx` and `DataIngestion.tsx`, dynamically combine `STANDARD_CATEGORIES` with the unique categories extracted from the `goldTransactions` and `silverTransactions` props/hooks.
+3. De-duplicate categories case-insensitively and sort them alphabetically, using this list to populate the autocomplete datalist options.
+
+### Verification Test
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *suggests custom categories dynamically in the edit modal and creation forms [BUG-018]*

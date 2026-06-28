@@ -1132,6 +1132,45 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     }
   };
 
+  const updateSilverTransactionsBatch = async (ids: string[], updates: Partial<SilverTransaction>) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch('/api/pipeline/silver-transactions/batch-update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ ids, updates }),
+      });
+      if (response.ok) {
+        await loadSilverTransactions();
+      }
+    } catch (err) {
+      console.error('Failed to batch update silver transactions:', err);
+    }
+  };
+
+  const updateGoldTransactionsBatch = async (ids: string[], updates: Partial<GoldTransaction>) => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch('/api/pipeline/gold-transactions/batch-update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ ids, updates }),
+      });
+      if (response.ok) {
+        await loadGoldTransactions();
+      }
+    } catch (err) {
+      console.error('Failed to batch update gold transactions:', err);
+    }
+  };
+
+
   const approveTransaction = async (
     silverId: string,
     merchant: string,
@@ -1448,6 +1487,8 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     extractSelectedEmails,
     updateSilverTransaction,
     updateGoldTransaction,
+    updateSilverTransactionsBatch,
+    updateGoldTransactionsBatch,
     handleFetchClick,
     approveTransaction,
     approveTransactionsBatch,

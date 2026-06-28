@@ -29,6 +29,8 @@ const TransactionPipeline: React.FC = () => {
     extractSelectedEmails,
     updateSilverTransaction,
     updateGoldTransaction,
+    updateSilverTransactionsBatch,
+    updateGoldTransactionsBatch,
     approveTransaction,
     approveTransactionsBatch,
     extractionProgress,
@@ -410,6 +412,9 @@ const TransactionPipeline: React.FC = () => {
             setStartDate={setStartDate}
             endDate={endDate}
             setEndDate={setEndDate}
+            onBatchEditSave={updateSilverTransactionsBatch}
+            paymentMethods={paymentMethods}
+            goldTransactions={goldTransactions}
           />
         )}
 
@@ -422,6 +427,9 @@ const TransactionPipeline: React.FC = () => {
             setStartDate={setStartDate}
             endDate={endDate}
             setEndDate={setEndDate}
+            onBatchEditSave={updateGoldTransactionsBatch}
+            paymentMethods={paymentMethods}
+            silverTransactions={silverTransactions}
           />
         )}
 

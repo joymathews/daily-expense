@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import type { GoldTransaction } from '../../hooks/use-gmail-integration';
+import React, { useState, useMemo } from 'react';
+import type { GoldTransaction, SilverTransaction } from '../../hooks/use-gmail-integration';
 import { MultiSelect } from '../MultiSelect';
 import { getSignedAmount } from '../../utils/transaction-helper';
+import { BatchEditModal } from './BatchEditModal';
 
 interface GoldLedgerListProps {
   goldTransactions: GoldTransaction[];
@@ -11,6 +12,9 @@ interface GoldLedgerListProps {
   setStartDate: (val: string) => void;
   endDate: string;
   setEndDate: (val: string) => void;
+  onBatchEditSave: (ids: string[], updates: any) => Promise<void>;
+  paymentMethods: Array<{ id: string; name: string }>;
+  silverTransactions: SilverTransaction[];
 }
 
 export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
@@ -21,6 +25,9 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
     setStartDate,
     endDate,
     setEndDate,
+    onBatchEditSave,
+    paymentMethods,
+    silverTransactions,
   } = props;
   // Local Filter/Sort States
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,6 +36,9 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc' | 'categoryAsc' | 'categoryDesc'>('dateDesc');
+  const [checkedGoldIds, setCheckedGoldIds] = useState<string[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isBatchEditModalOpen, setIsBatchEditModalOpen] = useState(false);
 
   // Extract unique options from the confirmed transactions list
   const uniqueCategories = Array.from(
@@ -105,6 +115,25 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
         return 0;
     }
   });
+
+  const selectables = sortedTransactions;
+  const allChecked = selectables.length > 0 && selectables.every(t => checkedGoldIds.includes(t.id));
+
+  const handleSelectAllGold = () => {
+    if (allChecked) {
+      const selectableIds = selectables.map(t => t.id);
+      setCheckedGoldIds(prev => prev.filter(id => !selectableIds.includes(id)));
+    } else {
+      const selectableIds = selectables.map(t => t.id);
+      setCheckedGoldIds(prev => Array.from(new Set([...prev, ...selectableIds])));
+    }
+  };
+
+  const toggleGoldCheck = (id: string) => {
+    setCheckedGoldIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
   return (
     <div>
@@ -226,25 +255,90 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
         <table className="min-w-full divide-y divide-gray-100">
           <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
             <tr>
-              <th className="px-2 py-2.5 text-left">Date</th>
-              <th className="px-2 py-2.5 text-left">Source</th>
-              <th className="px-2 py-2.5 text-left">Merchant</th>
-              <th className="px-2 py-2.5 text-center">Category</th>
-              <th className="px-2 py-2.5 text-center">Method</th>
-              <th className="px-2 py-2.5 text-right">Amount</th>
-              <th className="px-2 py-2.5 text-center">Currency</th>
+              <th className="px-2 py-2.5 text-center w-8">
+                <input 
+                  type="checkbox" 
+                  checked={allChecked}
+                  onChange={handleSelectAllGold}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
+                />
+              </th>
+              {checkedGoldIds.length > 0 ? (
+                <th colSpan={7} className="px-2 py-2 text-left bg-indigo-50/50">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xs font-bold text-indigo-700">{checkedGoldIds.length} Selected</span>
+                    <div className="relative inline-block text-left">
+                      <button
+                        type="button"
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        className="bg-white border border-indigo-200 text-indigo-700 text-[10px] font-bold px-3 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shadow-sm hover:bg-indigo-50 transition-colors cursor-pointer"
+                        id="gold-pipeline-bulk-actions-btn"
+                        data-testid="gold-pipeline-bulk-actions-btn"
+                      >
+                        Bulk Actions ▾
+                      </button>
+                      {isDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
+                          <div className="absolute left-0 mt-1 w-44 bg-white border border-gray-150 rounded-xl shadow-xl z-20 overflow-hidden divide-y divide-gray-50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDropdownOpen(false);
+                                setIsBatchEditModalOpen(true);
+                              }}
+                              data-testid="gold-pipeline-bulk-edit-btn"
+                              className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              ✏️ Batch Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDropdownOpen(false);
+                                setCheckedGoldIds([]);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs text-gray-500 hover:bg-gray-50 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              ✕ Deselect All
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </th>
+              ) : (
+                <>
+                  <th className="px-2 py-2.5 text-left">Date</th>
+                  <th className="px-2 py-2.5 text-left">Source</th>
+                  <th className="px-2 py-2.5 text-left">Merchant</th>
+                  <th className="px-2 py-2.5 text-center">Category</th>
+                  <th className="px-2 py-2.5 text-center">Method</th>
+                  <th className="px-2 py-2.5 text-right">Amount</th>
+                  <th className="px-2 py-2.5 text-center">Currency</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 bg-white">
             {sortedTransactions.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-2 py-12 text-center">
+                <td colSpan={8} className="px-2 py-12 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No matching validated ledger items found</p>
                 </td>
               </tr>
             ) : (
               sortedTransactions.map(tx => (
                 <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors text-xs">
+                  <td className="px-2 py-2.5 text-center">
+                    <input 
+                      type="checkbox" 
+                      checked={checkedGoldIds.includes(tx.id)}
+                      onChange={() => toggleGoldCheck(tx.id)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
                     {tx.transactionDate}
                   </td>
@@ -298,6 +392,19 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
           </tbody>
         </table>
       </div>
+
+      <BatchEditModal
+        isOpen={isBatchEditModalOpen}
+        onClose={() => setIsBatchEditModalOpen(false)}
+        onSave={async (updates) => {
+          await onBatchEditSave(checkedGoldIds, updates);
+          setCheckedGoldIds([]);
+        }}
+        selectedCount={checkedGoldIds.length}
+        paymentMethods={paymentMethods}
+        goldTransactions={goldTransactions}
+        silverTransactions={silverTransactions}
+      />
     </div>
   );
 };

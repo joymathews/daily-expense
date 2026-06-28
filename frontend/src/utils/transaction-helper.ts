@@ -205,3 +205,19 @@ export const computeDailySpendTimeline = (
   }));
 };
 
+export const STANDARD_CATEGORIES = [
+  'Groceries',
+  'Cabs & Transport',
+  'Travel',
+  'Utilities',
+  'Internet & Telecom',
+  'Entertainment Subscriptions',
+  'Cloud & Software Services',
+  'Shopping',
+  'Restaurant & Dining',
+  'Online Food Order',
+  'Medical & Healthcare',
+  'Other'
+];
+
+

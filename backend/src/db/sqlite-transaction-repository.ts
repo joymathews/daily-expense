@@ -986,6 +986,32 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     );
   }
 
+  async updatePendingTransactionsBatch(ids: string[], userId: string, updates: Partial<PendingTransaction>): Promise<void> {
+    await this.run('BEGIN TRANSACTION');
+    try {
+      for (const id of ids) {
+        await this.updatePendingTransaction(id, userId, updates);
+      }
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
+  }
+
+  async updateGoldTransactionsBatch(ids: string[], userId: string, updates: Partial<Transaction>): Promise<void> {
+    await this.run('BEGIN TRANSACTION');
+    try {
+      for (const id of ids) {
+        await this.updateGoldTransaction(id, userId, updates);
+      }
+      await this.run('COMMIT');
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
+  }
+
   async revertGoldToSilver(userId: string, goldId: string): Promise<void> {
     await this.run('BEGIN TRANSACTION');
     try {

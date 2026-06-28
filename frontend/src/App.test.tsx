@@ -1265,9 +1265,10 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(headerTexts).not.toContain('Action');
     
     // Verify specific column ordering (Date is first data column, followed by Source, then Merchant)
-    expect(headerTexts[0]).toBe('Date');
-    expect(headerTexts[1]).toBe('Source');
-    expect(headerTexts[2]).toBe('Merchant');
+    expect(headerTexts[0]).toBe('');
+    expect(headerTexts[1]).toBe('Date');
+    expect(headerTexts[2]).toBe('Source');
+    expect(headerTexts[3]).toBe('Merchant');
     
     // Check that stacked column DOES NOT exist
     expect(headerTexts).not.toContain('Category & Method');
@@ -4689,6 +4690,238 @@ describe('Requirement Traceability Matrix Verification', () => {
     expect(screen.getByText(/SIP Plan \(₹5000.00\)/i)).toBeInTheDocument();
 
     global.Date = RealDate;
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-52] Dynamic Category Suggestions / [BUG-018] Custom Categories autocomplete suggestions
+   * Verify that both standard categories and any custom categories from existing transactions
+   * are dynamically loaded and rendered as datalist autocomplete suggestions in the edit modal and Data Ingestion forms.
+   */
+  it('suggests custom categories dynamically in the edit modal and creation forms [BUG-018]', async () => {
+    const mockGoldTransactions = [
+      {
+        id: 'gold_tx_custom_1',
+        merchant: 'Uber',
+        amount: 250.00,
+        currency: 'INR',
+        transactionDate: '2026-06-20',
+        category: 'Custom Travel Cat',
+        paymentMethod: 'UPI',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      }
+    ];
+
+    const mockSilverTransactions = [
+      {
+        id: 'silver_pending_custom_1',
+        bronzeInputId: 'bronze_custom_abc',
+        rawEmailId: 'bronze_custom_abc',
+        sourceType: 'email',
+        merchantRaw: 'Zomato',
+        merchantNormalized: 'Zomato',
+        amount: 350.00,
+        currency: 'INR',
+        transactionDate: '2026-06-20',
+        inferredCategory: 'Custom Food Cat',
+        paymentMethod: 'UPI',
+        transactionType: 'expense',
+        status: 'pending',
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGoldTransactions }),
+        });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockSilverTransactions }),
+        });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [{ id: 'bronze_custom_abc', sender: 'zomato@zomato.com', subject: 'Your Order', date: '2026-06-20', snippet: 'Food Order', body: 'Order details', hasTransaction: true, status: 'processed' }] }),
+        });
+      }
+      if (url.includes('/api/ingestion/payment-methods') || url.includes('/api/pipeline/payment-methods')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ methods: [{ id: 'pm1', name: 'UPI' }] }) });
+      }
+      if (url.includes('/api/pipeline/llm-log') || url.includes('/api/gmail/llm-log')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
+      }
+      if (url.includes('/api/pipeline/deleted') || url.includes('/api/gmail/deleted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], silverTransactions: [], goldTransactions: [] }) });
+      }
+      if (url.includes('/api/pipeline/fixed-charges')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ fixedCharges: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // ── 1. Check Data Ingestion (Manual Entry form datalist) ──
+    fireEvent.click(screen.getByRole('link', { name: /Data Ingestion/i }));
+    fireEvent.click(screen.getByText(/Direct Ledger Entry/i));
+
+    // Datalist manual-categories-list must contain standard options AND custom options
+    const manualDatalist = screen.getByTestId('manual-categories-list');
+    expect(manualDatalist).toBeInTheDocument();
+    
+    await waitFor(() => {
+      const options = Array.from(manualDatalist.querySelectorAll('option')).map(o => o.getAttribute('value'));
+      // Predefined standard categories should be present
+      expect(options).toContain('Groceries');
+      // Custom categories from gold transactions should be present
+      expect(options).toContain('Custom Travel Cat');
+      // Custom categories from silver transactions should be present
+      expect(options).toContain('Custom Food Cat');
+    });
+
+    // ── 2. Check Data Ingestion (Fixed Charge Form datalist) ──
+    fireEvent.click(screen.getByRole('button', { name: /Cycle & Salary Settings/i }));
+    const fcDatalist = screen.getByTestId('fc-categories-list');
+    expect(fcDatalist).toBeInTheDocument();
+    
+    await waitFor(() => {
+      const options = Array.from(fcDatalist.querySelectorAll('option')).map(o => o.getAttribute('value'));
+      expect(options).toContain('Groceries');
+      expect(options).toContain('Custom Travel Cat');
+      expect(options).toContain('Custom Food Cat');
+    });
+
+    // ── 3. Check Edit Modal (EmailDetailModal datalist) ──
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Silver/i }));
+
+    const silverMerchantCell = await screen.findByText('Zomato');
+    fireEvent.click(silverMerchantCell);
+
+    const modal = screen.getByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    const modalDatalist = within(modal).getByTestId('modal-categories-list');
+    expect(modalDatalist).toBeInTheDocument();
+
+    await waitFor(() => {
+      const options = Array.from(modalDatalist.querySelectorAll('option')).map(o => o.getAttribute('value'));
+      expect(options).toContain('Groceries');
+      expect(options).toContain('Custom Travel Cat');
+      expect(options).toContain('Custom Food Cat');
+    });
+
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+    vi.unstubAllGlobals();
+  });
+
+  test('supports batch editing multiple selected transactions with field-level toggles and inputs [FUNC-GMAIL-53]', async () => {
+    // 1. Mock fetch responses for batch-update
+    let batchUpdatesReceived: any = null;
+    vi.stubGlobal('fetch', (url: string, options: any) => {
+      if (url.includes('/api/pipeline/silver-transactions/batch-update') && options.method === 'POST') {
+        batchUpdatesReceived = JSON.parse(options.body);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ success: true }),
+        });
+      }
+      // Standard endpoints mock
+      if (url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            transactions: [
+              { id: 'tx-1', sourceType: 'email', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2026-06-01', status: 'pending', paymentMethod: 'Cash', inferredCategory: 'Food' },
+              { id: 'tx-2', sourceType: 'email', merchantRaw: 'Merchant B', amount: 200, currency: 'INR', transactionDate: '2026-06-02', status: 'pending', paymentMethod: 'Cash', inferredCategory: 'Food' },
+            ]
+          }),
+        });
+      }
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/ingestion/payment-methods')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve([]),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([]),
+      });
+    });
+
+    render(<App />);
+
+    // 2. Go to Pipeline Page, Silver tab
+    const pipelineLink = await screen.findByRole('link', { name: /Transaction Pipeline/i });
+    fireEvent.click(pipelineLink);
+
+    const silverBtn = await screen.findByRole('button', { name: /Silver/i });
+    fireEvent.click(silverBtn);
+
+    // 3. Find checkboxes and verify table displays rows
+    await screen.findByText('Merchant A');
+    await screen.findByText('Merchant B');
+
+    // Get all checkboxes
+    const checkboxes = screen.getAllByRole('checkbox');
+    // Index 0: Select All. Index 1: Row 1 checkbox. Index 2: Row 2 checkbox.
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(checkboxes[2]);
+
+    // 4. Verify "Bulk Actions" button is shown
+    const bulkActionsBtn = await screen.findByTestId('silver-bulk-actions-btn');
+    expect(bulkActionsBtn).toBeInTheDocument();
+
+    // Click "Bulk Actions" to open menu
+    fireEvent.click(bulkActionsBtn);
+
+    // Click "Batch Edit"
+    const batchEditOption = await screen.findByTestId('silver-bulk-edit-btn');
+    fireEvent.click(batchEditOption);
+
+    // 5. Verify BatchEditModal is opened
+    const batchModal = await screen.findByTestId('batch-edit-modal');
+    expect(batchModal).toBeInTheDocument();
+
+    // Fill in a merchant name and toggle it on
+    const merchantInput = within(batchModal).getByPlaceholderText('Starbucks, Uber, Amazon...');
+    const merchantToggle = batchModal.querySelector('#toggle-merchant');
+    
+    expect(merchantToggle).toBeInTheDocument();
+    fireEvent.click(merchantToggle!);
+    fireEvent.change(merchantInput, { target: { value: 'Batch Overwrite Merchant' } });
+
+    // Submit batch edit form
+    const saveButton = within(batchModal).getByRole('button', { name: /Save Changes/i });
+    fireEvent.click(saveButton);
+
+    // 6. Assert API request payload was correctly generated
+    await waitFor(() => {
+      expect(batchUpdatesReceived).not.toBeNull();
+      expect(batchUpdatesReceived.ids).toContain('tx-1');
+      expect(batchUpdatesReceived.ids).toContain('tx-2');
+      expect(batchUpdatesReceived.updates.merchant).toBe('Batch Overwrite Merchant');
+    });
+
     vi.unstubAllGlobals();
   });
 });

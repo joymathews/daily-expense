@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { GmailMessage, GoldTransaction, SilverTransaction, PaymentMethod } from '../../hooks/use-gmail-integration';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { formatToUserTimezone } from '../../utils/date-formatter';
+import { STANDARD_CATEGORIES } from '../../utils/transaction-helper';
 
 interface EmailDetailModalProps {
   selectedEmail: GmailMessage | null;
@@ -42,20 +43,6 @@ interface EmailDetailModalProps {
   fetchLlmLog?: (bronzeId: string) => Promise<any | null>;
 }
 
-const STANDARD_CATEGORIES = [
-  'Groceries',
-  'Cabs & Transport',
-  'Travel',
-  'Utilities',
-  'Internet & Telecom',
-  'Entertainment Subscriptions',
-  'Cloud & Software Services',
-  'Shopping',
-  'Restaurant & Dining',
-  'Online Food Order',
-  'Medical & Healthcare',
-  'Other'
-];
 
 export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   selectedEmail,
@@ -104,6 +91,29 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setLlmLog(null);
     }
   }, [bronzeInputIdForLog, fetchLlmLog]);
+
+  const allCategories = useMemo(() => {
+    const customGoldCategories = goldTransactions?.map(tx => tx.category) || [];
+    const customSilverCategories = silverTransactions?.map(tx => tx.inferredCategory) || [];
+    const combined = [
+      ...STANDARD_CATEGORIES,
+      ...customGoldCategories,
+      ...customSilverCategories
+    ].filter(Boolean).map(c => c.trim());
+    
+    // De-duplicate case-insensitively but preserve original casing
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    
+    for (const cat of combined) {
+      const lower = cat.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        unique.push(cat);
+      }
+    }
+    return unique.sort((a, b) => a.localeCompare(b));
+  }, [goldTransactions, silverTransactions]);
 
   // Dynamically attach extracted silver record if selectedEmail has none, for pipeline backward-compatibility
   if (selectedEmail && !selectedEmail.extracted && silverTransactions) {
@@ -537,8 +547,8 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                   />
-                  <datalist id="modal-categories-list">
-                    {STANDARD_CATEGORIES.map(opt => (
+                  <datalist id="modal-categories-list" data-testid="modal-categories-list">
+                    {allCategories.map(opt => (
                       <option key={opt} value={opt} />
                     ))}
                   </datalist>

@@ -32,6 +32,9 @@ describe('Fixed Charges API & Ledger Upfront Generation', () => {
   });
 
   beforeEach(async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-06-20T12:00:00Z'));
+
     if (fs.existsSync(testDbPath)) {
       try {
         fs.unlinkSync(testDbPath);
@@ -46,6 +49,10 @@ describe('Fixed Charges API & Ledger Upfront Generation', () => {
     await (repository as any).run("DELETE FROM fixed_charges");
     await (repository as any).run("DELETE FROM gold_transactions");
     await repository.close();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   /**

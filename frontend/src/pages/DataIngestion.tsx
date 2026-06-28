@@ -1,21 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import { FilterPanel } from '../components/gmail/FilterPanel';
-
-const STANDARD_CATEGORIES = [
-  'Groceries',
-  'Cabs & Transport',
-  'Travel',
-  'Utilities',
-  'Internet & Telecom',
-  'Entertainment Subscriptions',
-  'Cloud & Software Services',
-  'Shopping',
-  'Restaurant & Dining',
-  'Online Food Order',
-  'Medical & Healthcare',
-  'Other'
-];
+import { STANDARD_CATEGORIES } from '../utils/transaction-helper';
 
 const DataIngestion: React.FC = () => {
   const {
@@ -47,6 +33,7 @@ const DataIngestion: React.FC = () => {
     deletePaymentRule,
     applyRetroactiveStandardization,
     goldTransactions,
+    silverTransactions,
     isLoading,
     fetcherEmails,
     billingCycleStartDay,
@@ -56,6 +43,29 @@ const DataIngestion: React.FC = () => {
     saveFixedCharge,
     deleteFixedCharge,
   } = useGmailIntegration();
+
+  const allCategories = useMemo(() => {
+    const customGoldCategories = goldTransactions?.map(tx => tx.category) || [];
+    const customSilverCategories = silverTransactions?.map(tx => tx.inferredCategory) || [];
+    const combined = [
+      ...STANDARD_CATEGORIES,
+      ...customGoldCategories,
+      ...customSilverCategories
+    ].filter(Boolean).map(c => c.trim());
+    
+    // De-duplicate case-insensitively but preserve original casing
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    
+    for (const cat of combined) {
+      const lower = cat.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        unique.push(cat);
+      }
+    }
+    return unique.sort((a, b) => a.localeCompare(b));
+  }, [goldTransactions, silverTransactions]);
 
   const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization' | 'settings'>('gmail');
 
@@ -523,8 +533,8 @@ const DataIngestion: React.FC = () => {
                   onChange={(e) => setCategory(e.target.value)}
                   className="border border-gray-250 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-indigo-550/30 focus:border-indigo-600 outline-none transition-all font-semibold bg-white"
                 />
-                <datalist id="manual-categories-list">
-                  {STANDARD_CATEGORIES.map(opt => (
+                <datalist id="manual-categories-list" data-testid="manual-categories-list">
+                  {allCategories.map(opt => (
                     <option key={opt} value={opt} />
                   ))}
                 </datalist>
@@ -1040,8 +1050,8 @@ const DataIngestion: React.FC = () => {
                         onChange={(e) => setFcCategory(e.target.value)}
                         className="border border-gray-250 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-550/30 outline-none"
                       />
-                      <datalist id="fc-categories-list">
-                        {STANDARD_CATEGORIES.map(opt => (
+                      <datalist id="fc-categories-list" data-testid="fc-categories-list">
+                        {allCategories.map(opt => (
                           <option key={opt} value={opt} />
                         ))}
                       </datalist>

@@ -169,6 +169,62 @@ router.put('/gold-transactions/:id', async (req, res) => {
 });
 
 /**
+ * [FUNC-GMAIL-53] POST /api/pipeline/silver-transactions/batch-update
+ * Updates multiple pending Silver staging transactions in a single batch operation.
+ */
+router.post('/silver-transactions/batch-update', async (req, res) => {
+  const { ids, updates } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids array is required' });
+  }
+  if (!updates || typeof updates !== 'object') {
+    return res.status(400).json({ error: 'updates object is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    await repository.updatePendingTransactionsBatch(ids, userId, updates);
+
+    await repository.close();
+    res.status(200).json({ status: 'updated', count: ids.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to batch update silver transactions' });
+  }
+});
+
+/**
+ * [FUNC-GMAIL-53] POST /api/pipeline/gold-transactions/batch-update
+ * Updates multiple confirmed Gold transactions in a single batch operation.
+ */
+router.post('/gold-transactions/batch-update', async (req, res) => {
+  const { ids, updates } = req.body;
+  const userId = (req as any).auth?.sub;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids array is required' });
+  }
+  if (!updates || typeof updates !== 'object') {
+    return res.status(400).json({ error: 'updates object is required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    await repository.updateGoldTransactionsBatch(ids, userId, updates);
+
+    await repository.close();
+    res.status(200).json({ status: 'updated', count: ids.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to batch update gold transactions' });
+  }
+});
+
+/**
  * [FUNC-GMAIL-13] POST /api/pipeline/approve
  * Stage 3: Confirms a staging transaction and promotes it to the Gold ledger.
  */

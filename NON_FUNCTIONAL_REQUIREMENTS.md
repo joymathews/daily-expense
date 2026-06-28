@@ -64,6 +64,7 @@
 - [NFR-USAB-30] Date Range Initialization Usability: The automatic date range initialization on ledger page load must complete within 100ms of the user preferences being successfully loaded from the database, ensuring no layout shifting or redundant data fetches.
 - [NFR-USAB-31] Cycle Trend Visualizer Responsiveness: The billing cycle expense trend visualization on the dashboard page must load and aggregate the daily expenditure sums within 150ms of the dashboard metrics data being fetched from the database, ensuring no noticeable layout lag or delay.
 - [NFR-USAB-32] Structured Dashboard Layout: The Dashboard page layout must clearly isolate Ledger Portfolio statistics and analytics from the Ingestion Pipeline flow under distinct headers and columns to maintain a clean visual hierarchy and prevent cognitive overlap.
+- [NFR-USAB-33] Dynamic Category Suggestions Performance: Compiling and rendering the dynamic list of predefined and custom categories inside the autocomplete datalist must resolve within 50ms of the modal or creation form opening, ensuring no input lag or layout shifting.
 
 
 ## Financial Analysis Performance & Usability [NFR-ANALYSIS]
@@ -73,3 +74,5 @@
 - [NFR-ANALYSIS-4] SVG Timeline Axes Fidelity: The SVG timeline chart must render explicit X and Y axis lines, ticks, and values/labels with clear contrast and modern typography scaling, preventing overlaps and remaining responsive.
 - [NFR-ANALYSIS-5] Fixed Charges CRUD Performance: Saving, updating, or deleting fixed charge templates and propagating their cascading ledger entries must resolve within 150ms at the API layer.
 - [NFR-ANALYSIS-6] Allocation Breakdown Recalculation: Re-evaluating the active cycle budget split (incorporating templates) must resolve in less than 50ms upon ledger page load.
+- [NFR-USAB-34] Header Bulk Action Dropdown & Batch Editing Usability: The bulk action table header transition must occur instantly (within 50ms) of selection updates, and saving batch edits must execute in less than 200ms at the API layer to maintain high platform responsiveness.
+

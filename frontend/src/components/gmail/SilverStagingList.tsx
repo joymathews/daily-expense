@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { SilverTransaction } from '../../hooks/use-gmail-integration';
 import { MultiSelect } from '../MultiSelect';
 import { getSignedAmount } from '../../utils/transaction-helper';
+import { BatchEditModal } from './BatchEditModal';
 
 interface SilverStagingListProps {
   silverTransactions: SilverTransaction[];
@@ -15,6 +16,9 @@ interface SilverStagingListProps {
   setStartDate: (val: string) => void;
   endDate: string;
   setEndDate: (val: string) => void;
+  onBatchEditSave: (ids: string[], updates: any) => Promise<void>;
+  paymentMethods: Array<{ id: string; name: string }>;
+  goldTransactions: any[];
 }
 
 export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
@@ -29,14 +33,18 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
     setStartDate,
     endDate,
     setEndDate,
+    onBatchEditSave,
+    paymentMethods,
+    goldTransactions,
   } = props;
-  // Local Filter and Sort States
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc' | 'categoryAsc' | 'categoryDesc'>('dateDesc');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isBatchEditModalOpen, setIsBatchEditModalOpen] = useState(false);
 
   // Filter out approved transactions first
   const visiblePending = silverTransactions.filter(tx => tx.status !== 'approved');
@@ -279,14 +287,73 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
                   className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
                 />
               </th>
-              <th className="px-2 py-2.5 text-left">Date</th>
-              <th className="px-2 py-2.5 text-left">Source</th>
-              <th className="px-2 py-2.5 text-left">Merchant</th>
-              <th className="px-2 py-2.5 text-center">Category</th>
-              <th className="px-2 py-2.5 text-center">Method</th>
-              <th className="px-2 py-2.5 text-right">Amount</th>
-              <th className="px-2 py-2.5 text-center">Currency</th>
-              <th className="px-2 py-2.5 text-center">Status / Action</th>
+              {checkedSilverIds.length > 0 ? (
+                <th colSpan={8} className="px-2 py-2 text-left bg-indigo-50/50">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xs font-bold text-indigo-700">{checkedSilverIds.length} Selected</span>
+                    <div className="relative inline-block text-left">
+                      <button
+                        type="button"
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        className="bg-white border border-indigo-200 text-indigo-700 text-[10px] font-bold px-3 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shadow-sm hover:bg-indigo-50 transition-colors cursor-pointer"
+                        id="silver-bulk-actions-btn"
+                        data-testid="silver-bulk-actions-btn"
+                      >
+                        Bulk Actions ▾
+                      </button>
+                      {isDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
+                          <div className="absolute left-0 mt-1 w-44 bg-white border border-gray-150 rounded-xl shadow-xl z-20 overflow-hidden divide-y divide-gray-50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDropdownOpen(false);
+                                setIsBatchEditModalOpen(true);
+                              }}
+                              data-testid="silver-bulk-edit-btn"
+                              className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              ✏️ Batch Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDropdownOpen(false);
+                                handleBatchApprove();
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs text-emerald-700 hover:bg-gray-50 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              🚀 Approve Selected
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDropdownOpen(false);
+                                setCheckedSilverIds([]);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs text-gray-500 hover:bg-gray-50 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              ✕ Deselect All
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </th>
+              ) : (
+                <>
+                  <th className="px-2 py-2.5 text-left">Date</th>
+                  <th className="px-2 py-2.5 text-left">Source</th>
+                  <th className="px-2 py-2.5 text-left">Merchant</th>
+                  <th className="px-2 py-2.5 text-center">Category</th>
+                  <th className="px-2 py-2.5 text-center">Method</th>
+                  <th className="px-2 py-2.5 text-right">Amount</th>
+                  <th className="px-2 py-2.5 text-center">Currency</th>
+                  <th className="px-2 py-2.5 text-center">Status / Action</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 bg-white">
@@ -369,6 +436,19 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
           </tbody>
         </table>
       </div>
+
+      <BatchEditModal
+        isOpen={isBatchEditModalOpen}
+        onClose={() => setIsBatchEditModalOpen(false)}
+        onSave={async (updates) => {
+          await onBatchEditSave(checkedSilverIds, updates);
+          setCheckedSilverIds([]);
+        }}
+        selectedCount={checkedSilverIds.length}
+        paymentMethods={paymentMethods}
+        goldTransactions={goldTransactions}
+        silverTransactions={silverTransactions}
+      />
     </div>
   );
 };
