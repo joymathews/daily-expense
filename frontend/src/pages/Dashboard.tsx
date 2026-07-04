@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import { getActiveCycleRange, computeSalaryAllocation, getDatesInRange } from '../utils/transaction-helper';
+import SpendCalendar from '../components/spend-calendar';
 
 interface DashboardProps {
   userEmail: string;
@@ -35,6 +36,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [hoveredPoint, setHoveredPoint] = useState<{ day: string; date: string; amount: number; x: number; y: number } | null>(null);
   const [topOverallCategories, setTopOverallCategories] = useState<{ category: string; currency: string; amount: number }[]>([]);
   const [topCycleCategories, setTopCycleCategories] = useState<{ category: string; currency: string; amount: number }[]>([]);
+  const [dailySpendMap, setDailySpendMap] = useState<Record<string, number>>({});
+  const [dailyTransactionsMap, setDailyTransactionsMap] = useState<Record<string, any[]>>({});
+  const [todayDateString, setTodayDateString] = useState('');
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   useEffect(() => {
     const loadMetrics = async () => {
@@ -104,6 +109,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           // Filter to transactions up to current date (local timezone)
           const todayObj = new Date();
           const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+          setTodayDateString(todayStr);
           
           const total = goldTxs
             .filter((tx: any) => tx.transactionDate <= todayStr)
@@ -149,6 +155,28 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             };
           });
           setWeeklyTrendData(trendData);
+
+          // Build daily spend map for the spending calendar (all recorded dates, not limited to cycle)
+          const spendMap: Record<string, number> = {};
+          goldTxs.forEach((tx: any) => {
+            if (tx.transactionType === 'transfer') return;
+            if (tx.transactionType === 'fixed') return;
+            const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+            const existing = spendMap[tx.transactionDate] ?? 0;
+            spendMap[tx.transactionDate] = Math.max(0, existing + signedAmt);
+          });
+          setDailySpendMap(spendMap);
+
+          // Build daily transactions map for the per-day popup
+          const txMap: Record<string, any[]> = {};
+          goldTxs.forEach((tx: any) => {
+            if (tx.transactionType === 'transfer') return;
+            if (tx.transactionType === 'fixed') return;
+            const date = tx.transactionDate;
+            if (!txMap[date]) txMap[date] = [];
+            txMap[date].push(tx);
+          });
+          setDailyTransactionsMap(txMap);
 
           // Calculate top 3 categories overall and top 3 categories in cycle
           const overallCategoryMap: { [key: string]: { [curr: string]: number } } = {};
@@ -419,6 +447,132 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             </div>
           </div>
         )}
+
+        {/* Spending Calendar */}
+        {!isLoading && todayDateString && (
+          <div className="bg-white border border-gray-100/90 rounded-2xl p-6 shadow-sm" data-testid="spend-calendar-panel">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-50 pb-4 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                  <span>📅</span> Daily Spending Calendar
+                </h3>
+                <p className="text-xs text-gray-400 font-semibold uppercase mt-0.5">Monthly Spend Heatmap</p>
+              </div>
+            </div>
+            <SpendCalendar
+              dailySpendMap={dailySpendMap}
+              today={todayDateString}
+              onDayClick={setSelectedCalendarDate}
+            />
+          </div>
+        )}
+
+        {/* Day Transaction Popup Modal */}
+        {selectedCalendarDate && (() => {
+          const dayTxs = dailyTransactionsMap[selectedCalendarDate] ?? [];
+          const [year, mon, day] = selectedCalendarDate.split('-');
+          const dayLabel = `${day}/${mon}/${year}`;
+          const dayTotal = dayTxs.reduce((sum: number, tx: any) => {
+            const signed = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+            return sum + signed;
+          }, 0);
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Transactions for ${dayLabel}`}
+              onClick={() => setSelectedCalendarDate(null)}
+            >
+              {/* Backdrop */}
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+              {/* Modal panel */}
+              <div
+                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                      <span>📅</span> {dayLabel}
+                    </h3>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                      {dayTxs.length} {dayTxs.length === 1 ? 'transaction' : 'transactions'}
+                    </p>
+                  </div>
+                  <button
+                    id="calendar-day-modal-close"
+                    aria-label="Close day transactions"
+                    onClick={() => setSelectedCalendarDate(null)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Transaction list */}
+                <div className="overflow-y-auto flex-1 px-6 py-3 space-y-2">
+                  {dayTxs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <span className="text-3xl mb-2">🔍</span>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No transactions on this day</p>
+                    </div>
+                  ) : (
+                    dayTxs.map((tx: any, idx: number) => {
+                      const isRefund = tx.transactionType === 'refund';
+                      const signed = isRefund ? -tx.amount : tx.amount;
+                      return (
+                        <div
+                          key={tx.id ?? idx}
+                          className="flex items-center justify-between gap-3 p-3 rounded-xl bg-gray-50 hover:bg-indigo-50/40 transition-colors border border-gray-100"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-gray-800 truncate">{tx.merchant || 'Unknown'}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {tx.category && (
+                                <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                                  {tx.category}
+                                </span>
+                              )}
+                              {tx.paymentMethod && (
+                                <span className="text-[9px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                                  {tx.paymentMethod}
+                                </span>
+                              )}
+                              {isRefund && (
+                                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                                  Refund
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className={`text-sm font-black tabular-nums shrink-0 ${
+                            isRefund ? 'text-emerald-600' : 'text-gray-900'
+                          }`}>
+                            {isRefund ? '-' : ''}₹{Math.abs(signed).toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer total */}
+                {dayTxs.length > 0 && (
+                  <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Spend</span>
+                    <span className="text-base font-black text-indigo-600">₹{dayTotal.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="w-full bg-white border border-gray-100/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-50 pb-4 mb-2">
