@@ -3,9 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge } from './transaction-repository';
+import { IFeedbackRepository, FeedbackSettings, CorrectionExample, CorrectionFieldName, FeedbackEffectiveness } from './feedback-repository';
 import { normalizeCategory } from '../utils/category-helper';
 
-export class SQLiteTransactionRepository implements ITransactionRepository {
+export class SQLiteTransactionRepository implements ITransactionRepository, IFeedbackRepository {
   private db: sqlite3.Database;
 
   constructor(dbPath: string = process.env.DATABASE_URL || './data/daily_expense.db') {
@@ -269,6 +270,9 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
     if (!hasPaymentMethod) {
       await this.run("ALTER TABLE fixed_charges ADD COLUMN payment_method TEXT;");
     }
+
+    // 8. LLM Feedback Learning tables
+    await this.initializeFeedbackSchema();
   }
 
   /**
@@ -1745,6 +1749,273 @@ export class SQLiteTransactionRepository implements ITransactionRepository {
       throw err;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // IFeedbackRepository implementation
+  // ---------------------------------------------------------------------------
+
+  /** Creates the llm_feedback_settings and llm_correction_examples tables. */
+  async initializeFeedbackSchema(): Promise<void> {
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS llm_feedback_settings (
+        user_id TEXT PRIMARY KEY,
+        is_enabled INTEGER NOT NULL DEFAULT 0,
+        max_examples INTEGER NOT NULL DEFAULT 10,
+        updated_at TEXT DEFAULT (datetime('now', 'utc'))
+      );
+    `);
+
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS llm_correction_examples (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        bronze_input_id TEXT NOT NULL,
+        field_name TEXT NOT NULL CHECK (field_name IN ('merchant', 'category', 'paymentMethod', 'transactionType')),
+        llm_value TEXT,
+        corrected_value TEXT NOT NULL,
+        email_snippet TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'utc')),
+        FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+        UNIQUE(user_id, bronze_input_id, field_name)
+      );
+    `);
+
+    await this.run(
+      'CREATE INDEX IF NOT EXISTS idx_correction_examples_user ON llm_correction_examples(user_id, created_at DESC);'
+    );
+  }
+
+  async getFeedbackSettings(userId: string): Promise<FeedbackSettings> {
+    const row = await this.get<{ is_enabled: number; max_examples: number }>(
+      'SELECT is_enabled, max_examples FROM llm_feedback_settings WHERE user_id = ?',
+      [userId]
+    );
+    if (!row) {
+      return { isEnabled: false, maxExamples: 10 };
+    }
+    return { isEnabled: row.is_enabled === 1, maxExamples: row.max_examples };
+  }
+
+  async saveFeedbackSettings(userId: string, settings: FeedbackSettings): Promise<void> {
+    await this.run(
+      `INSERT INTO llm_feedback_settings (user_id, is_enabled, max_examples, updated_at)
+       VALUES (?, ?, ?, datetime('now', 'utc'))
+       ON CONFLICT(user_id) DO UPDATE SET
+         is_enabled = excluded.is_enabled,
+         max_examples = excluded.max_examples,
+         updated_at = excluded.updated_at`,
+      [userId, settings.isEnabled ? 1 : 0, settings.maxExamples]
+    );
+  }
+
+  async upsertCorrectionExample(example: CorrectionExample): Promise<void> {
+    await this.run(
+      `INSERT INTO llm_correction_examples (id, user_id, bronze_input_id, field_name, llm_value, corrected_value, email_snippet, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc'))
+       ON CONFLICT(user_id, bronze_input_id, field_name) DO UPDATE SET
+         id = excluded.id,
+         llm_value = excluded.llm_value,
+         corrected_value = excluded.corrected_value,
+         email_snippet = excluded.email_snippet,
+         created_at = excluded.created_at`,
+      [example.id, example.userId, example.bronzeInputId, example.fieldName,
+       example.llmValue ?? null, example.correctedValue, example.emailSnippet ?? null]
+    );
+  }
+
+  async getRecentCorrectionExamples(userId: string, limit: number): Promise<CorrectionExample[]> {
+    const rows = await this.all<any>(
+      'SELECT * FROM llm_correction_examples WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+      [userId, limit]
+    );
+    return rows.map(this.mapRowToCorrectionExample);
+  }
+
+  async listCorrectionExamples(userId: string): Promise<CorrectionExample[]> {
+    const rows = await this.all<any>(
+      'SELECT * FROM llm_correction_examples WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    return rows.map(this.mapRowToCorrectionExample);
+  }
+
+  async deleteCorrectionExample(id: string, userId: string): Promise<void> {
+    await this.run(
+      'DELETE FROM llm_correction_examples WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+  }
+
+  async clearAllCorrectionExamples(userId: string): Promise<void> {
+    await this.run(
+      'DELETE FROM llm_correction_examples WHERE user_id = ?',
+      [userId]
+    );
+  }
+
+  async getFeedbackEffectiveness(userId: string): Promise<FeedbackEffectiveness> {
+    // 1. Fetch correction examples
+    const examples = await this.all<any>(
+      'SELECT field_name, created_at FROM llm_correction_examples WHERE user_id = ? ORDER BY created_at ASC',
+      [userId]
+    );
+
+    const totalExamples = examples.length;
+    const byField: Record<string, number> = {
+      merchant: 0,
+      category: 0,
+      paymentMethod: 0,
+      transactionType: 0,
+    };
+    let cutoffDate: string | null = null;
+    if (totalExamples > 0) {
+      cutoffDate = examples[0].created_at;
+      for (const ex of examples) {
+        if (byField[ex.field_name] !== undefined) {
+          byField[ex.field_name]++;
+        }
+      }
+    }
+
+    // 2. Fetch Gold transactions joined with original LLM logs
+    const accuracyRows = await this.all<any>(
+      `SELECT 
+         g.created_at AS gold_created_at,
+         g.merchant, l.extracted_merchant,
+         g.category, l.extracted_category,
+         g.payment_method, l.extracted_payment_method
+       FROM gold_transactions g
+       JOIN silver_extracted_transactions s ON g.silver_tx_id = s.id AND g.user_id = s.user_id
+       JOIN llm_extraction_logs l ON s.bronze_input_id = l.bronze_input_id AND s.user_id = l.user_id
+       WHERE g.user_id = ? AND g.deleted_at IS NULL
+       ORDER BY g.created_at ASC`,
+      [userId]
+    );
+
+    const historicalMissesByField: Record<string, number> = {
+      merchant: 0,
+      category: 0,
+      paymentMethod: 0,
+    };
+
+    // Helper for matching checks
+    const isMerchantMatch = (row: any) =>
+      (row.merchant || '').trim().toLowerCase() === (row.extracted_merchant || '').trim().toLowerCase();
+
+    const isCategoryMatch = (row: any) =>
+      (row.category || '').trim().toLowerCase() === (row.extracted_category || '').trim().toLowerCase();
+
+    const isPaymentMethodMatch = (row: any) => {
+      const normMethod = (row.payment_method || '').trim().toLowerCase();
+      const normExtractedMethod = (row.extracted_payment_method || '').trim().toLowerCase();
+      const isMethodEmpty = !normMethod || normMethod === 'unknown' || normMethod === 'n/a';
+      const isExtractedEmpty = !normExtractedMethod || normExtractedMethod === 'unknown' || normExtractedMethod === 'n/a';
+      return normMethod === normExtractedMethod || (isMethodEmpty && isExtractedEmpty);
+    };
+
+    // Count misses
+    for (const r of accuracyRows) {
+      if (!isMerchantMatch(r)) historicalMissesByField.merchant++;
+      if (!isCategoryMatch(r)) historicalMissesByField.category++;
+      if (!isPaymentMethodMatch(r)) historicalMissesByField.paymentMethod++;
+    }
+
+    // Weekly bucketer
+    const getWeekStr = (dateStr: string) => {
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return 'unknown';
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d.setDate(diff));
+        return monday.toISOString().slice(0, 10); // Monday as week label: YYYY-MM-DD
+      } catch {
+        return 'unknown';
+      }
+    };
+
+    // Group rows by week
+    const weeklyBuckets: Record<string, { merchantM: number; categoryM: number; paymentM: number; total: number }> = {};
+    for (const r of accuracyRows) {
+      const week = getWeekStr(r.gold_created_at);
+      if (week === 'unknown') continue;
+      if (!weeklyBuckets[week]) {
+        weeklyBuckets[week] = { merchantM: 0, categoryM: 0, paymentM: 0, total: 0 };
+      }
+      weeklyBuckets[week].total++;
+      if (isMerchantMatch(r)) weeklyBuckets[week].merchantM++;
+      if (isCategoryMatch(r)) weeklyBuckets[week].categoryM++;
+      if (isPaymentMethodMatch(r)) weeklyBuckets[week].paymentM++;
+    }
+
+    const weeklyTrend = Object.entries(weeklyBuckets)
+      .map(([week, b]) => ({
+        week,
+        merchantAccuracy: Math.round((b.merchantM / b.total) * 100),
+        categoryAccuracy: Math.round((b.categoryM / b.total) * 100),
+        paymentMethodAccuracy: Math.round((b.paymentM / b.total) * 100),
+        totalRecords: b.total,
+      }))
+      .sort((a, b) => a.week.localeCompare(b.week));
+
+    // Before/After calculations
+    let before: any = null;
+    let after: any = null;
+
+    if (cutoffDate) {
+      const cutoffTime = new Date(cutoffDate).getTime();
+      const beforeRows = accuracyRows.filter(r => new Date(r.gold_created_at).getTime() < cutoffTime);
+      const afterRows = accuracyRows.filter(r => new Date(r.gold_created_at).getTime() >= cutoffTime);
+
+      const calculateAccuracy = (rows: any[]) => {
+        if (rows.length === 0) return null;
+        let merchantM = 0, categoryM = 0, paymentM = 0;
+        for (const r of rows) {
+          if (isMerchantMatch(r)) merchantM++;
+          if (isCategoryMatch(r)) categoryM++;
+          if (isPaymentMethodMatch(r)) paymentM++;
+        }
+        return {
+          merchantAccuracy: Math.round((merchantM / rows.length) * 100),
+          categoryAccuracy: Math.round((categoryM / rows.length) * 100),
+          paymentMethodAccuracy: Math.round((paymentM / rows.length) * 100),
+          totalRecords: rows.length,
+        };
+      };
+
+      before = calculateAccuracy(beforeRows);
+      after = calculateAccuracy(afterRows);
+    }
+
+    return {
+      weeklyTrend,
+      beforeAfter: {
+        cutoffDate,
+        before,
+        after,
+      },
+      coverage: {
+        totalExamples,
+        byField,
+        historicalMissesByField,
+      },
+    };
+  }
+
+  private mapRowToCorrectionExample(row: any): CorrectionExample {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      bronzeInputId: row.bronze_input_id,
+      fieldName: row.field_name as CorrectionFieldName,
+      llmValue: row.llm_value ?? null,
+      correctedValue: row.corrected_value,
+      emailSnippet: row.email_snippet ?? null,
+      createdAt: row.created_at,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
 
   close(): Promise<void> {
     return new Promise((resolve, reject) => {

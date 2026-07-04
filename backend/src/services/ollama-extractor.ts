@@ -6,7 +6,7 @@ export class OllamaExtractor implements ITransactionExtractor {
     private endpoint: string
   ) { }
 
-  async extractTransaction(textBody: string): Promise<ExtractedTransaction | null> {
+  async extractTransaction(textBody: string, contextBlock: string = ''): Promise<ExtractedTransaction | null> {
     const systemInstruction = `
 You are a precise financial parser. Extract transaction details from the email text and return ONLY a valid JSON object matching this schema:
 {
@@ -41,6 +41,11 @@ Ensure:
 - If any field cannot be found, set it to a default.
 `;
 
+    // Prepend few-shot correction block when the feedback feature provides one.
+    const fullSystemInstruction = contextBlock
+      ? `${contextBlock}\n\n${systemInstruction}`
+      : systemInstruction;
+
     try {
       const response = await fetch(`${this.endpoint}/api/chat`, {
         method: 'POST',
@@ -48,7 +53,7 @@ Ensure:
         body: JSON.stringify({
           model: this.modelName,
           messages: [
-            { role: 'system', content: systemInstruction },
+            { role: 'system', content: fullSystemInstruction },
             { role: 'user', content: `Email Content:\n${textBody}` }
           ],
           format: 'json',

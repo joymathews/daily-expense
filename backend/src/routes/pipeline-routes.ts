@@ -2,8 +2,10 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { SQLiteTransactionRepository } from '../db/sqlite-transaction-repository';
 import { TransactionExtractorFactory } from '../services/transaction-extractor';
+import { CorrectionLearningService } from '../services/correction-learning-service';
 
 const router = Router();
+const correctionLearningService = new CorrectionLearningService();
 
 /**
  * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/pipeline/raw-inputs
@@ -138,10 +140,44 @@ router.put('/silver-transactions/:id', async (req, res) => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
+    // Fetch Silver record before update to retrieve bronzeInputId
+    const silverTx = await repository.getSilverTransactionById(id, userId);
+
     await repository.updatePendingTransaction(id, userId, updates);
 
     await repository.close();
     res.status(200).json({ status: 'updated' });
+
+    // [FUNC-FEEDBACK-1] Fire-and-forget: capture corrections for learning.
+    // Only runs if the feature is enabled. Never affects the response above.
+    if (silverTx?.bronzeInputId) {
+      const captureRepository = new SQLiteTransactionRepository();
+      await captureRepository.initializeSchema();
+      const llmLog = await captureRepository.getLlmExtractionLogByBronzeId(silverTx.bronzeInputId, userId);
+      const rawInput = await captureRepository.getRawInputById(silverTx.bronzeInputId, userId);
+      if (llmLog) {
+        correctionLearningService.captureCorrectionsIfEnabled({
+          userId,
+          bronzeInputId: silverTx.bronzeInputId,
+          emailBody: rawInput?.rawBody ?? '',
+          llmLog: {
+            extractedMerchant: llmLog.extractedMerchant,
+            extractedCategory: llmLog.extractedCategory,
+            extractedPaymentMethod: llmLog.extractedPaymentMethod,
+            extractedTransactionType: llmLog.extractedTransactionType,
+          },
+          savedValues: {
+            merchant: updates.merchantNormalized ?? updates.merchantRaw,
+            category: updates.inferredCategory,
+            paymentMethod: updates.paymentMethod,
+            transactionType: updates.transactionType,
+          },
+          repository: captureRepository,
+        }).catch(() => {}).finally(() => captureRepository.close());
+      } else {
+        await captureRepository.close();
+      }
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update silver transaction' });
   }
@@ -159,10 +195,45 @@ router.put('/gold-transactions/:id', async (req, res) => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
+    // Fetch Gold record before update to trace back to bronzeInputId via Silver
+    const goldTransactions = await repository.getGoldTransactions(userId);
+    const goldTx = goldTransactions.find(tx => tx.id === id);
+
     await repository.updateGoldTransaction(id, userId, updates);
 
     await repository.close();
     res.status(200).json({ status: 'updated' });
+
+    // [FUNC-FEEDBACK-1] Fire-and-forget: capture corrections for learning.
+    const bronzeInputId = goldTx?.bronzeInputId;
+    if (bronzeInputId) {
+      const captureRepository = new SQLiteTransactionRepository();
+      await captureRepository.initializeSchema();
+      const llmLog = await captureRepository.getLlmExtractionLogByBronzeId(bronzeInputId, userId);
+      const rawInput = await captureRepository.getRawInputById(bronzeInputId, userId);
+      if (llmLog) {
+        correctionLearningService.captureCorrectionsIfEnabled({
+          userId,
+          bronzeInputId,
+          emailBody: rawInput?.rawBody ?? '',
+          llmLog: {
+            extractedMerchant: llmLog.extractedMerchant,
+            extractedCategory: llmLog.extractedCategory,
+            extractedPaymentMethod: llmLog.extractedPaymentMethod,
+            extractedTransactionType: llmLog.extractedTransactionType,
+          },
+          savedValues: {
+            merchant: updates.merchant,
+            category: updates.category,
+            paymentMethod: updates.paymentMethod,
+            transactionType: updates.transactionType,
+          },
+          repository: captureRepository,
+        }).catch(() => {}).finally(() => captureRepository.close());
+      } else {
+        await captureRepository.close();
+      }
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update gold transaction' });
   }
@@ -240,6 +311,9 @@ router.post('/approve', async (req, res) => {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
+    // Fetch Silver record before promoting so we can trace to bronzeInputId
+    const silverTx = await repository.getSilverTransactionById(silverId, userId);
+
     await repository.promoteToTransaction(silverId, {
       id: crypto.randomUUID(),
       pendingTxId: silverId,
@@ -258,6 +332,32 @@ router.post('/approve', async (req, res) => {
 
     await repository.close();
     res.status(200).json({ status: 'approved' });
+
+    // [FUNC-FEEDBACK-1] Fire-and-forget: capture corrections at approval time.
+    // The approved field values are diffed against the original LLM log.
+    if (silverTx?.bronzeInputId) {
+      const captureRepository = new SQLiteTransactionRepository();
+      await captureRepository.initializeSchema();
+      const llmLog = await captureRepository.getLlmExtractionLogByBronzeId(silverTx.bronzeInputId, userId);
+      const rawInput = await captureRepository.getRawInputById(silverTx.bronzeInputId, userId);
+      if (llmLog) {
+        correctionLearningService.captureCorrectionsIfEnabled({
+          userId,
+          bronzeInputId: silverTx.bronzeInputId,
+          emailBody: rawInput?.rawBody ?? '',
+          llmLog: {
+            extractedMerchant: llmLog.extractedMerchant,
+            extractedCategory: llmLog.extractedCategory,
+            extractedPaymentMethod: llmLog.extractedPaymentMethod,
+            extractedTransactionType: llmLog.extractedTransactionType,
+          },
+          savedValues: { merchant, category, paymentMethod, transactionType },
+          repository: captureRepository,
+        }).catch(() => {}).finally(() => captureRepository.close());
+      } else {
+        await captureRepository.close();
+      }
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to approve transaction' });
   }
@@ -361,6 +461,10 @@ router.post('/extract', async (req, res) => {
     const extractor = TransactionExtractorFactory.createExtractor();
     const results: any[] = [];
 
+    // [FUNC-FEEDBACK-1] Fetch the few-shot correction block once per batch request.
+    // Returns '' when the feature is disabled or no examples exist — zero cost when inactive.
+    const fewShotBlock = await correctionLearningService.buildFewShotPromptBlock(userId, repository);
+
     for (const id of rawEmailIds) {
       const rawInput = await repository.getRawInputById(id, userId);
       if (!rawInput) {
@@ -374,7 +478,8 @@ router.post('/extract', async (req, res) => {
         continue;
       }
 
-      const extracted = await extractor.extractTransaction(rawInput.rawBody);
+      const extracted = await extractor.extractTransaction(rawInput.rawBody, fewShotBlock);
+
       if (extracted) {
         const standardizedMethod = await repository.standardizePaymentMethod(userId, extracted.paymentMethod);
         const pendingTx = {

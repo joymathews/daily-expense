@@ -10,7 +10,7 @@ export interface ExtractedTransaction {
 }
 
 export interface ITransactionExtractor {
-  extractTransaction(textBody: string): Promise<ExtractedTransaction | null>;
+  extractTransaction(textBody: string, contextBlock?: string): Promise<ExtractedTransaction | null>;
 }
 
 import { OllamaExtractor } from './ollama-extractor';

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import { FilterPanel } from '../components/gmail/FilterPanel';
 import { STANDARD_CATEGORIES } from '../utils/transaction-helper';
+import LlmFeedbackSettings from '../components/llm-feedback-settings';
 
 const DataIngestion: React.FC = () => {
   const {
@@ -67,7 +68,7 @@ const DataIngestion: React.FC = () => {
     return unique.sort((a, b) => a.localeCompare(b));
   }, [goldTransactions, silverTransactions]);
 
-  const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization' | 'settings'>('gmail');
+  const [activeSubTab, setActiveSubTab] = useState<'gmail' | 'manual' | 'standardization' | 'settings' | 'feedback'>('gmail');
 
   // Fixed charges form state
   const [fcId, setFcId] = useState<string>('');
@@ -348,6 +349,20 @@ const DataIngestion: React.FC = () => {
           }`}
         >
           ⚙️ Cycle & Salary Settings
+        </button>
+        <button
+          onClick={() => {
+            setActiveSubTab('feedback');
+            setValidationError(null);
+            setSuccessMessage(null);
+          }}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+            activeSubTab === 'feedback'
+              ? 'bg-indigo-50 text-indigo-750 shadow-sm'
+              : 'text-gray-500 hover:text-gray-950'
+          }`}
+        >
+          🧠 LLM Feedback
         </button>
       </div>
 
@@ -1190,6 +1205,15 @@ const DataIngestion: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeSubTab === 'feedback' && (
+          <div className="bg-white border border-gray-150/70 shadow-sm rounded-2xl p-6 md:p-8 space-y-6 animate-fade-in text-left">
+            <h3 className="text-base font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-3">
+              🧠 LLM Feedback Learning
+            </h3>
+            <LlmFeedbackSettings />
           </div>
         )}
       </div>

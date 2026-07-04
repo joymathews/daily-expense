@@ -2,6 +2,7 @@ import express from 'express';
 import { checkJwt } from './middleware/auth-middleware';
 import ingestionRoutes from './routes/ingestion-routes';
 import pipelineRoutes from './routes/pipeline-routes';
+import feedbackRoutes from './routes/feedback-routes';
 
 const app = express();
 
@@ -10,6 +11,9 @@ app.use(express.json());
 // Ingestion and Pipeline routes
 app.use('/api/ingestion', checkJwt, ingestionRoutes);
 app.use('/api/pipeline', checkJwt, pipelineRoutes);
+
+// LLM Feedback Learning routes (fully decoupled from pipeline and ingestion)
+app.use('/api/feedback', checkJwt, feedbackRoutes);
 
 // Backward compatibility routes for testing
 app.use('/api/gmail', checkJwt, ingestionRoutes);

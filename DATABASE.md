@@ -325,4 +325,62 @@ To optimize performance and query speeds, the following custom database indexes 
 7. **`idx_fetcher_emails_user`**:
    - *Query*: `CREATE INDEX IF NOT EXISTS idx_fetcher_emails_user ON fetcher_emails(user_id);`
    - *Justification*: Rapid lookup of stored fetcher email addresses for datalist autocomplete displays.
+8. **`idx_correction_examples_user`**:
+   - *Query*: `CREATE INDEX IF NOT EXISTS idx_correction_examples_user ON llm_correction_examples(user_id, created_at DESC);`
+   - *Justification*: Optimizes the hot path of fetching the most-recent N correction examples per user at extraction time.
 
+---
+
+### 9. `llm_feedback_settings` (LLM Feedback Learning Configuration)
+Stores per-user configuration for the LLM Feedback Learning feature.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS llm_feedback_settings (
+  user_id TEXT PRIMARY KEY,
+  is_enabled INTEGER NOT NULL DEFAULT 0,
+  max_examples INTEGER NOT NULL DEFAULT 10,
+  updated_at TEXT DEFAULT (datetime('now', 'utc'))
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`user_id`** | `TEXT` | `PRIMARY KEY` | AWS Cognito user sub. Partitions feedback configuration by user. |
+| **`is_enabled`** | `INTEGER` | `NOT NULL DEFAULT 0` | Binary flag (`1` enabled, `0` disabled). Controls whether correction examples are captured and injected. Off by default so the feature is opt-in. |
+| **`max_examples`** | `INTEGER` | `NOT NULL DEFAULT 10` | Maximum number of recent correction examples to inject into the LLM system prompt at extraction time. Configurable 1-50. |
+| **`updated_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Audit timestamp of the last settings change. |
+
+---
+
+### 10. `llm_correction_examples` (LLM Feedback Correction Examples)
+Stores field-level correction examples captured from user edits at the Silver and Gold stages. Used to enrich future LLM extraction prompts.
+
+#### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS llm_correction_examples (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  bronze_input_id TEXT NOT NULL,
+  field_name TEXT NOT NULL CHECK (field_name IN ('merchant', 'category', 'paymentMethod', 'transactionType')),
+  llm_value TEXT,
+  corrected_value TEXT NOT NULL,
+  email_snippet TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'utc')),
+  FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
+  UNIQUE(user_id, bronze_input_id, field_name)
+);
+```
+
+#### Fields Justification & Purpose
+| Column Name | Data Type | Key / Constraints | Description / Business Justification |
+| :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | `PRIMARY KEY` | Unique UUID generated for each correction example record. |
+| **`user_id`** | `TEXT` | `NOT NULL` | AWS Cognito user sub. Enforces data isolation between users. |
+| **`bronze_input_id`** | `TEXT` | `NOT NULL, FOREIGN KEY` | References the originating Bronze raw input. Cascades deletion when the source raw email is deleted. |
+| **`field_name`** | `TEXT` | `CHECK (merchant, category, paymentMethod, transactionType)` | The specific extracted field that was corrected. Only inference-based fields are tracked. |
+| **`llm_value`** | `TEXT` | `Nullable` | The original value extracted by the LLM. Null if the LLM returned no value. |
+| **`corrected_value`** | `TEXT` | `NOT NULL` | The final user-corrected value saved to Silver or Gold. The ground-truth value taught to the LLM. |
+| **`email_snippet`** | `TEXT` | `Nullable` | A truncated prefix (~300 chars) of the raw email body, providing semantic context in the few-shot prompt block. |
+| **`created_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Timestamp of correction. Used for ordering to retrieve the most-recent N examples. |
