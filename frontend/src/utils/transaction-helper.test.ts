@@ -59,5 +59,27 @@ describe('computeSalaryAllocation with Fixed Charges templates', () => {
     // Unspent: 100000 - 15000 - 17000 = 68000 (68%)
     expect(result.totalSaved).toBe(68000);
     expect(result.unspentPercent).toBe(68);
+    expect(result.bankDebitTotal).toBe(0);
+  });
+
+  it('should exclude UPI/debit transactions from consumptionSpend and populate bankDebitTotal', () => {
+    const mixedTransactions = [
+      { amount: 2000, transactionDate: '2026-06-20', category: 'Food', transactionType: 'expense', paymentMethod: 'Credit Card' },
+      { amount: 5000, transactionDate: '2026-06-21', category: 'Utilities', transactionType: 'expense', paymentMethod: 'UPI' },
+      { amount: 1500, transactionDate: '2026-06-22', category: 'Shopping', transactionType: 'expense', paymentMethod: 'HDFC Bank Transaction' }
+    ];
+
+    const result = computeSalaryAllocation(mixedTransactions, billingCycleRange, expectedSalary, []);
+
+    // Credit Card (2000) should be under consumptionSpend
+    expect(result.consumptionSpend).toBe(2000);
+    expect(result.consumptionPercent).toBe(2);
+
+    // UPI (5000) + HDFC Bank Transaction (1500) = 6500 should be under bankDebitTotal
+    expect(result.bankDebitTotal).toBe(6500);
+
+    // Savings: 100000 - 2000 = 98000
+    expect(result.totalSaved).toBe(98000);
+    expect(result.unspentPercent).toBe(98);
   });
 });

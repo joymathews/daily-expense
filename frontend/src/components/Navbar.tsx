@@ -61,6 +61,16 @@ const Navbar: React.FC<NavbarProps> = ({ onSignOut }) => {
             >
               Ledger
             </Link>
+            <Link
+              to="/analytics"
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
+                isActive('/analytics') 
+                  ? 'bg-indigo-50/70 text-indigo-700 shadow-sm' 
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-gray-50/50'
+              }`}
+            >
+              Analytics
+            </Link>
           </div>
         </div>
         

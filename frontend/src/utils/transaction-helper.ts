@@ -19,6 +19,23 @@ export const getSignedAmount = (t: HasAmountAndTransactionType): number => {
 };
 
 /**
+ * Helper to identify if a transaction's payment method is a credit card or deferred liability card
+ * (e.g. HDFC Credit Card, RuPay Credit Card) vs direct bank debit (UPI, Cash, Debit Card).
+ */
+export const isCreditCardPayment = (paymentMethod?: string): boolean => {
+  if (!paymentMethod || paymentMethod.trim() === '') return true; // Fallback for backwards compatibility
+  const pm = paymentMethod.toLowerCase();
+  if (pm.includes('debit')) return false;
+  if (pm.includes('bank')) return false;
+  if (pm.includes('upi')) return false;
+  if (pm.includes('cash')) return false;
+  if (pm.includes('credit') || pm.includes('cc') || pm.includes('rupay') || pm.includes('card') || pm.includes('hdfc') || pm.includes('amex') || pm.includes('visa') || pm.includes('mastercard')) {
+    return true;
+  }
+  return false;
+};
+
+/**
  * Compute active billing cycle dates based on cycle start day
  */
 export const getActiveCycleRange = (startDay: number) => {
@@ -102,6 +119,7 @@ export interface SalaryAllocationResult {
   consumptionPercent: number;
   unspentPercent: number;
   allocationTransactions: HelperTransaction[];
+  bankDebitTotal: number;
 }
 
 /**
@@ -148,9 +166,21 @@ export const computeSalaryAllocation = (
 
   const ledgerConsumptionSpend = allocationTransactions
     .filter(tx => {
-      if (tx.transactionType === 'transfer') return false;
+      if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return false;
       const catLower = (tx.category || '').toLowerCase();
-      return catLower !== 'investment' && catLower !== 'mutual fund';
+      if (catLower === 'investment' || catLower === 'mutual fund') return false;
+      // Exclude direct bank debits from salary consumption spend
+      return isCreditCardPayment(tx.paymentMethod);
+    })
+    .reduce((sum, tx) => sum + getSignedAmount(tx), 0);
+
+  const bankDebitTotal = allocationTransactions
+    .filter(tx => {
+      if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return false;
+      const catLower = (tx.category || '').toLowerCase();
+      if (catLower === 'investment' || catLower === 'mutual fund') return false;
+      // Keep only direct bank debits
+      return !isCreditCardPayment(tx.paymentMethod);
     })
     .reduce((sum, tx) => sum + getSignedAmount(tx), 0);
 
@@ -169,7 +199,8 @@ export const computeSalaryAllocation = (
     mutualFundPercent,
     consumptionPercent,
     unspentPercent,
-    allocationTransactions
+    allocationTransactions,
+    bankDebitTotal
   };
 };
 

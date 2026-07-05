@@ -347,6 +347,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
                     </div>
                   </div>
                 )}
+
+                {/* Pre-existing bank balance spent footnote */}
+                {salaryAllocation.bankDebitTotal > 0 && (
+                  <div className="mt-3.5 pt-3.5 border-t border-gray-105 flex items-center space-x-1.5 text-2xs text-gray-400 font-medium font-sans text-left" data-testid="bank-outflow-footnote">
+                    <span>🏦</span>
+                    <span>
+                      Instant Bank Outflows: <span className="font-bold text-gray-600">₹{salaryAllocation.bankDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> spent via UPI/Debit from pre-existing bank balances (not counted against expected salary allocation).
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

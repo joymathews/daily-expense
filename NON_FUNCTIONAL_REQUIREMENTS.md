@@ -76,4 +76,6 @@
 - [NFR-ANALYSIS-5] Fixed Charges CRUD Performance: Saving, updating, or deleting fixed charge templates and propagating their cascading ledger entries must resolve within 150ms at the API layer.
 - [NFR-ANALYSIS-6] Allocation Breakdown Recalculation: Re-evaluating the active cycle budget split (incorporating templates) must resolve in less than 50ms upon ledger page load.
 - [NFR-USAB-34] Header Bulk Action Dropdown & Batch Editing Usability: The bulk action table header transition must occur instantly (within 50ms) of selection updates, and saving batch edits must execute in less than 200ms at the API layer to maintain high platform responsiveness.
+- [NFR-ANALYSIS-8] The budget slider interaction and projected forecasts must update the UI metrics instantly (within 50ms) to ensure interactive responsiveness.
+- [NFR-ANALYSIS-9] The Outflow Peaks periodicity charts and lists must load and render within 150ms of ledger data retrieval.
 

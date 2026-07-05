@@ -4678,11 +4678,15 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Recalculated values including fixed charges:
     // Expected Salary: 100000
     // Mutual Fund: Ledger: Investment (25000) + Fixed SIP Plan (5000) = 30000 -> 30%
-    // Consumption: Ledger: Uber (500) + Starbucks (1500) - Refund (1000) = 1000 + Fixed House Rent (15000) = 16000 -> 16%
-    // Savings: 100000 - 30000 - 16000 = 54000 -> 54%
+    // Consumption: Ledger: Starbucks (1500) - Refund (1000) = 500 + Fixed House Rent (15000) = 15500 -> 15.5% (Uber ₹500 is UPI -> bank outflow)
+    // Savings: 100000 - 30000 - 15500 = 54500 -> 54.5%
     expect(screen.getByText(/₹30000.00 \(30.0%\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/₹16000.00 \(16.0%\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/₹54000.00 \(54.0%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/₹15500.00 \(15.5%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/₹54500.00 \(54.5%\)/i)).toBeInTheDocument();
+
+    // Verify bank outflow footnote displays the excluded UPI transaction
+    expect(screen.getByTestId('bank-outflow-footnote')).toBeInTheDocument();
+    expect(screen.getByTestId('bank-outflow-footnote')).toHaveTextContent(/Instant Bank Outflows:.*₹500.00/i);
 
     // Verify fixed charges section
     expect(screen.getByText(/Includes Fixed Charges:/i)).toBeInTheDocument();
