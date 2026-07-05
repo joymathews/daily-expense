@@ -490,7 +490,7 @@ describe('LLM Feedback Learning', () => {
       expect(block).toContain('Groceries');
     });
 
-    it('selects the most semantically relevant examples over unrelated ones', async () => {
+    it('selects the most semantically relevant examples over unrelated ones [NFR-LLM-3]', async () => {
       await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 1, similarityThreshold: 0.2 });
 
       // Insert 2 examples with distinct template signatures

@@ -205,9 +205,9 @@ describe('Financial Analytics Utility Computations', () => {
   });
 
   /**
-   * [FUNC-ANALYSIS-13]: Verify Day of the Month peaks calculations.
+   * [FUNC-ANALYSIS-17] / [NFR-ANALYSIS-12]: Verify Day of the Month peaks calculations.
    */
-  it('correctly groups expenditures by day of the month', () => {
+  it('correctly groups expenditures by day of the month [FUNC-ANALYSIS-17] [NFR-ANALYSIS-12] [FUNC-ANALYSIS-13]', () => {
     const peaks = calculateDayOfMonthPeaks(mockTransactions);
     // tx-2 is on 20th: amount = 500
     expect(peaks.find(p => p.day === 20)?.amount).toBe(500);
@@ -217,7 +217,7 @@ describe('Financial Analytics Utility Computations', () => {
     // Non-discretionary are ignored (tx-1 on 18th is Investment)
   });
 
-  it('correctly calculates weekend spend amount for day of month peaks', () => {
+  it('correctly calculates weekend spend amount for day of month peaks [FUNC-ANALYSIS-19] [NFR-ANALYSIS-13]', () => {
     const peaks = calculateDayOfMonthPeaks(mockTransactions);
     const p20 = peaks.find(p => p.day === 20);
     expect(p20?.amount).toBe(500);
@@ -229,9 +229,9 @@ describe('Financial Analytics Utility Computations', () => {
   });
 
   /**
-   * [FUNC-ANALYSIS-13]: Verify Day of the Week peaks calculations.
+   * [FUNC-ANALYSIS-18] / [NFR-ANALYSIS-12]: Verify Day of the Week peaks calculations.
    */
-  it('correctly groups expenditures by day of the week', () => {
+  it('correctly groups expenditures by day of the week [FUNC-ANALYSIS-18] [NFR-ANALYSIS-12] [FUNC-ANALYSIS-13]', () => {
     const peaks = calculateDayOfWeekPeaks(mockTransactions);
     // 2026-06-20 is Saturday. tx-2 (500) + tx-5 (900) = 1400
     const sat = peaks.find(p => p.dayName === 'Sat');
@@ -431,7 +431,7 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
    * [FUNC-ANALYSIS-10] / [FUNC-ANALYSIS-11] / [FUNC-ANALYSIS-12]:
    * Verify the default landing view fetches correctly and loads page headers, slider control, and projected forecasts.
    */
-  it('renders title, loads ledger data, displays interactive budget slider, and displays projected forecasts', async () => {
+  it('renders title, loads ledger data, displays interactive budget slider, and displays projected forecasts [FUNC-ANALYSIS-16] [NFR-ANALYSIS-11] [NFR-ANALYSIS-9]', async () => {
     render(
       <BrowserRouter>
         <FinancialAnalytics />
@@ -566,7 +566,7 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
     expect(screen.getByText(/Weekly outflows/i)).toBeInTheDocument();
   });
 
-  it('displays horizontal average reference lines for both periodicity charts', async () => {
+  it('displays horizontal average reference lines for both periodicity charts [FUNC-ANALYSIS-19] [NFR-ANALYSIS-13]', async () => {
     render(
       <BrowserRouter>
         <FinancialAnalytics />
@@ -581,7 +581,27 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
     expect(screen.getByTestId('dow-average-line')).toBeInTheDocument();
   });
 
-  it('correctly generates savings recommendations from periodicity peaks and bills', () => {
+  it('updates interactive hover state header values on chart bar mouse-enter [FUNC-ANALYSIS-15] [NFR-ANALYSIS-10]', async () => {
+    render(
+      <BrowserRouter>
+        <FinancialAnalytics />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Financial Analytics & Predictions')).toBeInTheDocument();
+    });
+
+    // Find a day bar and mouse-enter it
+    const bar = screen.getByTestId('dom-bar-20');
+    fireEvent.mouseEnter(bar);
+
+    // Verify hover badge displays details
+    expect(screen.getByTestId('dom-hover-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('dom-hover-badge')).toHaveTextContent(/Day 20/);
+  });
+
+  it('correctly generates savings recommendations from periodicity peaks and bills [FUNC-ANALYSIS-20] [NFR-ANALYSIS-14]', () => {
     const dayOfMonthPeaks = [
       { day: 17, amount: 10000, weekendAmount: 8500 }, // high weekend bias
       { day: 22, amount: 5000, weekendAmount: 0 }

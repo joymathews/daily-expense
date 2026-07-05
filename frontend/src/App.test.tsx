@@ -1573,7 +1573,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    * [FUNC-GMAIL-16] Date Range Filtering: Filter Silver and Gold records by start/end dates.
    * [NFR-USAB-8] Date Range Filtering Responsiveness: Automatically trigger fetch on date change.
    */
-  it('supports date range filtering contextually in Silver and Gold tabs', async () => {
+  it('supports date range filtering contextually in Silver and Gold tabs [FUNC-GOLD-PAGE-14] [NFR-USAB-30] [BUG-013] [BUG-014] [BUG-015]', async () => {
     const mockSilver = [
       { id: 'silver_1', rawEmailId: '1', merchantRaw: 'Merchant A', amount: 100, currency: 'INR', transactionDate: '2023-01-15', status: 'pending', paymentMethod: 'UPI' }
     ];
@@ -4436,7 +4436,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    * Verify that the Dashboard page fetches gold transactions and correctly aggregates
    * and renders the weekly expense trend chart using real ledger data.
    */
-  it('displays the weekly trend chart on the dashboard using real transaction data [BUG-017]', async () => {
+  it('displays the weekly trend chart on the dashboard using real transaction data [BUG-017] [FUNC-GOLD-PAGE-15] [NFR-USAB-31] [NFR-ANALYSIS-2] [NFR-ANALYSIS-4]', async () => {
     const RealDate = global.Date;
     const mockSystemDate = new RealDate('2026-06-21T09:20:00');
     // @ts-ignore
@@ -4555,7 +4555,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    * Verify that the Salary Allocation Breakdown is displayed on the Dashboard page,
    * evaluates cycle dates correctly based on user preferences, and incorporates active fixed charges.
    */
-  it('renders Salary Allocation Breakdown widget on the dashboard, evaluates cycles, and incorporates active fixed charges', async () => {
+  it('renders Salary Allocation Breakdown widget on the dashboard, evaluates cycles, and incorporates active fixed charges [NFR-ANALYSIS-6]', async () => {
     const RealDate = global.Date;
     const mockSystemDate = new RealDate('2026-06-20T09:20:00');
     // @ts-ignore
@@ -4702,7 +4702,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    * Verify that both standard categories and any custom categories from existing transactions
    * are dynamically loaded and rendered as datalist autocomplete suggestions in the edit modal and Data Ingestion forms.
    */
-  it('suggests custom categories dynamically in the edit modal and creation forms [BUG-018]', async () => {
+  it('suggests custom categories dynamically in the edit modal and creation forms [BUG-018] [NFR-USAB-33]', async () => {
     const mockGoldTransactions = [
       {
         id: 'gold_tx_custom_1',
@@ -4826,7 +4826,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     vi.unstubAllGlobals();
   });
 
-  test('supports batch editing multiple selected transactions with field-level toggles and inputs [FUNC-GMAIL-53]', async () => {
+  test('supports batch editing multiple selected transactions with field-level toggles and inputs [FUNC-GMAIL-53] [NFR-USAB-34]', async () => {
     // 1. Mock fetch responses for batch-update
     let batchUpdatesReceived: any = null;
     vi.stubGlobal('fetch', (url: string, options: any) => {
