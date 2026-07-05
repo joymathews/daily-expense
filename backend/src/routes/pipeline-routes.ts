@@ -172,6 +172,12 @@ router.put('/silver-transactions/:id', async (req, res) => {
             paymentMethod: updates.paymentMethod,
             transactionType: updates.transactionType,
           },
+          draftValues: {
+            merchant: silverTx.merchantNormalized ?? silverTx.merchantRaw,
+            category: silverTx.inferredCategory,
+            paymentMethod: silverTx.paymentMethod,
+            transactionType: silverTx.transactionType,
+          },
           repository: captureRepository,
         }).catch(() => {}).finally(() => captureRepository.close());
       } else {
@@ -211,26 +217,32 @@ router.put('/gold-transactions/:id', async (req, res) => {
       await captureRepository.initializeSchema();
       const llmLog = await captureRepository.getLlmExtractionLogByBronzeId(bronzeInputId, userId);
       const rawInput = await captureRepository.getRawInputById(bronzeInputId, userId);
-      if (llmLog) {
-        correctionLearningService.captureCorrectionsIfEnabled({
-          userId,
-          bronzeInputId,
-          emailBody: rawInput?.rawBody ?? '',
-          llmLog: {
-            extractedMerchant: llmLog.extractedMerchant,
-            extractedCategory: llmLog.extractedCategory,
-            extractedPaymentMethod: llmLog.extractedPaymentMethod,
-            extractedTransactionType: llmLog.extractedTransactionType,
-          },
-          savedValues: {
-            merchant: updates.merchant,
-            category: updates.category,
-            paymentMethod: updates.paymentMethod,
-            transactionType: updates.transactionType,
-          },
-          repository: captureRepository,
-        }).catch(() => {}).finally(() => captureRepository.close());
-      } else {
+        if (llmLog) {
+          correctionLearningService.captureCorrectionsIfEnabled({
+            userId,
+            bronzeInputId,
+            emailBody: rawInput?.rawBody ?? '',
+            llmLog: {
+              extractedMerchant: llmLog.extractedMerchant,
+              extractedCategory: llmLog.extractedCategory,
+              extractedPaymentMethod: llmLog.extractedPaymentMethod,
+              extractedTransactionType: llmLog.extractedTransactionType,
+            },
+            savedValues: {
+              merchant: updates.merchant,
+              category: updates.category,
+              paymentMethod: updates.paymentMethod,
+              transactionType: updates.transactionType,
+            },
+            draftValues: goldTx ? {
+              merchant: goldTx.merchant,
+              category: goldTx.category,
+              paymentMethod: goldTx.paymentMethod,
+              transactionType: goldTx.transactionType,
+            } : undefined,
+            repository: captureRepository,
+          }).catch(() => {}).finally(() => captureRepository.close());
+        } else {
         await captureRepository.close();
       }
     }
@@ -352,6 +364,12 @@ router.post('/approve', async (req, res) => {
             extractedTransactionType: llmLog.extractedTransactionType,
           },
           savedValues: { merchant, category, paymentMethod, transactionType },
+          draftValues: {
+            merchant: silverTx.merchantNormalized ?? silverTx.merchantRaw,
+            category: silverTx.inferredCategory,
+            paymentMethod: silverTx.paymentMethod,
+            transactionType: silverTx.transactionType,
+          },
           repository: captureRepository,
         }).catch(() => {}).finally(() => captureRepository.close());
       } else {
@@ -461,10 +479,6 @@ router.post('/extract', async (req, res) => {
     const extractor = TransactionExtractorFactory.createExtractor();
     const results: any[] = [];
 
-    // [FUNC-FEEDBACK-1] Fetch the few-shot correction block once per batch request.
-    // Returns '' when the feature is disabled or no examples exist — zero cost when inactive.
-    const fewShotBlock = await correctionLearningService.buildFewShotPromptBlock(userId, repository);
-
     for (const id of rawEmailIds) {
       const rawInput = await repository.getRawInputById(id, userId);
       if (!rawInput) {
@@ -477,6 +491,9 @@ router.post('/extract', async (req, res) => {
         results.push(existingSilver);
         continue;
       }
+
+      // [FUNC-FEEDBACK-1] Fetch the semantically relevant few-shot correction block for this specific email body.
+      const fewShotBlock = await correctionLearningService.buildFewShotPromptBlock(userId, repository, rawInput.rawBody);
 
       const extracted = await extractor.extractTransaction(rawInput.rawBody, fewShotBlock);
 

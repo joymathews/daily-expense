@@ -1761,6 +1761,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
         user_id TEXT PRIMARY KEY,
         is_enabled INTEGER NOT NULL DEFAULT 0,
         max_examples INTEGER NOT NULL DEFAULT 10,
+        similarity_threshold REAL DEFAULT 0.3,
         updated_at TEXT DEFAULT (datetime('now', 'utc'))
       );
     `);
@@ -1774,6 +1775,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
         llm_value TEXT,
         corrected_value TEXT NOT NULL,
         email_snippet TEXT,
+        embedding TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
         FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
         UNIQUE(user_id, bronze_input_id, field_name)
@@ -1783,43 +1785,62 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     await this.run(
       'CREATE INDEX IF NOT EXISTS idx_correction_examples_user ON llm_correction_examples(user_id, created_at DESC);'
     );
+
+    // Safe migration: check for missing columns dynamically
+    const settingsCols = await this.all<{ name: string }>("PRAGMA table_info(llm_feedback_settings);");
+    const hasThreshold = settingsCols.some(col => col.name === 'similarity_threshold');
+    if (!hasThreshold) {
+      await this.run("ALTER TABLE llm_feedback_settings ADD COLUMN similarity_threshold REAL DEFAULT 0.3;");
+    }
+
+    const examplesCols = await this.all<{ name: string }>("PRAGMA table_info(llm_correction_examples);");
+    const hasEmbedding = examplesCols.some(col => col.name === 'embedding');
+    if (!hasEmbedding) {
+      await this.run("ALTER TABLE llm_correction_examples ADD COLUMN embedding TEXT;");
+    }
   }
 
   async getFeedbackSettings(userId: string): Promise<FeedbackSettings> {
-    const row = await this.get<{ is_enabled: number; max_examples: number }>(
-      'SELECT is_enabled, max_examples FROM llm_feedback_settings WHERE user_id = ?',
+    const row = await this.get<{ is_enabled: number; max_examples: number; similarity_threshold: number }>(
+      'SELECT is_enabled, max_examples, similarity_threshold FROM llm_feedback_settings WHERE user_id = ?',
       [userId]
     );
     if (!row) {
-      return { isEnabled: false, maxExamples: 10 };
+      return { isEnabled: false, maxExamples: 10, similarityThreshold: 0.3 };
     }
-    return { isEnabled: row.is_enabled === 1, maxExamples: row.max_examples };
+    return {
+      isEnabled: row.is_enabled === 1,
+      maxExamples: row.max_examples,
+      similarityThreshold: row.similarity_threshold ?? 0.3
+    };
   }
 
   async saveFeedbackSettings(userId: string, settings: FeedbackSettings): Promise<void> {
     await this.run(
-      `INSERT INTO llm_feedback_settings (user_id, is_enabled, max_examples, updated_at)
-       VALUES (?, ?, ?, datetime('now', 'utc'))
+      `INSERT INTO llm_feedback_settings (user_id, is_enabled, max_examples, similarity_threshold, updated_at)
+       VALUES (?, ?, ?, ?, datetime('now', 'utc'))
        ON CONFLICT(user_id) DO UPDATE SET
          is_enabled = excluded.is_enabled,
          max_examples = excluded.max_examples,
+         similarity_threshold = excluded.similarity_threshold,
          updated_at = excluded.updated_at`,
-      [userId, settings.isEnabled ? 1 : 0, settings.maxExamples]
+      [userId, settings.isEnabled ? 1 : 0, settings.maxExamples, settings.similarityThreshold ?? 0.3]
     );
   }
 
   async upsertCorrectionExample(example: CorrectionExample): Promise<void> {
     await this.run(
-      `INSERT INTO llm_correction_examples (id, user_id, bronze_input_id, field_name, llm_value, corrected_value, email_snippet, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc'))
+      `INSERT INTO llm_correction_examples (id, user_id, bronze_input_id, field_name, llm_value, corrected_value, email_snippet, embedding, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc'))
        ON CONFLICT(user_id, bronze_input_id, field_name) DO UPDATE SET
          id = excluded.id,
          llm_value = excluded.llm_value,
          corrected_value = excluded.corrected_value,
          email_snippet = excluded.email_snippet,
+         embedding = excluded.embedding,
          created_at = excluded.created_at`,
       [example.id, example.userId, example.bronzeInputId, example.fieldName,
-       example.llmValue ?? null, example.correctedValue, example.emailSnippet ?? null]
+       example.llmValue ?? null, example.correctedValue, example.emailSnippet ?? null, example.embedding ?? null]
     );
   }
 
@@ -2011,6 +2032,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
       llmValue: row.llm_value ?? null,
       correctedValue: row.corrected_value,
       emailSnippet: row.email_snippet ?? null,
+      embedding: row.embedding ?? null,
       createdAt: row.created_at,
     };
   }

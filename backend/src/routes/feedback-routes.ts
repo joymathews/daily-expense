@@ -26,7 +26,7 @@ router.get('/settings', async (req, res) => {
  */
 router.put('/settings', async (req, res) => {
   const userId = (req as any).auth?.sub;
-  const { isEnabled, maxExamples } = req.body;
+  const { isEnabled, maxExamples, similarityThreshold } = req.body;
 
   if (typeof isEnabled !== 'boolean') {
     return res.status(400).json({ error: 'isEnabled (boolean) is required' });
@@ -37,12 +37,25 @@ router.put('/settings', async (req, res) => {
     return res.status(400).json({ error: 'maxExamples must be an integer between 1 and 50' });
   }
 
+  const threshold = parseFloat(similarityThreshold ?? '0.3');
+  const clampedThreshold = Math.min(1.0, Math.max(0.0, isNaN(threshold) ? 0.3 : threshold));
+
   try {
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
-    await repository.saveFeedbackSettings(userId, { isEnabled, maxExamples: clampedMax });
+    await repository.saveFeedbackSettings(userId, {
+      isEnabled,
+      maxExamples: clampedMax,
+      similarityThreshold: clampedThreshold
+    });
     await repository.close();
-    res.status(200).json({ settings: { isEnabled, maxExamples: clampedMax } });
+    res.status(200).json({
+      settings: {
+        isEnabled,
+        maxExamples: clampedMax,
+        similarityThreshold: clampedThreshold
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update feedback settings' });
   }

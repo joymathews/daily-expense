@@ -340,6 +340,7 @@ CREATE TABLE IF NOT EXISTS llm_feedback_settings (
   user_id TEXT PRIMARY KEY,
   is_enabled INTEGER NOT NULL DEFAULT 0,
   max_examples INTEGER NOT NULL DEFAULT 10,
+  similarity_threshold REAL DEFAULT 0.3,
   updated_at TEXT DEFAULT (datetime('now', 'utc'))
 );
 ```
@@ -349,7 +350,8 @@ CREATE TABLE IF NOT EXISTS llm_feedback_settings (
 | :--- | :--- | :--- | :--- |
 | **`user_id`** | `TEXT` | `PRIMARY KEY` | AWS Cognito user sub. Partitions feedback configuration by user. |
 | **`is_enabled`** | `INTEGER` | `NOT NULL DEFAULT 0` | Binary flag (`1` enabled, `0` disabled). Controls whether correction examples are captured and injected. Off by default so the feature is opt-in. |
-| **`max_examples`** | `INTEGER` | `NOT NULL DEFAULT 10` | Maximum number of recent correction examples to inject into the LLM system prompt at extraction time. Configurable 1-50. |
+| **`max_examples`** | `INTEGER` | `NOT NULL DEFAULT 10` | Maximum number of similar correction examples to inject into the LLM system prompt at extraction time. Configurable 1-50. |
+| **`similarity_threshold`** | `REAL` | `NOT NULL DEFAULT 0.3` | Minimum cosine similarity score (0.0 to 1.0) required for a correction to be injected semantically. |
 | **`updated_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Audit timestamp of the last settings change. |
 
 ---
@@ -367,6 +369,7 @@ CREATE TABLE IF NOT EXISTS llm_correction_examples (
   llm_value TEXT,
   corrected_value TEXT NOT NULL,
   email_snippet TEXT,
+  embedding TEXT,
   created_at TEXT DEFAULT (datetime('now', 'utc')),
   FOREIGN KEY (user_id, bronze_input_id) REFERENCES bronze_raw_inputs(user_id, id) ON DELETE CASCADE,
   UNIQUE(user_id, bronze_input_id, field_name)
@@ -383,4 +386,6 @@ CREATE TABLE IF NOT EXISTS llm_correction_examples (
 | **`llm_value`** | `TEXT` | `Nullable` | The original value extracted by the LLM. Null if the LLM returned no value. |
 | **`corrected_value`** | `TEXT` | `NOT NULL` | The final user-corrected value saved to Silver or Gold. The ground-truth value taught to the LLM. |
 | **`email_snippet`** | `TEXT` | `Nullable` | A truncated prefix (~300 chars) of the raw email body, providing semantic context in the few-shot prompt block. |
+| **`embedding`** | `TEXT` | `Nullable` | JSON serialized string of float values representing the email snippet's semantic embedding vector. |
 | **`created_at`** | `TEXT` | `DEFAULT UTC Timestamp` | Timestamp of correction. Used for ordering to retrieve the most-recent N examples. |
+

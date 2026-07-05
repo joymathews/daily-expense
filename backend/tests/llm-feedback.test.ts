@@ -75,18 +75,20 @@ describe('LLM Feedback Learning', () => {
       const settings = await repository.getFeedbackSettings(userId);
       expect(settings.isEnabled).toBe(false);
       expect(settings.maxExamples).toBe(10);
+      expect(settings.similarityThreshold).toBe(0.3);
     });
 
     it('persists enabled state and custom maxExamples correctly', async () => {
-      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 25 });
+      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 25, similarityThreshold: 0.6 });
       const settings = await repository.getFeedbackSettings(userId);
       expect(settings.isEnabled).toBe(true);
       expect(settings.maxExamples).toBe(25);
+      expect(settings.similarityThreshold).toBe(0.6);
     });
 
     it('can be toggled back to disabled after being enabled', async () => {
-      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 10 });
-      await repository.saveFeedbackSettings(userId, { isEnabled: false, maxExamples: 10 });
+      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 10, similarityThreshold: 0.3 });
+      await repository.saveFeedbackSettings(userId, { isEnabled: false, maxExamples: 10, similarityThreshold: 0.3 });
       const settings = await repository.getFeedbackSettings(userId);
       expect(settings.isEnabled).toBe(false);
     });
@@ -438,6 +440,156 @@ describe('LLM Feedback Learning', () => {
 
       // Since we had a cutoff date, before/after should be populated (or at least evaluated)
       expect(report.beforeAfter.cutoffDate).not.toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Semantic Embedding Routing [FUNC-FEEDBACK-1]
+  // ---------------------------------------------------------------------------
+
+  describe('Semantic Embedding-based Routing [FUNC-FEEDBACK-1]', () => {
+    let originalFetch: any;
+
+    beforeEach(() => {
+      originalFetch = global.fetch;
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('calculates correct cosine similarity for vectors', () => {
+      const s = service as any;
+      // Orthogonal vectors similarity = 0
+      expect(s.cosineSimilarity([1, 0], [0, 1])).toBe(0);
+      // Identical vectors similarity = 1
+      expect(s.cosineSimilarity([3, 4], [3, 4])).toBeCloseTo(1.0);
+      // Opposing vectors similarity = -1
+      expect(s.cosineSimilarity([1, 1], [-1, -1])).toBeCloseTo(-1.0);
+    });
+
+    it('gracefully falls back to recency ordering when embedding query fails', async () => {
+      // Mock fetch returning offline error
+      global.fetch = jest.fn().mockImplementation(() => Promise.reject(new Error('Offline')));
+
+      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 10, similarityThreshold: 0.3 });
+      
+      const bronzeId = crypto.randomUUID();
+      await createRawInput(bronzeId, userId, 'Receipt text');
+      await createPendingTransaction(bronzeId, userId);
+
+      await service.captureCorrectionsIfEnabled({
+        userId, bronzeInputId: bronzeId, emailBody: 'Receipt text',
+        llmLog: { extractedMerchant: null, extractedCategory: 'Shopping', extractedPaymentMethod: null, extractedTransactionType: 'expense' },
+        savedValues: { category: 'Groceries' }, repository,
+      });
+
+      const block = await service.buildFewShotPromptBlock(userId, repository, 'New receipt text');
+      // Should still return block using fallback ordering
+      expect(block).toContain('Correction History');
+      expect(block).toContain('Groceries');
+    });
+
+    it('selects the most semantically relevant examples over unrelated ones', async () => {
+      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 1, similarityThreshold: 0.2 });
+
+      // Insert 2 examples with distinct template signatures
+      const bronzeIdA = crypto.randomUUID();
+      await createRawInput(bronzeIdA, userId, 'Zomato order details for lunch');
+      await createPendingTransaction(bronzeIdA, userId);
+      
+      const bronzeIdB = crypto.randomUUID();
+      await createRawInput(bronzeIdB, userId, 'Uber taxi cab receipt');
+      await createPendingTransaction(bronzeIdB, userId);
+
+      // We will mock fetch to return different embeddings based on the prompt text:
+      // Zomato prompt gets [1, 0], Uber prompt gets [0, 1]
+      global.fetch = jest.fn().mockImplementation((url, init: any) => {
+        const body = JSON.parse(init.body);
+        let embedding = [0.1, 0.1];
+        if (body.prompt.includes('Zomato')) embedding = [1.0, 0.0];
+        if (body.prompt.includes('Uber')) embedding = [0.0, 1.0];
+        
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ embedding })
+        });
+      });
+
+      // Capture Zomato correction (will be embedded as [1, 0])
+      await service.captureCorrectionsIfEnabled({
+        userId, bronzeInputId: bronzeIdA, emailBody: 'Zomato order details for lunch',
+        llmLog: { extractedMerchant: null, extractedCategory: 'Shopping', extractedPaymentMethod: null, extractedTransactionType: 'expense' },
+        savedValues: { category: 'Online Food Order' }, repository,
+      });
+
+      // Capture Uber correction (will be embedded as [0, 1])
+      await service.captureCorrectionsIfEnabled({
+        userId, bronzeInputId: bronzeIdB, emailBody: 'Uber taxi cab receipt',
+        llmLog: { extractedMerchant: null, extractedCategory: 'Shopping', extractedPaymentMethod: null, extractedTransactionType: 'expense' },
+        savedValues: { category: 'Cabs & Transport' }, repository,
+      });
+
+      // Querying with an Uber-like email (will fetch embedding [0, 1])
+      // Should score Uber example as similarity = 1.0, and Zomato as similarity = 0.0
+      // Since maxExamples is 1, it must return ONLY the Uber cabs correction example!
+      const block = await service.buildFewShotPromptBlock(userId, repository, 'Uber ride to airport');
+      expect(block).toContain('Cabs & Transport');
+      expect(block).not.toContain('Online Food Order');
+    });
+
+    it('filters out examples below the similarity threshold', async () => {
+      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 10, similarityThreshold: 0.8 });
+
+      global.fetch = jest.fn().mockImplementation((url, init: any) => {
+        const body = JSON.parse(init.body);
+        let embedding = [1.0, 0.0]; // saved
+        if (body.prompt.includes('Query')) embedding = [0.1, 0.9]; // query (unrelated)
+        
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ embedding })
+        });
+      });
+
+      const bronzeId = crypto.randomUUID();
+      await createRawInput(bronzeId, userId, 'Merchant A invoice');
+      await createPendingTransaction(bronzeId, userId);
+
+      await service.captureCorrectionsIfEnabled({
+        userId, bronzeInputId: bronzeId, emailBody: 'Merchant A invoice',
+        llmLog: { extractedMerchant: null, extractedCategory: 'Shopping', extractedPaymentMethod: null, extractedTransactionType: 'expense' },
+        savedValues: { category: 'Online Food Order' }, repository,
+      });
+
+      // Query with unrelated text. Similarity will be low (~0.1).
+      // Since threshold is 0.8, it must return an empty block.
+      const block = await service.buildFewShotPromptBlock(userId, repository, 'Query text');
+      expect(block).toBe('');
+    });
+
+    it('ignores auto-applied rule changes when the user does not edit them', async () => {
+      await repository.saveFeedbackSettings(userId, { isEnabled: true, maxExamples: 10, similarityThreshold: 0.0 });
+
+      const bronzeId = crypto.randomUUID();
+      await createRawInput(bronzeId, userId, 'Merchant invoice');
+      await createPendingTransaction(bronzeId, userId);
+
+      // Scenario: LLM extracted 'Raw Category'.
+      // Staging draft got 'Shopping' (via backend standard rule mapping).
+      // Saved/approved value is 'Shopping' (user accepted without editing).
+      await service.captureCorrectionsIfEnabled({
+        userId,
+        bronzeInputId: bronzeId,
+        emailBody: 'Merchant invoice',
+        llmLog: { extractedMerchant: null, extractedCategory: 'Raw Category', extractedPaymentMethod: null, extractedTransactionType: 'expense' },
+        savedValues: { category: 'Shopping' },
+        draftValues: { category: 'Shopping' }, // matches savedValues
+        repository,
+      });
+
+      const examples = await repository.listCorrectionExamples(userId);
+      expect(examples).toHaveLength(0); // must skip since it was not manually corrected
     });
   });
 });

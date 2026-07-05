@@ -4,6 +4,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 interface FeedbackSettings {
   isEnabled: boolean;
   maxExamples: number;
+  similarityThreshold: number;
 }
 
 interface CorrectionExample {
@@ -69,7 +70,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
  * Manages its own state and API calls; no props required beyond standard React.
  */
 const LlmFeedbackSettings: React.FC = () => {
-  const [settings, setSettings] = useState<FeedbackSettings>({ isEnabled: false, maxExamples: 10 });
+  const [settings, setSettings] = useState<FeedbackSettings>({ isEnabled: false, maxExamples: 10, similarityThreshold: 0.3 });
   const [examples, setExamples] = useState<CorrectionExample[]>([]);
   const [effectiveness, setEffectiveness] = useState<FeedbackEffectiveness | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
@@ -173,6 +174,14 @@ const LlmFeedbackSettings: React.FC = () => {
   };
 
   const handleMaxExamplesBlur = () => {
+    saveSettings(settings);
+  };
+
+  const handleThresholdChange = (value: number) => {
+    setSettings(prev => ({ ...prev, similarityThreshold: value }));
+  };
+
+  const handleThresholdBlur = () => {
     saveSettings(settings);
   };
 
@@ -305,7 +314,38 @@ const LlmFeedbackSettings: React.FC = () => {
                 <span>50 (maximum)</span>
               </div>
               <p className="text-xs text-gray-500">
-                The {settings.maxExamples} most recent corrections will be included in the LLM prompt at extraction time.
+                The {settings.maxExamples} most semantically relevant corrections will be included in the LLM prompt at extraction time.
+              </p>
+            </div>
+
+            {/* Similarity threshold slider */}
+            <div className={`space-y-2 transition-opacity duration-200 ${settings.isEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+              <div className="flex items-center justify-between">
+                <label htmlFor="similarity-threshold-input" className="text-sm font-semibold text-gray-800">
+                  Minimum Semantic Similarity Threshold
+                </label>
+                <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-lg">
+                  {settings.similarityThreshold}
+                </span>
+              </div>
+              <input
+                id="similarity-threshold-input"
+                type="range"
+                min={0.0}
+                max={1.0}
+                step={0.05}
+                value={settings.similarityThreshold}
+                onChange={e => handleThresholdChange(parseFloat(e.target.value))}
+                onMouseUp={handleThresholdBlur}
+                onTouchEnd={handleThresholdBlur}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>0.00 (inject all)</span>
+                <span>1.00 (strict match only)</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Only corrections with a similarity score equal to or higher than this threshold will be injected.
               </p>
             </div>
           </>

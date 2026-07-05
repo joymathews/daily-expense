@@ -9,6 +9,7 @@ export type CorrectionFieldName = 'merchant' | 'category' | 'paymentMethod' | 't
 export interface FeedbackSettings {
   isEnabled: boolean;
   maxExamples: number;
+  similarityThreshold?: number;
 }
 
 export interface CorrectionExample {
@@ -19,6 +20,7 @@ export interface CorrectionExample {
   llmValue: string | null;
   correctedValue: string;
   emailSnippet: string | null;
+  embedding?: string | null;
   createdAt?: string;
 }
 
