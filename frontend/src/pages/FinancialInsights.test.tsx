@@ -121,4 +121,34 @@ describe('Financial Insights Workspace Page', () => {
     // Verify filter displays only matching impact cards (or empty state if none)
     expect(screen.queryByTestId('insight-card-recurring')).not.toBeInTheDocument();
   });
+
+  it('toggles, updates and resets the calibration settings sliders', async () => {
+    render(
+      <BrowserRouter>
+        <FinancialInsights />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('💡 Smart Financial Insights')).toBeInTheDocument();
+    });
+
+    // Check calibration panel is not visible initially
+    expect(screen.queryByTestId('calibration-panel')).not.toBeInTheDocument();
+
+    // Toggle open
+    const toggleBtn = screen.getByTestId('toggle-calibration-btn');
+    fireEvent.click(toggleBtn);
+    expect(screen.getByTestId('calibration-panel')).toBeInTheDocument();
+
+    // Change category splurge slider
+    const categorySlider = screen.getByTestId('slider-category');
+    fireEvent.change(categorySlider, { target: { value: '30' } });
+    expect(screen.getByTestId('value-category')).toHaveTextContent('30%');
+
+    // Reset back to defaults
+    const resetBtn = screen.getByTestId('reset-calibration-btn');
+    fireEvent.click(resetBtn);
+    expect(screen.getByTestId('value-category')).toHaveTextContent('20%'); // Default is 20%
+  });
 });

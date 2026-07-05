@@ -7,14 +7,16 @@ import {
   calculateDayOfMonthPeaks,
   calculateDayOfWeekPeaks,
   detectRecurringBills,
-  generateSavingsRecommendations
+  generateSavingsRecommendations,
+  DEFAULT_INSIGHTS_CONFIG
 } from '../utils/analytics-helper';
 import type {
   RunRateForecastResult,
   DayPeakPoint,
   DayOfWeekPeakPoint,
   RecurringBillPrediction,
-  SavingsRecommendation
+  SavingsRecommendation,
+  InsightsConfig
 } from '../utils/analytics-helper';
 
 const FinancialInsights: React.FC = () => {
@@ -27,6 +29,34 @@ const FinancialInsights: React.FC = () => {
   
   // Filter state for insights list
   const [activeFilter, setActiveFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
+
+  // Calibration config state
+  const [config, setConfig] = useState<InsightsConfig>(() => {
+    const saved = localStorage.getItem('insights_calibration_config');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return DEFAULT_INSIGHTS_CONFIG;
+      }
+    }
+    return DEFAULT_INSIGHTS_CONFIG;
+  });
+
+  const [showCalibrationSettings, setShowCalibrationSettings] = useState(false);
+
+  const updateConfig = (newVal: Partial<InsightsConfig>) => {
+    setConfig(prev => {
+      const updated = { ...prev, ...newVal };
+      localStorage.setItem('insights_calibration_config', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleResetConfig = () => {
+    setConfig(DEFAULT_INSIGHTS_CONFIG);
+    localStorage.setItem('insights_calibration_config', JSON.stringify(DEFAULT_INSIGHTS_CONFIG));
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -135,7 +165,8 @@ const FinancialInsights: React.FC = () => {
     discretionarySpend,
     forecast.projectedTotal,
     cycleRange,
-    todayStr
+    todayStr,
+    config
   );
 
   // Sum potential savings of active recommendations
@@ -201,7 +232,142 @@ const FinancialInsights: React.FC = () => {
             Dynamic savings recommendations, habit corrections, and wealth strategies compiled from transaction history.
           </p>
         </div>
+        <button
+          onClick={() => setShowCalibrationSettings(!showCalibrationSettings)}
+          className="text-xs font-bold text-gray-655 hover:text-indigo-650 hover:bg-indigo-50/50 uppercase tracking-wider border border-gray-200 px-4 py-2 rounded-xl shadow-3xs transition-all duration-200 cursor-pointer flex items-center space-x-1.5 shrink-0"
+          data-testid="toggle-calibration-btn"
+        >
+          <span>⚙️ Calibrate Insights</span>
+        </button>
       </div>
+
+      {/* Calibration settings card */}
+      {showCalibrationSettings && (
+        <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-6" data-testid="calibration-panel">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div>
+              <h2 className="text-sm font-extrabold text-gray-900 Outfit">⚙️ Insight Calibration Settings</h2>
+              <p className="text-3xs text-gray-400 mt-0.5 font-sans">
+                Fine-tune mathematical triggers and limits used to identify financial recommendations.
+              </p>
+            </div>
+            <button
+              onClick={handleResetConfig}
+              className="text-3xs font-extrabold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/70 px-2.5 py-1.5 rounded-lg transition-all cursor-pointer"
+              data-testid="reset-calibration-btn"
+            >
+              RESET TO DEFAULTS
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Category Splurge Limit */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs font-bold">
+                <span className="text-gray-900 Outfit">Category Splurge Limit</span>
+                <span className="text-indigo-600 font-extrabold bg-indigo-50/70 px-2 py-0.5 rounded border border-indigo-100/50" data-testid="value-category">{config.categoryPctThreshold}%</span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="50"
+                step="5"
+                value={config.categoryPctThreshold}
+                onChange={e => updateConfig({ categoryPctThreshold: parseInt(e.target.value, 10) })}
+                className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                data-testid="slider-category"
+              />
+              <p className="text-[10px] leading-normal text-gray-400 font-sans">
+                Flags a category if it consumes more than this % of card spend. Lowering this catches smaller category leaks; raising it focuses on top categories.
+              </p>
+            </div>
+
+            {/* Merchant Visits Limit */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs font-bold">
+                <span className="text-gray-900 Outfit">Merchant Visits Limit</span>
+                <span className="text-indigo-600 font-extrabold bg-indigo-50/70 px-2 py-0.5 rounded border border-indigo-100/50" data-testid="value-merchant">{config.merchantVisitsThreshold} visits</span>
+              </div>
+              <input
+                type="range"
+                min="2"
+                max="15"
+                step="1"
+                value={config.merchantVisitsThreshold}
+                onChange={e => updateConfig({ merchantVisitsThreshold: parseInt(e.target.value, 10) })}
+                className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                data-testid="slider-merchant"
+              />
+              <p className="text-[10px] leading-normal text-gray-400 font-sans">
+                Flags a merchant if visited this many times in a cycle. Lowering this catches minor repeat patterns; raising it captures only heavy daily habits.
+              </p>
+            </div>
+
+            {/* Weekend Spend Bias Limit */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs font-bold">
+                <span className="text-gray-900 Outfit">Weekend Spend Bias Limit</span>
+                <span className="text-indigo-600 font-extrabold bg-indigo-50/70 px-2 py-0.5 rounded border border-indigo-100/50" data-testid="value-weekend">{config.weekendPctThreshold}%</span>
+              </div>
+              <input
+                type="range"
+                min="20"
+                max="80"
+                step="5"
+                value={config.weekendPctThreshold}
+                onChange={e => updateConfig({ weekendPctThreshold: parseInt(e.target.value, 10) })}
+                className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                data-testid="slider-weekend"
+              />
+              <p className="text-[10px] leading-normal text-gray-400 font-sans">
+                Flags weekend splurging if Friday-Sunday spend exceeds this % of weekly total. Lowering this makes the weekend warning more sensitive.
+              </p>
+            </div>
+
+            {/* Large Expense Limit */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs font-bold">
+                <span className="text-gray-900 Outfit">Large Expense Limit</span>
+                <span className="text-indigo-600 font-extrabold bg-indigo-50/70 px-2 py-0.5 rounded border border-indigo-100/50" data-testid="value-large-expense">{config.largeExpensePctThreshold}%</span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="50"
+                step="5"
+                value={config.largeExpensePctThreshold}
+                onChange={e => updateConfig({ largeExpensePctThreshold: parseInt(e.target.value, 10) })}
+                className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                data-testid="slider-large-expense"
+              />
+              <p className="text-[10px] leading-normal text-gray-400 font-sans">
+                Flags a single purchase if it exceeds this % of expected monthly salary. Lowering this flags smaller single luxury purchases.
+              </p>
+            </div>
+
+            {/* Fixed Cost Warning Limit */}
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex justify-between items-center text-xs font-bold">
+                <span className="text-gray-900 Outfit">Fixed Cost Warning Limit</span>
+                <span className="text-indigo-600 font-extrabold bg-indigo-50/70 px-2 py-0.5 rounded border border-indigo-100/50" data-testid="value-fixed-burden">{config.fixedBurdenPctThreshold}%</span>
+              </div>
+              <input
+                type="range"
+                min="20"
+                max="70"
+                step="5"
+                value={config.fixedBurdenPctThreshold}
+                onChange={e => updateConfig({ fixedBurdenPctThreshold: parseInt(e.target.value, 10) })}
+                className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                data-testid="slider-fixed-burden"
+              />
+              <p className="text-[10px] leading-normal text-gray-400 font-sans">
+                Warns you of cash flow strain if rent, loans, and EMIs consume more than this % of expected salary.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Potential Savings Banner */}
       {totalPotentialSavings > 0 && (

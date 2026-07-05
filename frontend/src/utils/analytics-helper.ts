@@ -375,6 +375,22 @@ export interface SavingsRecommendation {
   impact: 'high' | 'medium' | 'low' | 'critical';
 }
 
+export interface InsightsConfig {
+  weekendPctThreshold: number;
+  categoryPctThreshold: number;
+  merchantVisitsThreshold: number;
+  largeExpensePctThreshold: number;
+  fixedBurdenPctThreshold: number;
+}
+
+export const DEFAULT_INSIGHTS_CONFIG: InsightsConfig = {
+  weekendPctThreshold: 50,
+  categoryPctThreshold: 20,
+  merchantVisitsThreshold: 5,
+  largeExpensePctThreshold: 20,
+  fixedBurdenPctThreshold: 45
+};
+
 /**
  * Generate smart savings recommendations based on historical cycles, weekend bias and periodicity.
  */
@@ -389,7 +405,8 @@ export const generateSavingsRecommendations = (
   discretionarySpend: number,
   projectedCardOutlay: number,
   cycleRange: { start: string; end: string },
-  todayStr: string
+  todayStr: string,
+  config: InsightsConfig = DEFAULT_INSIGHTS_CONFIG
 ): SavingsRecommendation[] => {
   const recommendations: SavingsRecommendation[] = [];
 
@@ -436,7 +453,7 @@ export const generateSavingsRecommendations = (
   
   if (totalWeekAmount > 0) {
     const weekendPct = Math.round((weekendTotal / totalWeekAmount) * 100);
-    if (weekendPct >= 50) {
+    if (weekendPct >= config.weekendPctThreshold) {
       const potential = Math.round(weekendTotal * 0.2);
       recommendations.push({
         id: 'rec-weekend',
@@ -494,21 +511,22 @@ export const generateSavingsRecommendations = (
     .map(cat => ({ name: cat, amount: categoryTotals[cat] }))
     .sort((a, b) => b.amount - a.amount);
     
-  if (sortedCategories.length > 0 && discretionarySpend > 0) {
-    const topCat = sortedCategories[0];
-    const catPct = Math.round((topCat.amount / discretionarySpend) * 100);
-    if (catPct >= 25 && topCat.amount > 0) {
-      const potential = Math.round(topCat.amount * 0.2);
-      recommendations.push({
-        id: 'rec-category',
-        type: 'category_cap',
-        title: `Cap Spend on ${topCat.name}`,
-        description: `The "${topCat.name}" category consumes ${catPct}% of your discretionary spending (₹${topCat.amount.toLocaleString('en-IN')}). Setting a budget cap here can save ₹${potential.toLocaleString('en-IN')}.`,
-        potentialSavings: potential,
-        impact: getImpact(potential)
-      });
+  sortedCategories.forEach((topCat, index) => {
+    if (discretionarySpend > 0) {
+      const catPct = Math.round((topCat.amount / discretionarySpend) * 100);
+      if (catPct >= config.categoryPctThreshold && topCat.amount > 0) {
+        const potential = Math.round(topCat.amount * 0.2);
+        recommendations.push({
+          id: `rec-category-${index}`,
+          type: 'category_cap',
+          title: `Cap Spend on ${topCat.name}`,
+          description: `The "${topCat.name}" category consumes ${catPct}% of your discretionary spending (₹${topCat.amount.toLocaleString('en-IN')}). Setting a budget cap here can save ₹${potential.toLocaleString('en-IN')}.`,
+          potentialSavings: potential,
+          impact: getImpact(potential)
+        });
+      }
     }
-  }
+  });
 
   // 6. Merchant Frequency Trap (merchant_frequency)
   const merchantCounts: Record<string, { count: number; total: number }> = {};
@@ -521,21 +539,20 @@ export const generateSavingsRecommendations = (
   
   const frequencyTraps = Object.keys(merchantCounts)
     .map(m => ({ merchant: m, count: merchantCounts[m].count, total: merchantCounts[m].total }))
-    .filter(item => item.count >= 5 && item.total > 0)
+    .filter(item => item.count >= config.merchantVisitsThreshold && item.total > 0)
     .sort((a, b) => b.count - a.count);
     
-  if (frequencyTraps.length > 0) {
-    const topFreq = frequencyTraps[0];
+  frequencyTraps.slice(0, 3).forEach((topFreq, index) => {
     const potential = Math.round(topFreq.total * 0.3);
     recommendations.push({
-      id: 'rec-merchant-freq',
+      id: `rec-merchant-freq-${index}`,
       type: 'merchant_frequency',
       title: `Review ${topFreq.merchant} Visits`,
-      description: `You made ${topFreq.count} transactions at ${topFreq.merchant} this cycle (spending ₹${topFreq.total.toLocaleString('en-IN')}). Spacing out visits to twice a week can save ₹${potential.toLocaleString('en-IN')}.`,
+      description: `You made ${topFreq.count} transactions at ${topFreq.merchant} this cycle (spending ₹${topFreq.total.toLocaleString('en-IN')}). Spacing out visits can save ₹${potential.toLocaleString('en-IN')}.`,
       potentialSavings: potential,
       impact: getImpact(potential)
     });
-  }
+  });
 
   // 7. Investment Surplus Routing (investment)
   const projectedSurplus = expectedSalary - totalFixedCharges - projectedCardOutlay;
@@ -610,7 +627,7 @@ export const generateSavingsRecommendations = (
   }
 
   // 12. Fixed Cost Burden Warning (fixed_burden)
-  if (expectedSalary > 0 && totalFixedCharges >= expectedSalary * 0.45) {
+  if (expectedSalary > 0 && totalFixedCharges >= expectedSalary * (config.fixedBurdenPctThreshold / 100)) {
     const pct = Math.round((totalFixedCharges / expectedSalary) * 100);
     recommendations.push({
       id: 'rec-fixed-burden',
@@ -624,7 +641,7 @@ export const generateSavingsRecommendations = (
 
   // 13. Single Large Outflow Shock (large_expense)
   const largeExpenses = rangeDiscretionary
-    .filter(tx => getSignedAmount(tx) >= expectedSalary * 0.2)
+    .filter(tx => getSignedAmount(tx) >= expectedSalary * (config.largeExpensePctThreshold / 100))
     .sort((a, b) => getSignedAmount(b) - getSignedAmount(a));
     
   if (largeExpenses.length > 0) {
