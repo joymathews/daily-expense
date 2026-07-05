@@ -8,7 +8,8 @@ import {
   calculateRunRateForecast,
   calculateDayOfMonthPeaks,
   calculateDayOfWeekPeaks,
-  detectRecurringBills
+  detectRecurringBills,
+  generateSavingsRecommendations
 } from '../utils/analytics-helper';
 
 // Mock Amplify Auth Session
@@ -578,5 +579,53 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
 
     expect(screen.getByTestId('dom-average-line')).toBeInTheDocument();
     expect(screen.getByTestId('dow-average-line')).toBeInTheDocument();
+  });
+
+  it('correctly generates savings recommendations from periodicity peaks and bills', () => {
+    const dayOfMonthPeaks = [
+      { day: 17, amount: 10000, weekendAmount: 8500 }, // high weekend bias
+      { day: 22, amount: 5000, weekendAmount: 0 }
+    ];
+    const dayOfWeekPeaks = [
+      { dayName: 'Mon', amount: 1000 },
+      { dayName: 'Tue', amount: 1000 },
+      { dayName: 'Wed', amount: 1000 },
+      { dayName: 'Thu', amount: 1000 },
+      { dayName: 'Fri', amount: 4000 },
+      { dayName: 'Sat', amount: 5000 },
+      { dayName: 'Sun', amount: 3000 }
+    ];
+    // Weekend total = 12000 / Week total = 16000 -> 75% weekend spend
+    const recurringBills = [
+      {
+        merchant: 'Netflix Inc',
+        averageAmount: 800,
+        frequencyDays: 30,
+        lastDate: '2026-06-17',
+        predictedNextDate: '2026-07-17',
+        historyCount: 2,
+        allIntervals: [30],
+        allDates: ['2026-05-18', '2026-06-17']
+      }
+    ];
+
+    const recs = generateSavingsRecommendations(
+      [],
+      dayOfMonthPeaks,
+      dayOfWeekPeaks,
+      recurringBills,
+      100000,
+      0,
+      50000,
+      20000,
+      20000,
+      { start: '2026-06-17', end: '2026-07-16' },
+      '2026-06-25'
+    );
+
+    expect(recs.find(r => r.type === 'recurring')?.title).toBe('Optimize Subscription: Netflix Inc');
+    expect(recs.find(r => r.type === 'weekend')?.title).toBe('Cap Weekend Outflows');
+    expect(recs.find(r => r.type === 'weekday')?.title).toBe('Reduce Sat Outflows');
+    expect(recs.find(r => r.type === 'date_trap')?.title).toBe('Avoid Date Trap: Day 17');
   });
 });

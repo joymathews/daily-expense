@@ -82,4 +82,5 @@
 - [NFR-ANALYSIS-11] Deficit Recalculation Efficiency: Recalculating the sustainable card spend cap and updating the deficit risk notifications based on slider or fixed charges changes must execute within 50ms.
 - [NFR-ANALYSIS-12] Chronological Layout Performance: Slicing and re-sorting transaction peaks by billing cycle day or standard weekdays must resolve instantly within 20ms during render compilation.
 - [NFR-ANALYSIS-13] Reference Line Render Latency: Drawing the average reference lines and computing variance percentages on hover must resolve instantly (within 10ms of state changes).
+- [NFR-ANALYSIS-14] Savings Recommendations Performance: The compilation and matching of savings recommendations must complete within 20ms of state changes to ensure immediate rendering on load or slider adjustments.
 

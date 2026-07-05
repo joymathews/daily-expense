@@ -350,5 +350,295 @@ export const detectRecurringBills = (
     }
   });
 
-  return recurringList.sort((a, b) => a.predictedNextDate.localeCompare(b.predictedNextDate));
+return recurringList.sort((a, b) => a.predictedNextDate.localeCompare(b.predictedNextDate));
+};
+
+export interface SavingsRecommendation {
+  id: string;
+  type: 
+    | 'weekend' 
+    | 'recurring' 
+    | 'weekday' 
+    | 'date_trap' 
+    | 'run_rate_margin' 
+    | 'category_cap' 
+    | 'budget_split' 
+    | 'budget_drift' 
+    | 'subscription_creep' 
+    | 'merchant_frequency' 
+    | 'investment' 
+    | 'fixed_burden'
+    | 'large_expense';
+  title: string;
+  description: string;
+  potentialSavings: number;
+  impact: 'high' | 'medium' | 'low' | 'critical';
+}
+
+/**
+ * Generate smart savings recommendations based on historical cycles, weekend bias and periodicity.
+ */
+export const generateSavingsRecommendations = (
+  transactions: HelperTransaction[],
+  dayOfMonthPeaks: DayPeakPoint[],
+  dayOfWeekPeaks: DayOfWeekPeakPoint[],
+  recurringBills: RecurringBillPrediction[],
+  expectedSalary: number,
+  totalFixedCharges: number,
+  targetBudget: number,
+  discretionarySpend: number,
+  projectedCardOutlay: number,
+  cycleRange: { start: string; end: string },
+  todayStr: string
+): SavingsRecommendation[] => {
+  const recommendations: SavingsRecommendation[] = [];
+
+  const getImpact = (savings: number): 'high' | 'medium' | 'low' => {
+    if (savings >= 5000) return 'high';
+    if (savings >= 1500) return 'medium';
+    return 'low';
+  };
+
+  // Discretionary transactions within range
+  const rangeDiscretionary = transactions.filter(tx => {
+    if (tx.transactionDate < cycleRange.start || tx.transactionDate > cycleRange.end) return false;
+    if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return false;
+    const catLower = (tx.category || '').toLowerCase();
+    if (catLower === 'investment' || catLower === 'mutual fund') return false;
+    return isCreditCardPayment(tx.paymentMethod);
+  });
+
+  // 1. Optimize Subscription (recurring)
+  if (recurringBills.length > 0) {
+    const sortedBills = [...recurringBills].sort((a, b) => {
+      const costA = a.averageAmount * (30 / a.frequencyDays);
+      const costB = b.averageAmount * (30 / b.frequencyDays);
+      return costB - costA;
+    });
+    const topBill = sortedBills[0];
+    const monthlyCost = Math.round(topBill.averageAmount * (30 / topBill.frequencyDays));
+    recommendations.push({
+      id: 'rec-recurring',
+      type: 'recurring',
+      title: `Optimize Subscription: ${topBill.merchant}`,
+      description: `You are spending an estimated monthly equivalent of ₹${monthlyCost.toLocaleString('en-IN')} on ${topBill.merchant}. Consider canceling or downgrading options.`,
+      potentialSavings: monthlyCost,
+      impact: getImpact(monthlyCost)
+    });
+  }
+
+  // 2. Cap Weekend Outflows (weekend)
+  const satAmount = dayOfWeekPeaks.find(p => p.dayName === 'Sat')?.amount || 0;
+  const sunAmount = dayOfWeekPeaks.find(p => p.dayName === 'Sun')?.amount || 0;
+  const friAmount = dayOfWeekPeaks.find(p => p.dayName === 'Fri')?.amount || 0;
+  const weekendTotal = satAmount + sunAmount + friAmount;
+  const totalWeekAmount = dayOfWeekPeaks.reduce((sum, p) => sum + p.amount, 0);
+  
+  if (totalWeekAmount > 0) {
+    const weekendPct = Math.round((weekendTotal / totalWeekAmount) * 100);
+    if (weekendPct >= 50) {
+      const potential = Math.round(weekendTotal * 0.2);
+      recommendations.push({
+        id: 'rec-weekend',
+        type: 'weekend',
+        title: 'Cap Weekend Outflows',
+        description: `Your spending on weekends (Fri-Sun) accounts for ${weekendPct}% of your total outflows. Capping weekend card spend by 20% can save you around ₹${potential.toLocaleString('en-IN')} per cycle.`,
+        potentialSavings: potential,
+        impact: getImpact(potential)
+      });
+    }
+  }
+
+  // 3. Reduce Weekday Outflows (weekday)
+  const sortedDays = [...dayOfWeekPeaks].sort((a, b) => b.amount - a.amount);
+  const highestDay = sortedDays[0];
+  if (highestDay && highestDay.amount > 0) {
+    const potential = Math.round(highestDay.amount * 0.15);
+    recommendations.push({
+      id: 'rec-weekday',
+      type: 'weekday',
+      title: `Reduce ${highestDay.dayName} Outflows`,
+      description: `Your card spending peaks on ${highestDay.dayName}s (totaling ₹${highestDay.amount.toLocaleString('en-IN')}). Cooking at home or shifting to free activities on ${highestDay.dayName}s can save ₹${potential.toLocaleString('en-IN')}.`,
+      potentialSavings: potential,
+      impact: getImpact(potential)
+    });
+  }
+
+  // 4. Avoid Date Trap (date_trap)
+  const weekendSkewedPeaks = dayOfMonthPeaks
+    .filter(p => p.amount > 0 && (p.weekendAmount / p.amount) >= 0.7)
+    .sort((a, b) => b.amount - a.amount);
+  
+  if (weekendSkewedPeaks.length > 0) {
+    const topTrap = weekendSkewedPeaks[0];
+    const biasPct = Math.round((topTrap.weekendAmount / topTrap.amount) * 100);
+    const potential = Math.round(topTrap.amount * 0.25);
+    recommendations.push({
+      id: 'rec-date-trap',
+      type: 'date_trap',
+      title: `Avoid Date Trap: Day ${topTrap.day}`,
+      description: `Historically, spending on Day ${topTrap.day} is highly weekend-skewed (${biasPct}% spent on Fri-Sun). Avoid shopping when Day ${topTrap.day} falls on a weekend to save ₹${potential.toLocaleString('en-IN')}.`,
+      potentialSavings: potential,
+      impact: getImpact(potential)
+    });
+  }
+
+  // 5. Category Splurge Control (category_cap)
+  const categoryTotals: Record<string, number> = {};
+  rangeDiscretionary.forEach(tx => {
+    const cat = tx.category || 'Other';
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + getSignedAmount(tx);
+  });
+  
+  const sortedCategories = Object.keys(categoryTotals)
+    .map(cat => ({ name: cat, amount: categoryTotals[cat] }))
+    .sort((a, b) => b.amount - a.amount);
+    
+  if (sortedCategories.length > 0 && discretionarySpend > 0) {
+    const topCat = sortedCategories[0];
+    const catPct = Math.round((topCat.amount / discretionarySpend) * 100);
+    if (catPct >= 25 && topCat.amount > 0) {
+      const potential = Math.round(topCat.amount * 0.2);
+      recommendations.push({
+        id: 'rec-category',
+        type: 'category_cap',
+        title: `Cap Spend on ${topCat.name}`,
+        description: `The "${topCat.name}" category consumes ${catPct}% of your discretionary spending (₹${topCat.amount.toLocaleString('en-IN')}). Setting a budget cap here can save ₹${potential.toLocaleString('en-IN')}.`,
+        potentialSavings: potential,
+        impact: getImpact(potential)
+      });
+    }
+  }
+
+  // 6. Merchant Frequency Trap (merchant_frequency)
+  const merchantCounts: Record<string, { count: number; total: number }> = {};
+  rangeDiscretionary.forEach(tx => {
+    const m = tx.merchant || 'Other';
+    if (!merchantCounts[m]) merchantCounts[m] = { count: 0, total: 0 };
+    merchantCounts[m].count += 1;
+    merchantCounts[m].total += getSignedAmount(tx);
+  });
+  
+  const frequencyTraps = Object.keys(merchantCounts)
+    .map(m => ({ merchant: m, count: merchantCounts[m].count, total: merchantCounts[m].total }))
+    .filter(item => item.count >= 5 && item.total > 0)
+    .sort((a, b) => b.count - a.count);
+    
+  if (frequencyTraps.length > 0) {
+    const topFreq = frequencyTraps[0];
+    const potential = Math.round(topFreq.total * 0.3);
+    recommendations.push({
+      id: 'rec-merchant-freq',
+      type: 'merchant_frequency',
+      title: `Review ${topFreq.merchant} Visits`,
+      description: `You made ${topFreq.count} transactions at ${topFreq.merchant} this cycle (spending ₹${topFreq.total.toLocaleString('en-IN')}). Spacing out visits to twice a week can save ₹${potential.toLocaleString('en-IN')}.`,
+      potentialSavings: potential,
+      impact: getImpact(potential)
+    });
+  }
+
+  // 7. Investment Surplus Routing (investment)
+  const projectedSurplus = expectedSalary - totalFixedCharges - projectedCardOutlay;
+  if (projectedSurplus >= 20000) {
+    const potential = Math.round(projectedSurplus * 0.4);
+    recommendations.push({
+      id: 'rec-investment',
+      type: 'investment',
+      title: 'Route Surplus to Wealth Building',
+      description: `You are projected to finish this cycle with a healthy salary surplus of ₹${projectedSurplus.toLocaleString('en-IN')}. Route ₹${potential.toLocaleString('en-IN')} (40%) to index funds or SIPs.`,
+      potentialSavings: potential,
+      impact: 'high'
+    });
+  }
+
+  // 8. Run-Rate Variance Alert (run_rate_margin)
+  const sustainableCap = Math.max(0, expectedSalary - totalFixedCharges);
+  if (projectedCardOutlay > targetBudget || projectedCardOutlay > sustainableCap) {
+    const overrun = projectedCardOutlay - Math.min(targetBudget, sustainableCap);
+    recommendations.push({
+      id: 'rec-run-rate-margin',
+      type: 'run_rate_margin',
+      title: 'Cycle Overspend Warning',
+      description: `At your current velocity, you are projected to overrun your safe limits by ₹${overrun.toLocaleString('en-IN')}. Review immediate daily card card-spend controls.`,
+      potentialSavings: 0,
+      impact: 'critical'
+    });
+  }
+
+  // 9. 50/30/20 Rule Balance (budget_split)
+  if (totalFixedCharges + targetBudget > expectedSalary) {
+    const deficit = totalFixedCharges + targetBudget - expectedSalary;
+    recommendations.push({
+      id: 'rec-budget-split',
+      type: 'budget_split',
+      title: 'Allocation Exceeds Salary Flow',
+      description: `Your active fixed charges (needs) plus card cap (wants) exceed expected salary by ₹${deficit.toLocaleString('en-IN')}. Capping card spend goals is necessary to save.`,
+      potentialSavings: 0,
+      impact: 'critical'
+    });
+  }
+
+  // 10. Unused Budget Calibration (budget_drift)
+  if (discretionarySpend > 0 && projectedCardOutlay <= targetBudget * 0.5) {
+    const drift = targetBudget - projectedCardOutlay;
+    recommendations.push({
+      id: 'rec-budget-drift',
+      type: 'budget_drift',
+      title: 'Calibrate Card Spend Goal',
+      description: `Your projected card spent is 50%+ below your card cap. Lock in a higher surplus by sliding down your cap to match your actual spent.`,
+      potentialSavings: drift,
+      impact: getImpact(drift)
+    });
+  }
+
+  // 11. Subscription Creep warning (subscription_creep)
+  const smallBills = recurringBills.filter(bill => {
+    const cost = bill.averageAmount * (30 / bill.frequencyDays);
+    return cost < 1500;
+  });
+  const smallBillsTotal = smallBills.reduce((sum, bill) => sum + (bill.averageAmount * (30 / bill.frequencyDays)), 0);
+  if (smallBills.length >= 3 && smallBillsTotal >= expectedSalary * 0.15) {
+    const potential = Math.round(smallBillsTotal * 0.3);
+    recommendations.push({
+      id: 'rec-subscription-creep',
+      type: 'subscription_creep',
+      title: 'Subscription Creep Detected',
+      description: `You have ${smallBills.length} small subscriptions aggregating to ₹${Math.round(smallBillsTotal).toLocaleString('en-IN')}/month. Clean up unused trials to save ₹${potential.toLocaleString('en-IN')}.`,
+      potentialSavings: potential,
+      impact: getImpact(potential)
+    });
+  }
+
+  // 12. Fixed Cost Burden Warning (fixed_burden)
+  if (expectedSalary > 0 && totalFixedCharges >= expectedSalary * 0.45) {
+    const pct = Math.round((totalFixedCharges / expectedSalary) * 100);
+    recommendations.push({
+      id: 'rec-fixed-burden',
+      type: 'fixed_burden',
+      title: 'High Fixed Cost Commitments',
+      description: `Your active template templates (loans, rent) absorb ${pct}% of expected salary. Avoid locking in new recurring commitments to keep cash fluid.`,
+      potentialSavings: 0,
+      impact: 'critical'
+    });
+  }
+
+  // 13. Single Large Outflow Shock (large_expense)
+  const largeExpenses = rangeDiscretionary
+    .filter(tx => getSignedAmount(tx) >= expectedSalary * 0.2)
+    .sort((a, b) => getSignedAmount(b) - getSignedAmount(a));
+    
+  if (largeExpenses.length > 0) {
+    const topLarge = largeExpenses[0];
+    const amount = getSignedAmount(topLarge);
+    recommendations.push({
+      id: 'rec-large-expense',
+      type: 'large_expense',
+      title: `Analyze Large Expense: ${topLarge.merchant}`,
+      description: `A single purchase of ₹${amount.toLocaleString('en-IN')} at ${topLarge.merchant} consumed a large chunk of your cycle card-spend flow. Verify if this was pre-budgeted.`,
+      potentialSavings: 0,
+      impact: 'high'
+    });
+  }
+
+  return recommendations;
 };

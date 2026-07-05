@@ -606,6 +606,7 @@ const FinancialAnalytics: React.FC = () => {
         </div>
       </div>
 
+      {/* Smart Savings Recommendations */}
       {/* Predicted Recurring Outflows */}
       <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6 space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
