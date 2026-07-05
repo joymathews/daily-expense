@@ -200,6 +200,14 @@ const FinancialAnalytics: React.FC = () => {
     return ` (${diffPct > 0 ? '+' : ''}${diffPct}% vs Avg)`;
   };
 
+  // Weekend bias format helper
+  const getWeekendBiasText = (amount: number, weekendAmount: number) => {
+    if (amount <= 0 || weekendAmount <= 0) return '';
+    const biasPct = Math.min(100, Math.max(0, Math.round((weekendAmount / amount) * 100)));
+    if (biasPct <= 10) return '';
+    return ` • ${biasPct}% weekend spend`;
+  };
+
   // Compute days difference between exhaustion and cycle end date
   const daysBeforeEnd = forecast.exhaustionDate
     ? Math.max(0, getDaysDiff(forecast.exhaustionDate, cycleRange.end) - 1)
@@ -483,7 +491,7 @@ const FinancialAnalytics: React.FC = () => {
             </div>
             {hoveredDOM ? (
               <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-3xs font-extrabold px-2 py-1 rounded-lg Outfit animate-pulse" data-testid="dom-hover-badge">
-                Day {hoveredDOM.day}: {formatCurrency(hoveredDOM.amount)}{getPercentDiffText(hoveredDOM.amount, avgDOMAmount)}
+                Day {hoveredDOM.day}: {formatCurrency(hoveredDOM.amount)}{getPercentDiffText(hoveredDOM.amount, avgDOMAmount)}{getWeekendBiasText(hoveredDOM.amount, hoveredDOM.weekendAmount)}
               </div>
             ) : (
               <div className="text-3xs text-gray-350 px-2 py-1 select-none">
@@ -509,6 +517,7 @@ const FinancialAnalytics: React.FC = () => {
             <div className="h-36 flex items-end justify-between space-x-0.5 sm:space-x-1 select-none overflow-x-auto pb-1 relative z-0">
               {cycleOrderedDOMPeaks.map(p => {
                 const heightPct = maxDOMAmount > 0 ? (p.amount / maxDOMAmount) * 80 : 0;
+                const isWeekendSkewed = p.amount > 0 && (p.weekendAmount / p.amount) >= 0.7;
                 return (
                   <div key={p.day} className="flex-1 flex flex-col justify-end items-center min-w-[8px] h-full">
                     <div
@@ -517,7 +526,15 @@ const FinancialAnalytics: React.FC = () => {
                       onMouseEnter={() => setHoveredDOM(p)}
                       onMouseLeave={() => setHoveredDOM(null)}
                       data-testid={`dom-bar-${p.day}`}
-                    />
+                    >
+                      {isWeekendSkewed && (
+                        <div 
+                          className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-3xs" 
+                          title="Weekend-skewed spending date (>70% on Fri-Sun)" 
+                          data-testid={`weekend-marker-${p.day}`}
+                        />
+                      )}
+                    </div>
                     <span className="text-[9px] text-gray-400 font-bold mt-1.5">{p.day}</span>
                   </div>
                 );
@@ -527,6 +544,10 @@ const FinancialAnalytics: React.FC = () => {
           <div className="flex justify-between text-3xs text-gray-400 font-semibold mt-1 tracking-wider uppercase">
             <span>Cycle Start (Day {billingCycleStartDay})</span>
             <span>Cycle End (Day {billingCycleStartDay === 1 ? 31 : billingCycleStartDay - 1})</span>
+          </div>
+          <div className="text-[9px] text-gray-400 mt-2.5 pt-1.5 border-t border-gray-100/50 flex items-center space-x-1 Outfit select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+            <span>Indicates calendar dates where &gt;70% of historical spending occurred on weekends (Fri–Sun).</span>
           </div>
         </div>
 

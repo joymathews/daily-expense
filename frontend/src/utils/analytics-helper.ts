@@ -17,6 +17,7 @@ export interface RunRateForecastResult {
 export interface DayPeakPoint {
   day: number;
   amount: number;
+  weekendAmount: number;
 }
 
 export interface DayOfWeekPeakPoint {
@@ -137,8 +138,10 @@ export const calculateRunRateForecast = (
  */
 export const calculateDayOfMonthPeaks = (transactions: HelperTransaction[]): DayPeakPoint[] => {
   const daysMap: Record<number, number> = {};
+  const weekendDaysMap: Record<number, number> = {};
   for (let i = 1; i <= 31; i++) {
     daysMap[i] = 0;
+    weekendDaysMap[i] = 0;
   }
   
   transactions
@@ -153,15 +156,27 @@ export const calculateDayOfMonthPeaks = (transactions: HelperTransaction[]): Day
       if (parts.length === 3) {
         const dayNum = parseInt(parts[2], 10);
         if (dayNum >= 1 && dayNum <= 31) {
-          daysMap[dayNum] += getSignedAmount(tx);
+          const amount = getSignedAmount(tx);
+          daysMap[dayNum] += amount;
+
+          // Check if transaction fell on a weekend: Fri (5), Sat (6), or Sun (0)
+          const dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, dayNum);
+          const dayOfWeek = dateObj.getDay();
+          if (dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6) {
+            weekendDaysMap[dayNum] += amount;
+          }
         }
       }
     });
 
-  return Object.keys(daysMap).map(k => ({
-    day: parseInt(k, 10),
-    amount: daysMap[parseInt(k, 10)]
-  })).sort((a, b) => a.day - b.day);
+  return Object.keys(daysMap).map(k => {
+    const day = parseInt(k, 10);
+    return {
+      day,
+      amount: daysMap[day],
+      weekendAmount: weekendDaysMap[day]
+    };
+  }).sort((a, b) => a.day - b.day);
 };
 
 /**

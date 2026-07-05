@@ -214,7 +214,17 @@ describe('Financial Analytics Utility Computations', () => {
     expect(peaks.find(p => p.day === 22)?.amount).toBe(1500);
     expect(peaks.find(p => p.day === 23)?.amount).toBe(-300);
     // Non-discretionary are ignored (tx-1 on 18th is Investment)
-    expect(peaks.find(p => p.day === 18)?.amount).toBe(0);
+  });
+
+  it('correctly calculates weekend spend amount for day of month peaks', () => {
+    const peaks = calculateDayOfMonthPeaks(mockTransactions);
+    const p20 = peaks.find(p => p.day === 20);
+    expect(p20?.amount).toBe(500);
+    expect(p20?.weekendAmount).toBe(500); // 2026-06-20 is a Saturday
+    
+    const p22 = peaks.find(p => p.day === 22);
+    expect(p22?.amount).toBe(1500);
+    expect(p22?.weekendAmount).toBe(0); // Monday is not a weekend
   });
 
   /**
