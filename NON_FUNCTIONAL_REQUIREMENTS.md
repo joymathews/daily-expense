@@ -78,4 +78,8 @@
 - [NFR-USAB-34] Header Bulk Action Dropdown & Batch Editing Usability: The bulk action table header transition must occur instantly (within 50ms) of selection updates, and saving batch edits must execute in less than 200ms at the API layer to maintain high platform responsiveness.
 - [NFR-ANALYSIS-8] The budget slider interaction and projected forecasts must update the UI metrics instantly (within 50ms) to ensure interactive responsiveness.
 - [NFR-ANALYSIS-9] The Outflow Peaks periodicity charts and lists must load and render within 150ms of ledger data retrieval.
+- [NFR-ANALYSIS-10] Interactive Hover Response: The hover transition and badge render on the periodicity charts must display and update within 50ms of a mouse-over event, ensuring smooth, lag-free user interaction.
+- [NFR-ANALYSIS-11] Deficit Recalculation Efficiency: Recalculating the sustainable card spend cap and updating the deficit risk notifications based on slider or fixed charges changes must execute within 50ms.
+- [NFR-ANALYSIS-12] Chronological Layout Performance: Slicing and re-sorting transaction peaks by billing cycle day or standard weekdays must resolve instantly within 20ms during render compilation.
+- [NFR-ANALYSIS-13] Reference Line Render Latency: Drawing the average reference lines and computing variance percentages on hover must resolve instantly (within 10ms of state changes).
 

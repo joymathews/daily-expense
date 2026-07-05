@@ -179,6 +179,30 @@ describe('Financial Analytics Utility Computations', () => {
     expect(result.recommendedDailyRate).toBe(500); // remaining budget 10000 / remaining days 20
   });
 
+  it('correctly adjusts recommended daily rate when target budget is unsustainable', () => {
+    const cycleRange = { start: '2026-06-17', end: '2026-07-16' }; // 30 days
+    const todayStr = '2026-06-27'; // Day 11 of cycle (elapsedDays = 11, remainingDays = 19)
+    const discretionarySpend = 20000;
+    const expectedSalary = 100000;
+    const targetBudgetPercent = 100; // Cap set to 100% = $100,000 (unsustainable!)
+    const totalFixedCharges = 60000; // Sustainable cap = 100000 - 60000 = 40000
+
+    const result = calculateRunRateForecast(
+      discretionarySpend,
+      expectedSalary,
+      targetBudgetPercent,
+      cycleRange,
+      todayStr,
+      totalFixedCharges
+    );
+
+    expect(result.targetBudget).toBe(100000);
+    expect(result.sustainableCap).toBe(40000);
+    // Remaining budget should be based on sustainableCap (40000) minus discretionarySpend (20000) = 20000
+    // Recommended daily rate = 20000 / 19 days = ~1052.63
+    expect(result.recommendedDailyRate).toBeCloseTo(1052.63, 1);
+  });
+
   /**
    * [FUNC-ANALYSIS-13]: Verify Day of the Month peaks calculations.
    */
@@ -201,6 +225,8 @@ describe('Financial Analytics Utility Computations', () => {
     // 2026-06-20 is Saturday. tx-2 (500) + tx-5 (900) = 1400
     const sat = peaks.find(p => p.dayName === 'Sat');
     expect(sat?.amount).toBe(1400);
+    expect(peaks[0].dayName).toBe('Mon');
+    expect(peaks[6].dayName).toBe('Sun');
   });
 
   /**
@@ -527,5 +553,20 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
 
     // Verify correct description content is displayed
     expect(screen.getByText(/Weekly outflows/i)).toBeInTheDocument();
+  });
+
+  it('displays horizontal average reference lines for both periodicity charts', async () => {
+    render(
+      <BrowserRouter>
+        <FinancialAnalytics />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Financial Analytics & Predictions')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('dom-average-line')).toBeInTheDocument();
+    expect(screen.getByTestId('dow-average-line')).toBeInTheDocument();
   });
 });

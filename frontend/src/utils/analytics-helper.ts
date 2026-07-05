@@ -11,6 +11,7 @@ export interface RunRateForecastResult {
   isExceeding: boolean;
   exhaustionDate: string | null;
   recommendedDailyRate: number;
+  sustainableCap: number;
 }
 
 export interface DayPeakPoint {
@@ -77,9 +78,11 @@ export const calculateRunRateForecast = (
   expectedSalary: number,
   targetBudgetPercent: number,
   cycleRange: { start: string; end: string },
-  todayStr: string
+  todayStr: string,
+  totalFixedCharges?: number
 ): RunRateForecastResult => {
   const targetBudget = Math.round(expectedSalary * (targetBudgetPercent / 100));
+  const sustainableCap = Math.max(0, expectedSalary - (totalFixedCharges || 0));
   const totalDays = getDaysDiff(cycleRange.start, cycleRange.end) || 30;
   
   // Bound todayStr to cycle range limits
@@ -92,11 +95,15 @@ export const calculateRunRateForecast = (
   
   const dailyVelocity = Math.max(0, discretionarySpend / elapsedDays);
   const projectedSpend = Math.round(dailyVelocity * totalDays);
-  const isExceeding = projectedSpend > targetBudget;
+  
+  // Exceeding if actual projected spend exceeds self-imposed cap OR sustainable cap (to prevent deficit)
+  const isExceeding = projectedSpend > targetBudget || projectedSpend > sustainableCap;
   
   let exhaustionDate: string | null = null;
-  if (isExceeding && dailyVelocity > 0) {
-    const daysUntilExhaustion = targetBudget / dailyVelocity;
+  // Exhaustion date is based on the first limit we hit (targetBudget or sustainableCap)
+  const effectiveLimit = Math.min(targetBudget, sustainableCap);
+  if ((projectedSpend > effectiveLimit) && dailyVelocity > 0) {
+    const daysUntilExhaustion = effectiveLimit / dailyVelocity;
     const start = new Date(cycleRange.start);
     start.setDate(start.getDate() + Math.floor(daysUntilExhaustion));
     
@@ -106,7 +113,7 @@ export const calculateRunRateForecast = (
     exhaustionDate = `${year}-${month}-${day}`;
   }
   
-  const remainingBudget = targetBudget - discretionarySpend;
+  const remainingBudget = Math.max(0, effectiveLimit - discretionarySpend);
   const recommendedDailyRate = remainingDays > 0 
     ? Math.max(0, remainingBudget / remainingDays) 
     : 0;
@@ -120,7 +127,8 @@ export const calculateRunRateForecast = (
     projectedSpend,
     isExceeding,
     exhaustionDate,
-    recommendedDailyRate
+    recommendedDailyRate,
+    sustainableCap
   };
 };
 
@@ -160,9 +168,11 @@ export const calculateDayOfMonthPeaks = (transactions: HelperTransaction[]): Day
  * Group expenses by day of the week (Sun-Sat) to identify weekly behavior.
  */
 export const calculateDayOfWeekPeaks = (transactions: HelperTransaction[]): DayOfWeekPeakPoint[] => {
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const jsDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const sortedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  
   const dayNamesMap: Record<string, number> = {};
-  weekDays.forEach(name => {
+  sortedDays.forEach(name => {
     dayNamesMap[name] = 0;
   });
   
@@ -177,12 +187,12 @@ export const calculateDayOfWeekPeaks = (transactions: HelperTransaction[]): DayO
       const parts = tx.transactionDate.split('-').map(Number);
       if (parts.length === 3) {
         const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
-        const name = weekDays[dateObj.getDay()];
+        const name = jsDays[dateObj.getDay()];
         dayNamesMap[name] += getSignedAmount(tx);
       }
     });
 
-  return weekDays.map(name => ({
+  return sortedDays.map(name => ({
     dayName: name,
     amount: dayNamesMap[name]
   }));

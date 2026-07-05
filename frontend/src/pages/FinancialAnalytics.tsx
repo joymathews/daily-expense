@@ -63,6 +63,8 @@ const FinancialAnalytics: React.FC = () => {
   const [calcExplanationType, setCalcExplanationType] = useState<'target' | 'actual' | null>(null);
   const [selectedBillForExplanation, setSelectedBillForExplanation] = useState<RecurringBillPrediction | null>(null);
   const [detectionFrequency, setDetectionFrequency] = useState<DetectionFrequency>('monthly');
+  const [hoveredDOM, setHoveredDOM] = useState<DayPeakPoint | null>(null);
+  const [hoveredDOW, setHoveredDOW] = useState<DayOfWeekPeakPoint | null>(null);
 
   // Load backend data
   useEffect(() => {
@@ -133,6 +135,12 @@ const FinancialAnalytics: React.FC = () => {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
+  // Compute active fixed charges and net savings forecast
+  const activeFixedCharges = (fixedCharges || []).filter((fc: any) => {
+    return fc.startDate <= cycleRange.end && fc.endDate >= cycleRange.start;
+  });
+  const totalFixedCharges = activeFixedCharges.reduce((sum: number, fc: any) => sum + fc.amount, 0);
+
   // Computations
   const discretionarySpent = calculateDiscretionarySpend(transactions, cycleRange.start, cycleRange.end);
   const forecast: RunRateForecastResult = calculateRunRateForecast(
@@ -140,7 +148,8 @@ const FinancialAnalytics: React.FC = () => {
     expectedSalary,
     targetBudgetPercent,
     cycleRange,
-    todayStr
+    todayStr,
+    totalFixedCharges
   );
 
   const dayOfMonthPeaks: DayPeakPoint[] = calculateDayOfMonthPeaks(transactions);
@@ -170,16 +179,32 @@ const FinancialAnalytics: React.FC = () => {
   const maxDOMAmount = Math.max(...dayOfMonthPeaks.map(p => p.amount), 1);
   const maxDOWAmount = Math.max(...dayOfWeekPeaks.map(p => p.amount), 1);
 
+  // Order Day of Month peaks chronologically by billing cycle
+  const cycleOrderedDOMPeaks = [
+    ...dayOfMonthPeaks.filter(p => p.day >= billingCycleStartDay),
+    ...dayOfMonthPeaks.filter(p => p.day < billingCycleStartDay)
+  ];
+
+  // Calculate average daily outflows
+  const totalDOMAmount = dayOfMonthPeaks.reduce((sum, p) => sum + p.amount, 0);
+  const avgDOMAmount = totalDOMAmount / 31;
+
+  const totalDOWAmount = dayOfWeekPeaks.reduce((sum, p) => sum + p.amount, 0);
+  const avgDOWAmount = totalDOWAmount / 7;
+
+  // Percentage variance calculation helper
+  const getPercentDiffText = (amount: number, avg: number) => {
+    if (avg <= 0) return '';
+    const diffPct = Math.round(((amount - avg) / avg) * 100);
+    if (diffPct === 0) return ' (Avg)';
+    return ` (${diffPct > 0 ? '+' : ''}${diffPct}% vs Avg)`;
+  };
+
   // Compute days difference between exhaustion and cycle end date
   const daysBeforeEnd = forecast.exhaustionDate
     ? Math.max(0, getDaysDiff(forecast.exhaustionDate, cycleRange.end) - 1)
     : 0;
 
-  // Compute active fixed charges and net savings forecast
-  const activeFixedCharges = (fixedCharges || []).filter((fc: any) => {
-    return fc.startDate <= cycleRange.end && fc.endDate >= cycleRange.start;
-  });
-  const totalFixedCharges = activeFixedCharges.reduce((sum: number, fc: any) => sum + fc.amount, 0);
   const netSavingsTarget = expectedSalary - totalFixedCharges - forecast.targetBudget;
   const netSavingsProjected = expectedSalary - totalFixedCharges - forecast.projectedSpend;
 
@@ -269,6 +294,11 @@ const FinancialAnalytics: React.FC = () => {
             <div className="flex justify-between items-center mt-1 pt-1 border-t border-gray-50/50">
               <span className="text-gray-500 font-medium flex items-center">
                 Target Salary Surplus:
+                {netSavingsTarget < 0 && (
+                  <span className="ml-1.5 bg-rose-50 border border-rose-100 text-rose-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-2xs Outfit uppercase tracking-wider animate-pulse" data-testid="target-deficit-warning-badge">
+                    ⚠️ Deficit Risk
+                  </span>
+                )}
                 <span className="group relative ml-1 cursor-help text-gray-400 hover:text-gray-600">
                   ℹ️
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 bg-gray-900 text-white text-3xs p-2 rounded shadow leading-normal z-25">
@@ -356,44 +386,86 @@ const FinancialAnalytics: React.FC = () => {
       <div className={`border rounded-2xl p-6 shadow-sm backdrop-blur-sm transition-all duration-300 ${
         forecast.isExceeding 
           ? 'bg-rose-50/70 border-rose-100 text-rose-950' 
-          : 'bg-emerald-50/70 border-emerald-100 text-emerald-950'
+          : netSavingsTarget < 0
+            ? 'bg-amber-50/70 border-amber-100 text-amber-950'
+            : 'bg-emerald-50/70 border-emerald-100 text-emerald-950'
       }`} data-testid="forecast-callout">
         {forecast.isExceeding ? (
-          <div className="flex items-start space-x-3">
-            <div className="p-2 bg-rose-100 rounded-lg text-rose-700 mt-0.5 shadow-sm">
-              ⚠️
-            </div>
-            <div>
-              <h3 className="font-extrabold text-base Outfit">Budget Exhaustion Warning</h3>
-              <p className="text-xs text-rose-900/90 mt-1 leading-relaxed">
-                At your current run-rate of <span className="font-bold">{formatCurrency(forecast.dailyVelocity)}/day</span>, you are projected to exhaust your target consumption budget of <span className="font-bold">{formatCurrency(forecast.targetBudget)}</span> on <span className="font-bold underline text-rose-800" data-testid="exhaustion-date-text">{forecast.exhaustionDate ? formatDate(forecast.exhaustionDate) : 'N/A'}</span>. This is approximately <span className="font-bold">{daysBeforeEnd} days</span> before the current cycle ends.
-              </p>
-              <div className="mt-4 flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-white/50 rounded-xl p-3 border border-rose-100/60 max-w-2xl text-xs text-rose-950">
-                <span className="font-semibold uppercase tracking-wider text-3xs text-rose-700">Recommended Action</span>
-                <span>
-                  Reduce discretionary spending to <span className="font-extrabold text-indigo-750" data-testid="recommended-rate-value">{formatCurrency(forecast.recommendedDailyRate)}/day</span> for the remaining {forecast.remainingDays} days to stay strictly within target.
-                </span>
+          forecast.projectedSpend > forecast.sustainableCap ? (
+            <div className="flex items-start space-x-3">
+              <div className="p-2 bg-rose-100 rounded-lg text-rose-700 mt-0.5 shadow-sm">
+                🚨
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base Outfit">Projected Deficit Risk</h3>
+                <p className="text-xs text-rose-900/90 mt-1 leading-relaxed">
+                  At your current run-rate of <span className="font-bold">{formatCurrency(forecast.dailyVelocity)}/day</span>, your projected card outlay of <span className="font-bold">{formatCurrency(forecast.projectedSpend)}</span> combined with your fixed charges (<span className="font-bold">{formatCurrency(totalFixedCharges)}</span>) exceeds your expected salary. This will result in a deficit of <span className="font-bold text-rose-750">{formatCurrency(forecast.projectedSpend + totalFixedCharges - expectedSalary)}</span>.
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-white/50 rounded-xl p-3 border border-rose-100/60 max-w-2xl text-xs text-rose-950">
+                  <span className="font-semibold uppercase tracking-wider text-3xs text-rose-700">Required Action</span>
+                  <span>
+                    Reduce card spending strictly to <span className="font-extrabold text-rose-800" data-testid="recommended-rate-value">{formatCurrency(forecast.recommendedDailyRate)}/day</span> for the remaining {forecast.remainingDays} days to eliminate the deficit risk.
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-start space-x-3">
+              <div className="p-2 bg-rose-100 rounded-lg text-rose-700 mt-0.5 shadow-sm">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base Outfit">Budget Exhaustion Warning</h3>
+                <p className="text-xs text-rose-900/90 mt-1 leading-relaxed">
+                  At your current run-rate of <span className="font-bold">{formatCurrency(forecast.dailyVelocity)}/day</span>, you are projected to exhaust your target card budget of <span className="font-bold">{formatCurrency(forecast.targetBudget)}</span> on <span className="font-bold underline text-rose-800" data-testid="exhaustion-date-text">{forecast.exhaustionDate ? formatDate(forecast.exhaustionDate) : 'N/A'}</span>. This is approximately <span className="font-bold">{daysBeforeEnd} days</span> before the current cycle ends.
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-white/50 rounded-xl p-3 border border-rose-100/60 max-w-2xl text-xs text-rose-950">
+                  <span className="font-semibold uppercase tracking-wider text-3xs text-rose-700">Recommended Action</span>
+                  <span>
+                    Reduce card spending to <span className="font-extrabold text-indigo-750" data-testid="recommended-rate-value">{formatCurrency(forecast.recommendedDailyRate)}/day</span> for the remaining {forecast.remainingDays} days to stay strictly within target.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
         ) : (
-          <div className="flex items-start space-x-3">
-            <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700 mt-0.5 shadow-sm">
-              🎉
-            </div>
-            <div>
-              <h3 className="font-extrabold text-base Outfit">Budget Outlook Safe</h3>
-              <p className="text-xs text-emerald-900/90 mt-1 leading-relaxed">
-                You are spending responsibly! You are projected to finish the billing cycle with an estimated discretionary surplus of <span className="font-extrabold text-emerald-800" data-testid="surplus-value">{formatCurrency(forecast.targetBudget - forecast.projectedSpend)}</span> under your cap.
-              </p>
-              <div className="mt-4 flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-white/50 rounded-xl p-3 border border-emerald-100/60 max-w-2xl text-xs text-emerald-950">
-                <span className="font-semibold uppercase tracking-wider text-3xs text-emerald-700">Healthy Margin</span>
-                <span>
-                  You have a maximum spending limit of <span className="font-extrabold text-indigo-750" data-testid="recommended-rate-value">{formatCurrency(forecast.recommendedDailyRate)}/day</span> remaining for this cycle.
-                </span>
+          netSavingsTarget < 0 ? (
+            <div className="flex items-start space-x-3">
+              <div className="p-2 bg-amber-100 rounded-lg text-amber-700 mt-0.5 shadow-sm">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base Outfit">Deferred Card Cap Too High</h3>
+                <p className="text-xs text-amber-900/90 mt-1 leading-relaxed">
+                  Your configured card spend limit of <span className="font-bold">{formatCurrency(forecast.targetBudget)}</span> plus fixed charges (<span className="font-bold">{formatCurrency(totalFixedCharges)}</span>) exceeds your expected salary. Although your current spending is safe, spending up to your target cap will cause a deficit.
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-white/50 rounded-xl p-3 border border-amber-250/60 max-w-2xl text-xs text-amber-950">
+                  <span className="font-semibold uppercase tracking-wider text-3xs text-amber-700">Sustainable Margin</span>
+                  <span>
+                    Keep card spending strictly below <span className="font-extrabold text-indigo-750" data-testid="recommended-rate-value">{formatCurrency(forecast.recommendedDailyRate)}/day</span> to avoid running into a deficit.
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-start space-x-3">
+              <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700 mt-0.5 shadow-sm">
+                🎉
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base Outfit">Budget Outlook Safe</h3>
+                <p className="text-xs text-emerald-900/90 mt-1 leading-relaxed">
+                  You are spending responsibly! You are projected to finish the billing cycle with an estimated card budget surplus of <span className="font-extrabold text-emerald-800" data-testid="surplus-value">{formatCurrency(forecast.targetBudget - forecast.projectedSpend)}</span> under your cap.
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-white/50 rounded-xl p-3 border border-emerald-100/60 max-w-2xl text-xs text-emerald-950">
+                  <span className="font-semibold uppercase tracking-wider text-3xs text-emerald-700">Healthy Margin</span>
+                  <span>
+                    You have a maximum spending limit of <span className="font-extrabold text-indigo-750" data-testid="recommended-rate-value">{formatCurrency(forecast.recommendedDailyRate)}/day</span> remaining for this cycle.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
         )}
       </div>
 
@@ -402,65 +474,115 @@ const FinancialAnalytics: React.FC = () => {
         
         {/* Day of Month Peaks */}
         <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6">
-          <h3 className="text-base font-extrabold text-gray-900 Outfit">Outflow Peaks by Day of Month</h3>
-          <p className="text-2xs text-gray-400 mt-0.5 mb-6">
-            Aggregated historical spending across days 1–31 to identify monthly peaks.
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-base font-extrabold text-gray-900 Outfit">Outflow Peaks by Day of Month</h3>
+              <p className="text-2xs text-gray-400 mt-0.5 mb-6">
+                Aggregated historical spending across days 1–31 to identify monthly peaks.
+              </p>
+            </div>
+            {hoveredDOM ? (
+              <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-3xs font-extrabold px-2 py-1 rounded-lg Outfit animate-pulse" data-testid="dom-hover-badge">
+                Day {hoveredDOM.day}: {formatCurrency(hoveredDOM.amount)}{getPercentDiffText(hoveredDOM.amount, avgDOMAmount)}
+              </div>
+            ) : (
+              <div className="text-3xs text-gray-350 px-2 py-1 select-none">
+                Hover bars to inspect
+              </div>
+            )}
+          </div>
 
-          <div className="h-44 flex items-end justify-between space-x-0.5 sm:space-x-1 pt-4 select-none overflow-x-auto">
-            {dayOfMonthPeaks.map(p => {
-              const heightPct = maxDOMAmount > 0 ? (p.amount / maxDOMAmount) * 100 : 0;
-              return (
-                <div key={p.day} className="flex-1 flex flex-col justify-end items-center min-w-[8px] h-full">
-                  <div
-                    className="w-full bg-indigo-100 hover:bg-indigo-600 rounded-t transition-all duration-300 relative group"
-                    style={{ height: `${Math.max(4, heightPct)}%` }}
-                  >
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10 bg-gray-900 text-white text-3xs px-2 py-1 rounded shadow font-semibold Outfit whitespace-nowrap">
-                      Day {p.day}: {formatCurrency(p.amount)}
-                    </div>
+          <div className="h-44 relative pt-4">
+            {/* Average Reference Line */}
+            {maxDOMAmount > 0 && avgDOMAmount > 0 && (
+              <div 
+                className="absolute left-0 right-0 border-t border-dashed border-indigo-400/40 pointer-events-none z-10 flex items-center justify-between font-sans"
+                style={{ bottom: `calc(1.5rem + ${(avgDOMAmount / maxDOMAmount) * 80}%)` }}
+                data-testid="dom-average-line"
+              >
+                <span className="bg-indigo-50/90 text-[8px] font-bold text-indigo-500 px-1 rounded-r border border-indigo-100/50 shadow-3xs Outfit uppercase">
+                  AVG: {formatCurrency(avgDOMAmount)}
+                </span>
+              </div>
+            )}
+
+            <div className="h-36 flex items-end justify-between space-x-0.5 sm:space-x-1 select-none overflow-x-auto pb-1 relative z-0">
+              {cycleOrderedDOMPeaks.map(p => {
+                const heightPct = maxDOMAmount > 0 ? (p.amount / maxDOMAmount) * 80 : 0;
+                return (
+                  <div key={p.day} className="flex-1 flex flex-col justify-end items-center min-w-[8px] h-full">
+                    <div
+                      className="w-full bg-indigo-100 hover:bg-indigo-600 rounded-t transition-all duration-300 relative group cursor-pointer"
+                      style={{ height: `${Math.max(4, heightPct)}%` }}
+                      onMouseEnter={() => setHoveredDOM(p)}
+                      onMouseLeave={() => setHoveredDOM(null)}
+                      data-testid={`dom-bar-${p.day}`}
+                    />
+                    <span className="text-[9px] text-gray-400 font-bold mt-1.5">{p.day}</span>
                   </div>
-                  <span className="text-[9px] text-gray-400 font-bold mt-1.5">{p.day}</span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
           <div className="flex justify-between text-3xs text-gray-400 font-semibold mt-1 tracking-wider uppercase">
-            <span>Day 1</span>
-            <span>Day 15</span>
-            <span>Day 31</span>
+            <span>Cycle Start (Day {billingCycleStartDay})</span>
+            <span>Cycle End (Day {billingCycleStartDay === 1 ? 31 : billingCycleStartDay - 1})</span>
           </div>
         </div>
 
         {/* Day of Week Peaks */}
         <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6">
-          <h3 className="text-base font-extrabold text-gray-900 Outfit">Weekly Spend Patterns</h3>
-          <p className="text-2xs text-gray-400 mt-0.5 mb-6">
-            Aggregated historical spending by day of week.
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-base font-extrabold text-gray-900 Outfit">Weekly Spend Patterns</h3>
+              <p className="text-2xs text-gray-400 mt-0.5 mb-6">
+                Aggregated historical spending by day of week.
+              </p>
+            </div>
+            {hoveredDOW ? (
+              <div className="bg-purple-50 border border-purple-100 text-purple-700 text-3xs font-extrabold px-2 py-1 rounded-lg Outfit animate-pulse" data-testid="dow-hover-badge">
+                {hoveredDOW.dayName}: {formatCurrency(hoveredDOW.amount)}{getPercentDiffText(hoveredDOW.amount, avgDOWAmount)}
+              </div>
+            ) : (
+              <div className="text-3xs text-gray-350 px-2 py-1 select-none">
+                Hover bars to inspect
+              </div>
+            )}
+          </div>
 
-          <div className="h-44 flex items-end justify-around pt-4 select-none">
-            {dayOfWeekPeaks.map(p => {
-              const heightPct = maxDOWAmount > 0 ? (p.amount / maxDOWAmount) * 100 : 0;
-              return (
-                <div key={p.dayName} className="w-10 flex flex-col justify-end items-center h-full">
-                  <div
-                    className="w-6 bg-purple-100 hover:bg-purple-600 rounded-t transition-all duration-300 relative group"
-                    style={{ height: `${Math.max(4, heightPct)}%` }}
-                  >
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10 bg-gray-900 text-white text-3xs px-2 py-1 rounded shadow font-semibold Outfit whitespace-nowrap">
-                      {p.dayName}: {formatCurrency(p.amount)}
-                    </div>
+          <div className="h-44 relative pt-4">
+            {/* Average Reference Line */}
+            {maxDOWAmount > 0 && avgDOWAmount > 0 && (
+              <div 
+                className="absolute left-0 right-0 border-t border-dashed border-purple-400/40 pointer-events-none z-10 flex items-center justify-between font-sans"
+                style={{ bottom: `calc(1.5rem + ${(avgDOWAmount / maxDOWAmount) * 80}%)` }}
+                data-testid="dow-average-line"
+              >
+                <span className="bg-purple-50/90 text-[8px] font-bold text-purple-500 px-1 rounded-r border border-purple-100/50 shadow-3xs Outfit uppercase">
+                  AVG: {formatCurrency(avgDOWAmount)}
+                </span>
+              </div>
+            )}
+
+            <div className="h-36 flex items-end justify-around select-none pb-1 relative z-0">
+              {dayOfWeekPeaks.map(p => {
+                const heightPct = maxDOWAmount > 0 ? (p.amount / maxDOWAmount) * 80 : 0;
+                return (
+                  <div key={p.dayName} className="w-10 flex flex-col justify-end items-center h-full">
+                    <div
+                      className="w-6 bg-purple-100 hover:bg-purple-600 rounded-t transition-all duration-300 relative group cursor-pointer"
+                      style={{ height: `${Math.max(4, heightPct)}%` }}
+                      onMouseEnter={() => setHoveredDOW(p)}
+                      onMouseLeave={() => setHoveredDOW(null)}
+                      data-testid={`dow-bar-${p.dayName}`}
+                    />
+                    <span className="text-xs text-gray-500 font-bold mt-2 Outfit">{p.dayName}</span>
                   </div>
-                  <span className="text-xs text-gray-500 font-bold mt-2 Outfit">{p.dayName}</span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
-
       </div>
 
       {/* Predicted Recurring Outflows */}
