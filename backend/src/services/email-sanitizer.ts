@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 /**
  * [FUNC-GMAIL-9] Decodes base64 email body content and strips HTML styling and markup.
  */
@@ -22,7 +24,7 @@ export class EmailSanitizer {
         }
         return decoded;
       } catch (err) {
-        console.error('Failed to decode body part:', err);
+        logger.error({ err }, 'Failed to decode body part');
         return '';
       }
     }

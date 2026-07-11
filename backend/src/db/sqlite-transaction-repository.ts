@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge } from './transaction-repository';
 import { IFeedbackRepository, FeedbackSettings, CorrectionExample, CorrectionFieldName, FeedbackEffectiveness } from './feedback-repository';
 import { normalizeCategory } from '../utils/category-helper';
+import { logger } from '../utils/logger';
 
 export class SQLiteTransactionRepository implements ITransactionRepository, IFeedbackRepository {
   private db: sqlite3.Database;
@@ -12,6 +13,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
   constructor(dbPath: string = process.env.DATABASE_URL || './data/daily_expense.db') {
     if (dbPath === ':memory:') {
       this.db = new sqlite3.Database(dbPath);
+      logger.info('Initialized in-memory SQLite database connection');
       return;
     }
 
@@ -23,32 +25,57 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     }
 
     this.db = new sqlite3.Database(resolvedPath);
+    logger.info({ resolvedPath }, 'Initialized file-based SQLite database connection');
   }
 
   // Wrap runs/queries in Promise utilities for clean async/await code
   public run(sql: string, params: any[] = []): Promise<void> {
+    logger.debug({ sql, params }, 'Database run query started');
+    const start = Date.now();
     return new Promise((resolve, reject) => {
       this.db.run(sql, params, function (err) {
-        if (err) reject(err);
-        else resolve();
+        const duration = Date.now() - start;
+        if (err) {
+          logger.error({ sql, params, err, duration }, 'Database run query failed');
+          reject(err);
+        } else {
+          logger.trace({ sql, duration }, 'Database run query completed');
+          resolve();
+        }
       });
     });
   }
 
   private get<T>(sql: string, params: any[] = []): Promise<T | undefined> {
+    logger.debug({ sql, params }, 'Database get query started');
+    const start = Date.now();
     return new Promise((resolve, reject) => {
       this.db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row as T);
+        const duration = Date.now() - start;
+        if (err) {
+          logger.error({ sql, params, err, duration }, 'Database get query failed');
+          reject(err);
+        } else {
+          logger.trace({ sql, duration, hasRow: !!row }, 'Database get query completed');
+          resolve(row as T);
+        }
       });
     });
   }
 
   private all<T>(sql: string, params: any[] = []): Promise<T[]> {
+    logger.debug({ sql, params }, 'Database all query started');
+    const start = Date.now();
     return new Promise((resolve, reject) => {
       this.db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows as T[]);
+        const duration = Date.now() - start;
+        if (err) {
+          logger.error({ sql, params, err, duration }, 'Database all query failed');
+          reject(err);
+        } else {
+          logger.trace({ sql, duration, rowsCount: rows?.length || 0 }, 'Database all query completed');
+          resolve(rows as T[]);
+        }
       });
     });
   }

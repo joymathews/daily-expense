@@ -1,4 +1,5 @@
 import { ITransactionExtractor, ExtractedTransaction } from './transaction-extractor';
+import { logger } from '../utils/logger';
 
 export class OllamaExtractor implements ITransactionExtractor {
   constructor(
@@ -7,6 +8,14 @@ export class OllamaExtractor implements ITransactionExtractor {
   ) { }
 
   async extractTransaction(textBody: string, contextBlock: string = ''): Promise<ExtractedTransaction | null> {
+    logger.debug(
+      { model: this.modelName, endpoint: this.endpoint, emailLength: textBody.length },
+      'Ollama extraction task started'
+    );
+    if (contextBlock) {
+      logger.trace({ contextBlock }, 'Injecting few-shot feedback examples to LLM prompt');
+    }
+
     const systemInstruction = `
 You are a precise financial parser. Extract transaction details from the email text and return ONLY a valid JSON object matching this schema:
 {
@@ -46,6 +55,14 @@ Ensure:
       ? `${contextBlock}\n\n${systemInstruction}`
       : systemInstruction;
 
+    logger.debug(
+      { 
+        systemPrompt: fullSystemInstruction, 
+        userPrompt: `Email Content:\n${textBody}` 
+      },
+      'Sending chat completion request to Ollama LLM'
+    );
+
     try {
       const response = await fetch(`${this.endpoint}/api/chat`, {
         method: 'POST',
@@ -68,13 +85,15 @@ Ensure:
       const responseData = await response.json();
       const contentString = responseData.message?.content;
       if (!contentString) {
+        logger.warn('Ollama returned empty message content');
         return null;
       }
 
+      logger.info({ rawLlmResponse: contentString }, 'Received raw JSON response from Ollama LLM');
+
       const parsedJSON = JSON.parse(contentString.trim());
 
-      // Enforce data checks
-      return {
+      const result: ExtractedTransaction = {
         merchant: parsedJSON.merchant || 'Unknown Merchant',
         amount: typeof parsedJSON.amount === 'number' ? parsedJSON.amount : parseFloat(parsedJSON.amount || '0'),
         currency: (parsedJSON.currency || 'USD').toUpperCase(),
@@ -84,8 +103,11 @@ Ensure:
         paymentMethod: parsedJSON.paymentMethod || 'Unknown',
         transactionType: parsedJSON.transactionType === 'refund' ? 'refund' : 'expense'
       };
+
+      logger.info({ transaction: result }, 'Ollama transaction extraction completed successfully');
+      return result;
     } catch (error) {
-      console.error('Ollama extraction failed:', error);
+      logger.error({ error, emailSnippet: textBody.substring(0, 200) }, 'Ollama extraction failed');
       return null;
     }
   }

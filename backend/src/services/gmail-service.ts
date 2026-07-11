@@ -1,6 +1,7 @@
 import { google, gmail_v1 } from 'googleapis';
 import { EmailSanitizer } from './email-sanitizer';
 import { EmailClassifier } from './email-classifier';
+import { logger } from '../utils/logger';
 
 export interface GmailFetchFilters {
   sender: string[];
@@ -136,7 +137,7 @@ export class GmailService {
       return formattedEmails;
 
     } catch (error) {
-      console.error('Error fetching from Gmail API:', error);
+      logger.error({ error }, 'Error fetching from Gmail API');
       throw new Error('Failed to fetch messages from Gmail');
     }
   }
@@ -186,7 +187,7 @@ export class GmailService {
 
       return allMessages.map(m => m.id!);
     } catch (error) {
-      console.error('Error listing messages from Gmail API:', error);
+      logger.error({ error, filters }, 'Error listing messages from Gmail API');
       throw new Error('Failed to list messages from Gmail');
     }
   }
@@ -221,7 +222,7 @@ export class GmailService {
         hasTransaction,
       };
     } catch (error) {
-      console.error(`Error getting details for message ${messageId}:`, error);
+      logger.error({ error, messageId }, `Error getting details for message ${messageId}`);
       throw new Error(`Failed to fetch message details for ${messageId}`);
     }
   }

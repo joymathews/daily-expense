@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { IFeedbackRepository, CorrectionExample, CorrectionFieldName } from '../db/feedback-repository';
+import { logger } from '../utils/logger';
 
 const CORRECTABLE_FIELDS: CorrectionFieldName[] = ['merchant', 'category', 'paymentMethod', 'transactionType'];
 const EMAIL_SNIPPET_MAX_CHARS = 300;
@@ -195,7 +196,7 @@ export class CorrectionLearningService {
       const data: any = await response.json();
       return data.embedding || null;
     } catch (err) {
-      console.warn('Ollama embedding service not available or model not pulled:', err);
+      logger.warn({ err }, 'Ollama embedding service not available or model not pulled');
       return null;
     }
   }

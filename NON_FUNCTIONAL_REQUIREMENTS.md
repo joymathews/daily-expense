@@ -12,6 +12,9 @@
 - [NFR-PERF-2] Dynamic Layout: The system must utilize a responsive design engine to ensure usability across diverse hardware resolutions.
 - [NFR-PERF-3] Data Processing: The backend service must handle pagination efficiently to retrieve all requested records without causing memory exhaustion.
 - [NFR-PERF-4] Batch Approval Efficiency: The batch approval operation must complete within 200ms per transaction at the API layer, updating the local UI state atomically.
+- [NFR-PERF-5] Non-Blocking Logging: Backend logging must execute asynchronously and use memory buffering to prevent file I/O operations from introducing latency in API responses.
+- [NFR-PERF-6] Dynamic Frontend Log Level: The frontend logger must support runtime level configuration via browser developer console commands and persist selections across page reloads.
+- [NFR-PERF-7] Configurable Frontend Network Log Forwarding: The frontend logger must support disabling network log forwarding entirely (via environment variables or local storage) to avoid unnecessary API requests and network usage.
 
 ## Availability [NFR-AVAIL]
 - [NFR-AVAIL-1] The system should target 99.9% availability for the core platform and third-party integration pipelines.
