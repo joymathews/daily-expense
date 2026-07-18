@@ -12,6 +12,7 @@ import TransactionPipeline from './pages/TransactionPipeline';
 import GoldTransactions from './pages/GoldTransactions';
 import FinancialAnalytics from './pages/FinancialAnalytics';
 import FinancialInsights from './pages/FinancialInsights';
+import DatabaseViewer from './pages/DatabaseViewer';
 
 Amplify.configure(authConfig);
 
@@ -29,9 +30,11 @@ function App() {
           <Route path="/transactions" element={<GoldTransactions />} />
           <Route path="/analytics" element={<FinancialAnalytics />} />
           <Route path="/insights" element={<FinancialInsights />} />
+          <Route path="/database" element={<DatabaseViewer />} />
           <Route path="/gmail" element={<Navigate to="/ingestion" replace />} />
         </Routes>
       </main>
+
       
       <footer className="py-8 text-center text-gray-400 text-xs border-t border-gray-50 bg-white">
         <p>&copy; 2026 Daily Expense. Built with SOLID principles and Clean Code.</p>

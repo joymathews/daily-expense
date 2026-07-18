@@ -70,7 +70,6 @@
 - [NFR-USAB-32] Structured Dashboard Layout: The Dashboard page layout must clearly isolate Ledger Portfolio statistics and analytics from the Ingestion Pipeline flow under distinct headers and columns to maintain a clean visual hierarchy and prevent cognitive overlap.
 - [NFR-USAB-33] Dynamic Category Suggestions Performance: Compiling and rendering the dynamic list of predefined and custom categories inside the autocomplete datalist must resolve within 50ms of the modal or creation form opening, ensuring no input lag or layout shifting.
 
-
 ## Financial Analysis Performance & Usability [NFR-ANALYSIS]
 - [NFR-ANALYSIS-1] Preference Ingress Performance: Retrieving user preferences and updating preferences must complete within 150ms at the API layer.
 - [NFR-ANALYSIS-2] Responsive SVG Rendering: The daily spend SVG chart must scale dynamically to its container width, rendering correctly on mobile and desktop layout configurations without clipping.
@@ -86,4 +85,8 @@
 - [NFR-ANALYSIS-12] Chronological Layout Performance: Slicing and re-sorting transaction peaks by billing cycle day or standard weekdays must resolve instantly within 20ms during render compilation.
 - [NFR-ANALYSIS-13] Reference Line Render Latency: Drawing the average reference lines and computing variance percentages on hover must resolve instantly (within 10ms of state changes).
 - [NFR-ANALYSIS-14] Savings Recommendations Performance: The compilation and matching of savings recommendations must complete within 20ms of state changes, and live recalibration on slider threshold updates must render instantly within 30ms to maintain fluid user interactivity.
+
+## Database Raw Table Viewer [NFR-DB-VIEWER]
+- [NFR-DB-VIEWER-1] Raw Table Query Latency & Data Isolation: The paginated database viewer API must execute raw table queries and return formatted cell payloads in under 200ms for page sizes up to 100 rows. All table queries must strictly enforce authentication (`checkJwt`) and user isolation by `user_id` context.
+
 
