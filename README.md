@@ -170,7 +170,7 @@ erDiagram
 
 ## Requirement Traceability & Software Quality Standards
 
-To prevent knowledge decay and technical debt common in legacy software projects, this codebase enforces strict **Bidirectional Requirement Traceability**. Detailed documentation is available in [`REQUIREMENTS_TRACEABILITY.md`](REQUIREMENTS_TRACEABILITY.md).
+To prevent knowledge decay and technical debt common in legacy software projects, this codebase enforces strict **Bidirectional Requirement Traceability**. Detailed documentation is available in [`REQUIREMENTS_DRIVEN_DEVELOPMENT.md`](REQUIREMENTS_DRIVEN_DEVELOPMENT.md).
 
 - **Requirement-to-Test Mapping**: Every functional requirement ([`FUNCTIONAL_DOCUMENTATION.md`](FUNCTIONAL_DOCUMENTATION.md)), non-functional requirement ([`NON_FUNCTIONAL_REQUIREMENTS.md`](NON_FUNCTIONAL_REQUIREMENTS.md)), and bug entry ([`BUG_REGISTRY.md`](BUG_REGISTRY.md)) is tagged with a unique ID (`[FUNC-*]`, `[NFR-*]`, `[BUG-*]`).
 - **Test Justification Annotations**: Every unit and integration test suite in Jest and Vitest explicitly declares the requirement or bug ID it validates.
@@ -303,7 +303,7 @@ daily_expense/
 ├── tools/                    # Administrative CLI maintenance scripts
 ├── FUNCTIONAL_DOCUMENTATION.md
 ├── NON_FUNCTIONAL_REQUIREMENTS.md
-├── REQUIREMENTS_TRACEABILITY.md
+├── REQUIREMENTS_DRIVEN_DEVELOPMENT.md
 ├── DATABASE.md
 ├── BUG_REGISTRY.md
 └── package.json
