@@ -4524,7 +4524,7 @@ describe('Requirement Traceability Matrix Verification', () => {
     
     // Check if the visualizer renders the expense trend chart card
     expect(await screen.findByText(/Expense Trend/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Billing Cycle Ledger Visualizer/i)).toBeInTheDocument();
+    expect(await screen.findByText("Billing Cycle Ledger Visualizer")).toBeInTheDocument();
 
     // Verify dynamic billing cycle date labels are present
     expect(await screen.findByText('17/06')).toBeInTheDocument();
@@ -4541,10 +4541,188 @@ describe('Requirement Traceability Matrix Verification', () => {
     // Verify spend values:
     // June 18 spend: 3000 (expense) - 500 (refund) = 2500
     // June 17 spend: 0 (since transfer is excluded)
-    expect(await screen.findByText('₹2500')).toBeInTheDocument();
+    expect((await screen.findAllByText('₹2500')).length).toBeGreaterThan(0);
     expect((await screen.findAllByText('₹0')).length).toBeGreaterThan(0);
     expect(await screen.findByText('18/06')).toBeInTheDocument();
     expect(await screen.findByText('17/06')).toBeInTheDocument();
+
+    global.Date = RealDate;
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GOLD-PAGE-17] / [NFR-USAB-35] Filterable Cycle Expense Comparison Graph:
+   * Verify that the comparison trend chart renders, filters by payment methods, and overlays cycles.
+   */
+  it('renders Cycle Comparison Trend chart on the dashboard and supports overlays, filtering, and view toggling [FUNC-GOLD-PAGE-17] [NFR-USAB-35]', async () => {
+    const RealDate = global.Date;
+    const mockSystemDate = new RealDate('2026-06-21T09:20:00');
+    // @ts-ignore
+    global.Date = class extends RealDate {
+      constructor(...args: any[]) {
+        if (args.length > 0) {
+          // @ts-ignore
+          return new RealDate(...args);
+        }
+        return mockSystemDate;
+      }
+      static now() {
+        return mockSystemDate.getTime();
+      }
+    };
+
+    const mockGoldTransactions = [
+      {
+        id: 'gold-comp-1',
+        merchant: 'Current Spend',
+        amount: 2000,
+        currency: 'INR',
+        transactionDate: '2026-06-18',
+        category: 'Shopping',
+        paymentMethod: 'Credit Card',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold-comp-2',
+        merchant: 'Previous Spend',
+        amount: 3000,
+        currency: 'INR',
+        transactionDate: '2026-05-18',
+        category: 'Shopping',
+        paymentMethod: 'UPI',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      },
+      {
+        id: 'gold-comp-3',
+        merchant: '2 Cycles Ago Spend',
+        amount: 4000,
+        currency: 'INR',
+        transactionDate: '2026-04-18',
+        category: 'Shopping',
+        paymentMethod: 'HDFC Bank Transaction',
+        sourceType: 'manual',
+        transactionType: 'expense',
+      }
+    ];
+
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/gold-transactions') || url.includes('/api/gmail/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: mockGoldTransactions }),
+        });
+      }
+      if (url.includes('/api/pipeline/raw-inputs') || url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/silver-transactions') || url.includes('/api/gmail/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-preferences')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ billingCycleStartDay: 17, expectedSalary: 100000 }),
+        });
+      }
+      if (url.includes('/api/pipeline/fixed-charges')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ fixedCharges: [] }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ emails: [], transactions: [], paymentMethods: [], paymentRules: [], fetcherEmails: [] }) });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Verify dashboard metrics and heading are rendered
+    expect(await screen.findByText(/Hi,/i)).toBeInTheDocument();
+    
+    // Check if the comparison trend chart panel is rendered
+    expect(await screen.findByText(/Cycle Comparison Trend/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Comparative Billing Cycle Ledger/i)).toBeInTheDocument();
+
+    // Verify current cycle label and total is present
+    expect(await screen.findByText(/Current Cycle \(₹2000\)/i)).toBeInTheDocument();
+    
+    // Verify default active previous cycle is listed in the legend
+    expect(await screen.findByText(/17 May '26 - 17 Jun '26 \(₹3000\)/i)).toBeInTheDocument();
+
+    // Verify payment method pills (Credit Card, HDFC Bank Transaction, UPI) are extracted
+    const ccPill = await screen.findByTestId('pm-pill-credit-card');
+    const hdfcPill = await screen.findByTestId('pm-pill-hdfc-bank-transaction');
+    const upiPill = await screen.findByTestId('pm-pill-upi');
+
+    expect(ccPill).toBeInTheDocument();
+    expect(hdfcPill).toBeInTheDocument();
+    expect(upiPill).toBeInTheDocument();
+
+    // Test cycle dropdown selector behavior
+    const dropdownBtn = screen.getByTestId('cycle-dropdown-btn');
+    await fireEvent.click(dropdownBtn);
+
+    // Verify checkbox options are listed in the dropdown menu
+    const offset1Checkbox = screen.getByTestId('checkbox-offset--1');
+    const offset2Checkbox = screen.getByTestId('checkbox-offset--2');
+    
+    expect(offset1Checkbox).toBeChecked();
+    expect(offset2Checkbox).not.toBeChecked();
+
+    // Overlay 2 Cycles Ago
+    await fireEvent.click(offset2Checkbox);
+    expect(offset2Checkbox).toBeChecked();
+    expect(await screen.findByText(/17 Apr '26 - 17 May '26 \(₹4000\)/i)).toBeInTheDocument();
+
+    // Toggle Previous Cycle off
+    await fireEvent.click(offset1Checkbox);
+    expect(offset1Checkbox).not.toBeChecked();
+    expect(screen.queryByText(/17 May '26 - 17 Jun '26 \(₹3000\)/i)).not.toBeInTheDocument();
+
+    // Toggle Previous Cycle back on
+    await fireEvent.click(offset1Checkbox);
+    expect(offset1Checkbox).toBeChecked();
+    expect(await screen.findByText(/17 May '26 - 17 Jun '26 \(₹3000\)/i)).toBeInTheDocument();
+
+    // Close dropdown menu
+    await fireEvent.click(dropdownBtn);
+
+    // Verify Daily vs Cumulative toggling updates buttons active state
+    const dailyBtn = screen.getByTestId('mode-daily-btn');
+    const cumulativeBtn = screen.getByTestId('mode-cumulative-btn');
+    
+    expect(cumulativeBtn).toHaveClass('bg-white');
+    
+    await fireEvent.click(dailyBtn);
+    expect(dailyBtn).toHaveClass('bg-white');
+    expect(cumulativeBtn).not.toHaveClass('bg-white');
+
+    // Test payment method filtering
+    await fireEvent.click(upiPill);
+    expect(await screen.findByText(/17 May '26 - 17 Jun '26 \(₹0\)/i)).toBeInTheDocument();
+
+    await fireEvent.click(upiPill);
+    expect(await screen.findByText(/17 May '26 - 17 Jun '26 \(₹3000\)/i)).toBeInTheDocument();
+
+    // Test Clear All
+    const clearAllBtn = screen.getByTestId('pms-clear-all');
+    await fireEvent.click(clearAllBtn);
+    expect(await screen.findByText(/Current Cycle \(₹0\)/i)).toBeInTheDocument();
+    expect(await screen.findByText(/17 May '26 - 17 Jun '26 \(₹0\)/i)).toBeInTheDocument();
+
+    // Test Select All
+    const selectAllBtn = screen.getByTestId('pms-select-all');
+    await fireEvent.click(selectAllBtn);
+    expect(await screen.findByText(/Current Cycle \(₹2000\)/i)).toBeInTheDocument();
+    expect(await screen.findByText(/17 May '26 - 17 Jun '26 \(₹3000\)/i)).toBeInTheDocument();
 
     global.Date = RealDate;
     vi.unstubAllGlobals();

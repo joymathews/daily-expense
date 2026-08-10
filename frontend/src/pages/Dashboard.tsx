@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
-import { getActiveCycleRange, computeSalaryAllocation, getDatesInRange } from '../utils/transaction-helper';
+import { getActiveCycleRange, computeSalaryAllocation, getDatesInRange, getCycleRangeForOffset } from '../utils/transaction-helper';
 import SpendCalendar from '../components/spend-calendar';
 
 interface DashboardProps {
@@ -22,6 +22,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     goldTotalAmount: 0,
   });
   const [weeklyTrendData, setWeeklyTrendData] = useState<{ day: string; date: string; amount: number }[]>([]);
+  const [goldTransactions, setGoldTransactions] = useState<any[]>([]);
+  const [prefsStartDay, setPrefsStartDay] = useState<number>(17);
+  const [uniquePaymentMethods, setUniquePaymentMethods] = useState<string[]>([]);
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>([]);
+  const [activeSeries, setActiveSeries] = useState({
+    current: true,
+  });
+  const [selectedOffsets, setSelectedOffsets] = useState<number[]>([-1]);
+  const [isCycleDropdownOpen, setIsCycleDropdownOpen] = useState(false);
+  const [chartViewMode, setChartViewMode] = useState<'daily' | 'cumulative'>('cumulative');
+  const [hoveredCompPoint, setHoveredCompPoint] = useState<any | null>(null);
   const [salaryAllocation, setSalaryAllocation] = useState({
     mutualFundSpend: 0,
     mutualFundPercent: 0,
@@ -29,6 +40,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     consumptionPercent: 0,
     totalSaved: 0,
     unspentPercent: 0,
+    bankDebitTotal: 0,
   });
   const [billingCycleRange, setBillingCycleRange] = useState({ start: '', end: '' });
   const [activeFixedCharges, setActiveFixedCharges] = useState<any[]>([]);
@@ -155,6 +167,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             };
           });
           setWeeklyTrendData(trendData);
+          setGoldTransactions(goldTxs);
+          setPrefsStartDay(cycleStartDay);
+
+          const pms = Array.from(new Set(goldTxs.map((tx: any) => tx.paymentMethod || 'Unknown').filter(Boolean))) as string[];
+          pms.sort((a, b) => a.localeCompare(b));
+          setUniquePaymentMethods(pms);
+          setSelectedPaymentMethods(pms);
 
           // Build daily spend map for the spending calendar (all recorded dates, not limited to cycle)
           const spendMap: Record<string, number> = {};
@@ -231,6 +250,213 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const maxWeeklyAmount = Math.max(...weeklyTrendData.map(d => d.amount), 100);
   const totalTrendSpend = weeklyTrendData.reduce((sum, d) => sum + d.amount, 0);
   const averageDailySpend = weeklyTrendData.length > 0 ? totalTrendSpend / weeklyTrendData.length : 0;
+
+  const todayStr = React.useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const minDate = React.useMemo(() => {
+    if (goldTransactions.length === 0) return '';
+    return goldTransactions.reduce((min, tx) => {
+      if (tx.transactionDate && tx.transactionDate < min) {
+        return tx.transactionDate;
+      }
+      return min;
+    }, todayStr);
+  }, [goldTransactions, todayStr]);
+
+  const availableCycles = React.useMemo(() => {
+    if (!minDate) return [];
+    const cycles = [];
+    let offset = -1;
+    while (offset >= -24) {
+      const range = getCycleRangeForOffset(prefsStartDay, offset);
+      
+      const formatLabel = (dateStr: string) => {
+        const parts = dateStr.split('-');
+        if (parts.length < 3) return dateStr;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const shortYear = parts[0].slice(2);
+        return `${parts[2]} ${months[monthIdx]} '${shortYear}`;
+      };
+
+      cycles.push({
+        offset,
+        range,
+        label: `${formatLabel(range.start)} - ${formatLabel(range.end)}`
+      });
+
+      if (range.start <= minDate) {
+        break;
+      }
+      offset--;
+    }
+    return cycles;
+  }, [minDate, prefsStartDay]);
+
+  const comparisonChartData = React.useMemo(() => {
+    try {
+      if (goldTransactions.length === 0) {
+        return {
+          currentSpends: [],
+          historicalData: [],
+          maxVal: 100,
+          daysCount: 30,
+          currentTotal: 0,
+          error: null
+        };
+      }
+
+      const currentRange = getCycleRangeForOffset(prefsStartDay, 0);
+      const currentDates = getDatesInRange(currentRange.start, currentRange.end);
+
+      const getDailySpends = (datesList: string[], isCurrent: boolean) => {
+        let cumulativeSum = 0;
+        let totalSum = 0;
+        const data = datesList.map((dateStr) => {
+          if (isCurrent && dateStr > todayStr) {
+            return { date: dateStr, amount: null };
+          }
+
+          const amount = goldTransactions
+            .filter((tx: any) => {
+              if (tx.transactionDate !== dateStr) return false;
+              if (tx.transactionType === 'transfer') return false;
+              if (tx.transactionType === 'fixed') return false;
+              
+              const pm = tx.paymentMethod || 'Unknown';
+              return selectedPaymentMethods.includes(pm);
+            })
+            .reduce((sum: number, tx: any) => {
+              const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+              return sum + signedAmt;
+            }, 0);
+
+          const dailyVal = Math.max(0, amount);
+          totalSum += dailyVal;
+          
+          if (chartViewMode === 'cumulative') {
+            cumulativeSum += dailyVal;
+            return { date: dateStr, amount: cumulativeSum };
+          }
+          return { date: dateStr, amount: dailyVal };
+        });
+
+        return { spends: data, total: totalSum };
+      };
+
+      const currentData = getDailySpends(currentDates, true);
+
+      const sortedOffsets = [...selectedOffsets].sort((a, b) => b - a);
+      const historicalData = sortedOffsets.map((offset) => {
+        const range = getCycleRangeForOffset(prefsStartDay, offset);
+        const dates = getDatesInRange(range.start, range.end);
+        const daily = getDailySpends(dates, false);
+        
+        const formatLabel = (dateStr: string) => {
+          const parts = dateStr.split('-');
+          if (parts.length < 3) return dateStr;
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthIdx = parseInt(parts[1], 10) - 1;
+          const shortYear = parts[0].slice(2);
+          return `${parts[2]} ${months[monthIdx]} '${shortYear}`;
+        };
+
+        return {
+          offset,
+          range,
+          spends: daily.spends,
+          total: daily.total,
+          label: `${formatLabel(range.start)} - ${formatLabel(range.end)}`
+        };
+      });
+
+      const maxDays = Math.max(
+        currentDates.length,
+        ...historicalData.map(h => h.spends.length),
+        28
+      );
+
+      const allAmounts: number[] = [];
+      if (activeSeries.current) {
+        currentData.spends.forEach(d => { if (d.amount !== null) allAmounts.push(d.amount); });
+      }
+      historicalData.forEach(h => {
+        h.spends.forEach(d => { if (d.amount !== null) allAmounts.push(d.amount); });
+      });
+      const maxVal = Math.max(...allAmounts, 100);
+
+      return {
+        currentSpends: currentData.spends,
+        historicalData,
+        maxVal,
+        daysCount: maxDays,
+        currentTotal: currentData.total,
+        error: null
+      };
+    } catch (err: any) {
+      console.error("Error in comparison chart memo:", err);
+      return {
+        currentSpends: [],
+        historicalData: [],
+        maxVal: 100,
+        daysCount: 30,
+        currentTotal: 0,
+        error: err.message || String(err)
+      };
+    }
+  }, [goldTransactions, prefsStartDay, selectedPaymentMethods, activeSeries, selectedOffsets, chartViewMode, todayStr]);
+
+  const compStepX = comparisonChartData.daysCount > 1 ? 890 / (comparisonChartData.daysCount - 1) : 890;
+
+  const validCurrentPoints = activeSeries.current
+    ? comparisonChartData.currentSpends
+        .map((pt, idx) => ({ x: 60 + idx * compStepX, y: pt.amount !== null ? 200 - (pt.amount / comparisonChartData.maxVal) * 180 : null }))
+        .filter((pt): pt is { x: number; y: number } => pt.y !== null)
+    : [];
+
+  const currentLinePath = validCurrentPoints.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+  const currentAreaPath = validCurrentPoints.length > 0
+    ? `${currentLinePath} L ${validCurrentPoints[validCurrentPoints.length - 1].x} 200 L ${validCurrentPoints[0].x} 200 Z`
+    : '';
+
+  const HISTORICAL_COLORS = [
+    { border: '#f59e0b', strokeDash: '4 4' },
+    { border: '#06b6d4', strokeDash: '2 2' },
+    { border: '#10b981', strokeDash: '1 1' },
+    { border: '#ec4899', strokeDash: 'none' },
+    { border: '#8b5cf6', strokeDash: '3 3' },
+    { border: '#f97316', strokeDash: '5 5' },
+  ];
+
+  const historicalSeries = React.useMemo(() => {
+    return (comparisonChartData.historicalData || []).map((series, index) => {
+      const colorInfo = HISTORICAL_COLORS[index % HISTORICAL_COLORS.length];
+      const points = series.spends.map((pt, idx) => ({
+        x: 60 + idx * compStepX,
+        y: pt.amount !== null ? 200 - (pt.amount / comparisonChartData.maxVal) * 180 : null
+      }));
+      const validPoints = points.filter((pt): pt is { x: number; y: number } => pt.y !== null);
+      
+      const linePath = validPoints.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+      
+      let areaPath = '';
+      if (validPoints.length > 0) {
+        areaPath = `${linePath} L ${validPoints[validPoints.length - 1].x} 200 L ${validPoints[0].x} 200 Z`;
+      }
+
+      return {
+        ...series,
+        index,
+        colorInfo,
+        validPoints,
+        linePath,
+        areaPath
+      };
+    });
+  }, [comparisonChartData.historicalData, compStepX, comparisonChartData.maxVal]);
 
   return (
     <div className="w-full max-w-5xl space-y-10 animate-fade-in">
@@ -768,6 +994,441 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
                   <span className="text-indigo-400 font-extrabold mt-0.5">₹{hoveredPoint.amount.toFixed(0)}</span>
                   {/* Tooltip arrow */}
                   <div className="w-1.5 h-1.5 bg-slate-900 rotate-45 transform translate-y-1/2 absolute bottom-0 left-1/2 -translate-x-1/2 border-r border-b border-slate-800"></div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Comparison Trend Graph Card */}
+        <div className="w-full bg-white border border-gray-100/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between" data-testid="comparison-trend-panel">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-50 pb-4 mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Cycle Comparison Trend</h3>
+              <p className="text-xs text-gray-400 font-semibold uppercase mt-0.5">Comparative Billing Cycle Ledger Visualizer</p>
+            </div>
+            
+            {/* View Mode selection: Daily vs Cumulative */}
+            <div className="flex bg-gray-100 p-0.5 rounded-xl border border-gray-200/40 self-start sm:self-auto shadow-inner">
+              <button
+                type="button"
+                onClick={() => setChartViewMode('daily')}
+                className={`px-3 py-1.5 rounded-lg text-2xs font-extrabold uppercase tracking-wider transition-all duration-150 ${
+                  chartViewMode === 'daily'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                data-testid="mode-daily-btn"
+              >
+                Daily Spend
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartViewMode('cumulative')}
+                className={`px-3 py-1.5 rounded-lg text-2xs font-extrabold uppercase tracking-wider transition-all duration-150 ${
+                  chartViewMode === 'cumulative'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                data-testid="mode-cumulative-btn"
+              >
+                Cumulative Spend
+              </button>
+            </div>
+          </div>
+
+          {/* Series & Filters Section */}
+          <div className="flex flex-col gap-4 mb-6 text-left">
+            {/* Series Checkboxes & Dropdown */}
+            <div className="flex flex-wrap gap-4 items-center">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Show Cycles:</span>
+              <label className="inline-flex items-center gap-2 cursor-pointer group select-none">
+                <input
+                  type="checkbox"
+                  checked={activeSeries.current}
+                  onChange={(e) => setActiveSeries({ ...activeSeries, current: e.target.checked })}
+                  className="rounded border-gray-300 text-indigo-650 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+                  data-testid="checkbox-series-current"
+                />
+                <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-650 transition-colors uppercase tracking-wider">
+                  ● Current Cycle (₹{comparisonChartData.currentTotal.toFixed(0)})
+                </span>
+              </label>
+
+              {/* Dynamic Dropdown Trigger */}
+              <div className="relative inline-block text-left" data-testid="cycle-dropdown-container">
+                <button
+                  type="button"
+                  onClick={() => setIsCycleDropdownOpen(!isCycleDropdownOpen)}
+                  className="inline-flex justify-between items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm cursor-pointer min-w-[220px]"
+                  data-testid="cycle-dropdown-btn"
+                >
+                  <span>Overlay Historical Cycles ({selectedOffsets.length})</span>
+                  <svg className={`w-4 h-4 text-gray-400 transform transition-transform duration-200 ${isCycleDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {isCycleDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsCycleDropdownOpen(false)}></div>
+                    <div
+                      className="absolute left-0 mt-1.5 w-64 rounded-xl bg-white border border-gray-150 shadow-xl z-20 max-h-60 overflow-y-auto py-2 flex flex-col text-left"
+                      data-testid="cycle-dropdown-menu"
+                    >
+                      {availableCycles.length === 0 ? (
+                        <span className="text-2xs text-gray-400 font-bold px-3 py-1.5 uppercase">No historical data available</span>
+                      ) : (
+                        availableCycles.map((cycle) => {
+                          const isChecked = selectedOffsets.includes(cycle.offset);
+                          return (
+                            <label
+                              key={cycle.offset}
+                              className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer select-none transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setSelectedOffsets(selectedOffsets.filter(o => o !== cycle.offset));
+                                  } else {
+                                    setSelectedOffsets([...selectedOffsets, cycle.offset]);
+                                  }
+                                }}
+                                className="rounded border-gray-300 text-indigo-650 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+                                data-testid={`checkbox-offset-${cycle.offset}`}
+                              />
+                              <span className="text-2xs font-extrabold text-gray-750 uppercase tracking-wide">
+                                {cycle.label}
+                              </span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Dynamic Historical Legend Display */}
+            {historicalSeries.length > 0 && (
+              <div className="flex flex-wrap gap-4 items-center border-t border-gray-50 pt-2.5">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Active Overlays:</span>
+                {historicalSeries.map((series) => (
+                  <div key={series.offset} className="flex items-center gap-1.5 text-2xs font-extrabold text-gray-600 uppercase tracking-wider" data-testid={`legend-offset-${series.offset}`}>
+                    <span className="text-sm leading-none font-extrabold" style={{ color: series.colorInfo.border }}>
+                      {series.colorInfo.strokeDash === 'none' ? '■' : series.colorInfo.strokeDash === '4 4' ? '⬡' : '▲'}
+                    </span>
+                    <span>
+                      {series.label} (₹{series.total.toFixed(0)})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Payment Method Pills */}
+            {uniquePaymentMethods.length > 0 && (
+              <div className="flex flex-col gap-1.5 border-t border-gray-50 pt-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Filter Payment Methods:</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethods(uniquePaymentMethods)}
+                      className="text-2xs font-extrabold text-indigo-600 hover:text-indigo-750 uppercase tracking-wider cursor-pointer"
+                      data-testid="pms-select-all"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-gray-300 text-2xs">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethods([])}
+                      className="text-2xs font-extrabold text-gray-400 hover:text-gray-600 uppercase tracking-wider cursor-pointer"
+                      data-testid="pms-clear-all"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {uniquePaymentMethods.map((pm) => {
+                    const isSelected = selectedPaymentMethods.includes(pm);
+                    return (
+                      <button
+                        key={pm}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedPaymentMethods(selectedPaymentMethods.filter((item) => item !== pm));
+                          } else {
+                            setSelectedPaymentMethods([...selectedPaymentMethods, pm]);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border transition-all duration-150 cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm'
+                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        data-testid={`pm-pill-${pm.split(' ').join('-').toLowerCase()}`}
+                      >
+                        {pm}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SVG Multi-Line Chart */}
+          {goldTransactions.length === 0 ? (
+            <div className="h-56 flex flex-col items-center justify-center text-center py-6">
+              <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-3 text-gray-400 border border-gray-100">
+                📊
+              </div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                No verified data to compare
+              </p>
+            </div>
+          ) : (
+            <div className="w-full relative mt-2">
+              <svg viewBox="0 0 1000 240" className="w-full h-64 overflow-visible select-none">
+                {/* Gradients */}
+                <defs>
+                  <linearGradient id="compCurrentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="compColorGrad-0" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.1" />
+                    <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="compColorGrad-1" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.1" />
+                    <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="compColorGrad-2" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.1" />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="compColorGrad-3" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#ec4899" stopOpacity="0.1" />
+                    <stop offset="100%" stopColor="#ec4899" stopOpacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="compColorGrad-4" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.1" />
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="compColorGrad-5" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#f97316" stopOpacity="0.1" />
+                    <stop offset="100%" stopColor="#f97316" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                {/* SVG Chart Grid Lines & Axes */}
+                <line x1={60} y1={20} x2={950} y2={20} stroke="#f1f5f9" strokeWidth="1" />
+                <line x1={60} y1={110} x2={950} y2={110} stroke="#f1f5f9" strokeWidth="1" />
+                <line x1={60} y1={200} x2={950} y2={200} stroke="#cbd5e1" strokeWidth="1.5" />
+
+                {/* Left Y Axis line */}
+                <line x1={60} y1={20} x2={60} y2={200} stroke="#cbd5e1" strokeWidth="1" />
+
+                {/* Left Y Axis Ticks */}
+                <line x1={55} y1={20} x2={60} y2={20} stroke="#cbd5e1" strokeWidth="1" />
+                <line x1={55} y1={110} x2={60} y2={110} stroke="#cbd5e1" strokeWidth="1" />
+                <line x1={55} y1={200} x2={60} y2={200} stroke="#cbd5e1" strokeWidth="1" />
+
+                {/* Y Axis Values */}
+                <text x={50} y={23} textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                  ₹{comparisonChartData.maxVal.toFixed(0)}
+                </text>
+                <text x={50} y={113} textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                  ₹{(comparisonChartData.maxVal / 2).toFixed(0)}
+                </text>
+                <text x={50} y={203} textAnchor="end" fill="#64748b" className="text-[9px] font-bold font-sans">
+                  ₹0
+                </text>
+
+                {/* X Axis Ticks and Labels */}
+                {(() => {
+                  const tickIndexes = [0, 4, 9, 14, 19, 24, Math.min(29, comparisonChartData.daysCount - 1)].filter(
+                    (val, idx, self) => self.indexOf(val) === idx && val < comparisonChartData.daysCount
+                  );
+
+                  return tickIndexes.map((idxVal) => {
+                    const tickX = 60 + idxVal * compStepX;
+                    const curPoint = comparisonChartData.currentSpends[idxVal];
+                    return (
+                      <g key={idxVal}>
+                        <line x1={tickX} y1="200" x2={tickX} y2="204" stroke="#cbd5e1" strokeWidth="1" />
+                        <text
+                          x={tickX}
+                          y="216"
+                          textAnchor="middle"
+                          fill="#475569"
+                          className="text-[9px] font-extrabold font-sans"
+                        >
+                          Day {idxVal + 1}
+                        </text>
+                        {curPoint && (
+                          <text
+                            x={tickX}
+                            y="227"
+                            textAnchor="middle"
+                            fill="#94a3b8"
+                            className="text-[8px] font-bold font-sans"
+                          >
+                            {curPoint.date}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  });
+                })()}
+
+                {/* Render Areas */}
+                {historicalSeries.map((series) => (
+                  series.areaPath && (
+                    <path
+                      key={`area-${series.offset}`}
+                      d={series.areaPath}
+                      fill={`url(#compColorGrad-${series.index % HISTORICAL_COLORS.length})`}
+                    />
+                  )
+                ))}
+                {activeSeries.current && currentAreaPath && <path d={currentAreaPath} fill="url(#compCurrentGrad)" />}
+
+                {/* Render Lines */}
+                {historicalSeries.map((series) => (
+                  series.linePath && (
+                    <path
+                      key={`line-${series.offset}`}
+                      d={series.linePath}
+                      fill="none"
+                      stroke={series.colorInfo.border}
+                      strokeWidth="2.5"
+                      strokeDasharray={series.colorInfo.strokeDash}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )
+                ))}
+                {activeSeries.current && currentLinePath && (
+                  <path
+                    d={currentLinePath}
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+
+                {/* Guide Line & Points on Hover */}
+                {hoveredCompPoint && (
+                  <>
+                    <line
+                      x1={60 + hoveredCompPoint.index * compStepX}
+                      y1={20}
+                      x2={60 + hoveredCompPoint.index * compStepX}
+                      y2={200}
+                      stroke="#94a3b8"
+                      strokeWidth="1"
+                      strokeDasharray="2 2"
+                    />
+                    {activeSeries.current && hoveredCompPoint.currentY !== null && (
+                      <circle
+                        cx={60 + hoveredCompPoint.index * compStepX}
+                        cy={hoveredCompPoint.currentY}
+                        r="5.5"
+                        fill="#ffffff"
+                        stroke="#6366f1"
+                        strokeWidth="3"
+                      />
+                    )}
+                    {hoveredCompPoint.histPoints.map((hp: any, sIdx: number) => (
+                      hp.y !== null && (
+                        <circle
+                          key={sIdx}
+                          cx={60 + hoveredCompPoint.index * compStepX}
+                          cy={hp.y}
+                          r="5"
+                          fill="#ffffff"
+                          stroke={hp.color}
+                          strokeWidth="2.5"
+                        />
+                      )
+                    ))}
+                  </>
+                )}
+
+                {/* Invisible Hover Zone Rectangles */}
+                {Array.from({ length: comparisonChartData.daysCount }).map((_, idx) => {
+                  const zoneX = 60 + idx * compStepX;
+                  const currentVal = comparisonChartData.currentSpends[idx];
+                  const currentY = (currentVal && currentVal.amount !== null) ? 200 - (currentVal.amount / comparisonChartData.maxVal) * 180 : null;
+
+                  const histYValues = historicalSeries.map(series => {
+                    const pt = series.spends[idx];
+                    return (pt && pt.amount !== null) ? 200 - (pt.amount / comparisonChartData.maxVal) * 180 : null;
+                  });
+
+                  return (
+                    <rect
+                      key={idx}
+                      x={zoneX - compStepX / 2}
+                      y={20}
+                      width={compStepX}
+                      height={180}
+                      fill="transparent"
+                      className="cursor-pointer"
+                      onMouseEnter={() => setHoveredCompPoint({
+                        index: idx,
+                        x: zoneX,
+                        currentY,
+                        currentVal,
+                        histPoints: historicalSeries.map((series, sIdx) => ({
+                          label: series.label,
+                          color: series.colorInfo.border,
+                          val: series.spends[idx],
+                          y: histYValues[sIdx]
+                        }))
+                      })}
+                      onMouseLeave={() => setHoveredCompPoint(null)}
+                    />
+                  );
+                })}
+              </svg>
+
+              {/* Dynamic HTML Tooltip */}
+              {hoveredCompPoint && (
+                <div
+                  style={{
+                    left: `${(hoveredCompPoint.x / 1000) * 100}%`,
+                    top: '30%',
+                  }}
+                  className="absolute transform -translate-x-1/2 -translate-y-1/2 bg-slate-900 text-white text-[10px] sm:text-xs font-bold rounded-xl p-3 shadow-2xl border border-slate-800 pointer-events-none transition-all duration-100 z-10 flex flex-col gap-1.5 min-w-[180px] text-left"
+                >
+                  <div className="border-b border-slate-800 pb-1 font-black text-center text-xs text-indigo-400">
+                    Day {hoveredCompPoint.index + 1}
+                  </div>
+                  {activeSeries.current && hoveredCompPoint.currentVal && hoveredCompPoint.currentVal.amount !== null && (
+                    <div className="flex justify-between gap-4 items-center">
+                      <span className="text-slate-400 font-medium">Current ({hoveredCompPoint.currentVal.date}):</span>
+                      <span className="font-extrabold text-indigo-300">₹{hoveredCompPoint.currentVal.amount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {hoveredCompPoint.histPoints.map((hp: any, sIdx: number) => (
+                    hp.val && hp.val.amount !== null && (
+                      <div key={sIdx} className="flex justify-between gap-4 items-center">
+                        <span className="text-slate-400 font-medium">{hp.label}:</span>
+                        <span className="font-extrabold" style={{ color: hp.color }}>₹{hp.val.amount.toFixed(2)}</span>
+                      </div>
+                    )
+                  ))}
                 </div>
               )}
             </div>

@@ -72,6 +72,34 @@ export const getActiveCycleRange = (startDay: number) => {
 };
 
 /**
+ * Compute the date range of a cycle with a given monthly offset relative to the current active cycle.
+ * e.g., offset = -1 for previous cycle, offset = -2 for two cycles ago.
+ */
+export const getCycleRangeForOffset = (startDay: number, offset: number) => {
+  const active = getActiveCycleRange(startDay);
+  const startParts = active.start.split('-').map(Number);
+  
+  // Use local Date to avoid UTC timezone shifts
+  const baseStart = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+  
+  // Calculate target start date by adding/subtracting months
+  const startDate = new Date(baseStart.getFullYear(), baseStart.getMonth() + offset, startDay);
+  const endDate = new Date(baseStart.getFullYear(), baseStart.getMonth() + offset + 1, startDay);
+  
+  const formatDate = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  return {
+    start: formatDate(startDate),
+    end: formatDate(endDate)
+  };
+};
+
+/**
  * Generate a list of continuous YYYY-MM-DD date strings in a range (inclusive)
  */
 export const getDatesInRange = (startStr: string, endStr: string): string[] => {
