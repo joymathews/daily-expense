@@ -1,22 +1,22 @@
 # Daily Expense
 
-A full-stack daily expense tracking application built with Node.js, Express, React, and SQLite. It implements a Medallion Data Architecture (Bronze, Silver, Gold layers) to process financial transaction emails via local LLM parsing (Ollama) and provides financial analytics and budget insights.
+A full-stack daily expense tracker built with Node.js, Express, React, and SQLite. It processes receipt emails through a Medallion data architecture (Bronze, Silver, Gold), parses transaction details using a local LLM (Ollama), and provides spending analytics and budget insights.
 
 ---
 
 ## Features
 
 - **Medallion Data Pipeline**:
-  - **Bronze Layer**: Raw storage for ingested financial emails and raw payloads (`bronze_raw_inputs`).
-  - **Silver Layer**: Staging layer for structured extraction, data cleaning, and user verification (`silver_extracted_transactions`).
-  - **Gold Layer**: Cleaned, verified transaction ledger ready for analytics and reporting (`gold_transactions`).
-- **Automated Transaction Ingestion**: Fetch financial receipt emails via Gmail OAuth2 integration.
-- **LLM-Powered Parsing**: Extract transaction date, amount, merchant, category, and payment method using local LLM models (Ollama `llama3`) with audit logging.
-- **In-Context Few-Shot Learning**: Remembers user field corrections (`llm_correction_examples`) and dynamically injects them into future prompts to improve extraction accuracy over time.
-- **Financial Analytics & Dashboard**: Visual spending calendar, billing cycle comparison trends, category breakdowns, and customizable calibration settings.
-- **Raw Database Inspector**: Built-in browser tool to inspect raw SQLite schemas, Bronze/Silver/Gold tables, and LLM extraction audit logs.
-- **Multi-Tenant User Isolation**: Endpoint authentication via AWS Cognito JWT tokens (`express-jwt` + `jwks-rsa`) ensuring strict data isolation per user.
-- **Centralized Logging**: Asynchronous logging powered by `pino` (backend) and `loglevel` (frontend) with local log viewers (`pino-pretty`).
+  - **Bronze Layer (`bronze_raw_inputs`)**: Raw storage for ingested financial emails and payload dumps.
+  - **Silver Layer (`silver_extracted_transactions`)**: Staging layer for structured extraction, data cleaning, and user verification.
+  - **Gold Layer (`gold_transactions`)**: Cleaned, verified ledger used for financial analytics and reporting.
+- **Automated Email Ingestion**: Fetches financial receipt emails via Gmail OAuth2 integration.
+- **Local LLM Parsing**: Extracts transaction date, amount, merchant, category, and payment method using Ollama (`llama3`).
+- **Few-Shot Learning**: Stores user field edits (`llm_correction_examples`) and includes them in prompt contexts to improve extraction accuracy over time.
+- **Financial Dashboard**: Visual spending calendar, billing cycle comparison trends, category breakdowns, and calibration settings.
+- **Database Inspector**: In-app browser tool to inspect raw SQLite schemas, Bronze/Silver/Gold tables, and LLM extraction audit logs.
+- **User Isolation**: Authenticates endpoints using AWS Cognito JWT tokens (`express-jwt` + `jwks-rsa`) to isolate user data.
+- **Logging**: Structured logging using `pino` (backend) and `loglevel` (frontend), readable via `pino-pretty`.
 
 ---
 
@@ -37,7 +37,7 @@ flowchart TD
     subgraph DataPipeline ["Data & Storage Layer"]
         Ollama["Local Ollama API (llama3)"]
         Gmail["Gmail API (googleapis OAuth2)"]
-        SQLite[("SQLite Database (Medallion Pipeline)")]
+        SQLite[("SQLite Database")]
     end
 
     FE -->|"Auth Session"| Cognito
@@ -63,16 +63,16 @@ flowchart LR
 
 ---
 
-## LLM Ingestion & Prompting Architecture
+## LLM Transaction Processing
 
-The application uses local LLM inference (Ollama with `llama3`, configurable via `LLM_MODEL` in `backend/.env`) to convert unstructured financial email receipts into validated ledger transactions. The ingestion pipeline combines constrained JSON parsing, database-backed few-shot learning, and real-time accuracy observability.
+The extraction engine ([`backend/src/services/ollama-extractor.ts`](backend/src/services/ollama-extractor.ts)) uses Ollama (`llama3`, configured via `LLM_MODEL` in `backend/.env`) to parse unstructured receipt emails into JSON records.
 
 ```mermaid
 flowchart TD
     RawEmail["Raw Receipt Email"] --> ExtractEngine["Ollama Extraction Engine<br/>(backend/src/services/ollama-extractor.ts)"]
     
     subgraph FewShotLoop ["In-Context Learning Loop"]
-        DBExamples[("SQLite: llm_correction_examples")] -->|Inject Top-N Exemplars| DynamicPrompt["Dynamic System Instruction"]
+        DBExamples[("SQLite: llm_correction_examples")] -->|Inject Exemplars| DynamicPrompt["System Instruction"]
     end
     
     DynamicPrompt --> ExtractEngine
@@ -81,39 +81,26 @@ flowchart TD
     JSONValidation --> SilverStage["Silver Staging Ledger"]
     
     SilverStage -->|User Correction| FeedbackRepo["Feedback Repository<br/>(backend/src/db/feedback-repository.ts)"]
-    FeedbackRepo -->|Upsert Ground Truth| DBExamples
+    FeedbackRepo -->|Save Ground Truth| DBExamples
     
-    subgraph Observability ["Accuracy Observability"]
-        AuditDB --> AccuracyMetrics["Effectiveness Engine<br/>(Weekly Trends & Before/After Snapshot)"]
+    subgraph Observability ["Accuracy Metrics"]
+        AuditDB --> AccuracyMetrics["Effectiveness Engine<br/>(Weekly Trends & Accuracy Stats)"]
     end
 ```
 
-### System Design & Implementation Details
+### Implementation Details
 
-1. **Constrained Structured Output Parsing**:
-   - **Deterministic JSON Decoding**: Uses Ollama's native JSON mode (`format: 'json'`) bound to an 8-field schema contract (`merchant`, `amount`, `currency`, `date`, `category`, `paymentMethod`, `transactionType`).
-   - **Joint Entity Extraction**: Prompts the LLM to scan full email text to combine financial institutions (HDFC, ICICI, SBI) and payment rails (UPI, Credit Card, NEFT) into unified payment method descriptors (e.g., `"HDFC Credit Card"`).
-   - **11-Category Taxonomy**: Enforces categorical classification across standardized domains (`Groceries`, `Utilities`, `Cabs & Transport`, `Online Food Order`, `Cloud & Software Services`, etc.).
-
-2. **Closed-Loop In-Context Learning (Few-Shot Prompting)**:
-   - **Ground-Truth Correction Storage**: When a user corrects a parsed field, the ground-truth edit is saved in SQLite (`llm_correction_examples`).
-   - **Dynamic Context Injection**: Prior to sending chat requests, recent historical correction examples are dynamically prepended to the system prompt (`contextBlock`), allowing the model to adapt to user preferences without fine-tuning.
-   - **Automated Deduplication**: Updates for existing input/field pairs overwrite previous entries to maintain accurate prompt context.
-
-3. **Defensive Processing & Fallbacks**:
-   - **Type Validation & Normalization**: The extraction service ([`backend/src/services/ollama-extractor.ts`](backend/src/services/ollama-extractor.ts)) applies runtime type coercion (`typeof amount === 'number'`), ISO currency normalization, and default fallback assignments (`"Unknown Merchant"`, `"Other"`, current date) to ensure malformed LLM responses never throw unhandled exceptions.
-
-4. **System Observability & Accuracy Tracking**:
-   - **Audit Logging**: Every extraction task records raw prompts, LLM responses, execution latency, and token metrics in `llm_extraction_audit_log`.
-   - **Accuracy Metrics**: The feedback module ([`backend/src/db/feedback-repository.ts`](backend/src/db/feedback-repository.ts)) calculates:
-     - **Before vs. After Impact**: Compares baseline extraction accuracy against post-correction performance to evaluate few-shot learning impact.
-     - **Weekly Accuracy Trends**: Tracks precision across attributes (`merchant`, `category`, `paymentMethod`) across calendar weeks.
+1. **Structured JSON Output**: Uses Ollama's `format: 'json'` with an 8-field schema (`merchant`, `amount`, `currency`, `date`, `category`, `paymentMethod`, `transactionType`).
+2. **Entity Combination**: Combines bank names (HDFC, ICICI, SBI) and payment types (UPI, Credit Card, NEFT) into unified labels (e.g. `"HDFC Credit Card"`).
+3. **Few-Shot Feedback**: Saves user corrections in `llm_correction_examples` and prepends recent exemplars to the prompt context.
+4. **Validation & Fallbacks**: Normalizes amounts to numbers, forces 3-letter ISO currency codes, and assigns defaults (`"Unknown Merchant"`, `"Other"`) if fields are missing.
+5. **Audit Logging**: Logs raw prompts, model responses, latency, and token metrics in `llm_extraction_audit_log`.
 
 ---
 
-## Database Architecture & Medallion Storage
+## Database Schema & Medallion Storage
 
-The application implements a multi-stage **Medallion Architecture** using SQLite (`data/daily_expense.db`). Detailed schema definitions are documented in [`DATABASE.md`](DATABASE.md).
+Data evolution is managed through SQLite (`data/daily_expense.db`). Complete schema details are available in [`DATABASE.md`](DATABASE.md).
 
 ```mermaid
 erDiagram
@@ -153,28 +140,26 @@ erDiagram
     }
 ```
 
-### Storage Principles & Security Standards
+### Key Storage Rules
 
-- **Medallion Data Pipeline**:
-  - **Bronze (`bronze_raw_inputs`)**: Raw email payload sink preserving immutable source content and metadata.
-  - **Silver (`silver_extracted_transactions`)**: Intermediate staging layer holding LLM-extracted fields pending user validation.
-  - **Gold (`gold_transactions`)**: Verified double-entry ledger used for financial analytics, trend graphs, and reporting.
-- **Integer Cents Financial Precision**: To avoid IEEE 754 floating-point rounding inaccuracies, all currency values are converted to and stored as integer cents (e.g., `$10.50` is stored as `1050`).
-- **Multi-Tenant User Isolation Standard**: Every table partitions records by `user_id` parsed from AWS Cognito JWT sub claims (`req.auth.sub`). Every database query enforces strict `user_id` filtering to guarantee multi-tenant data privacy.
-- **Audit & Feedback Persist Layer**:
-  - `llm_extraction_audit_log`: Persists execution latency, raw prompt payload, model response, and extraction status.
-  - `llm_correction_examples`: Ground-truth feedback store powering dynamic few-shot prompt context injection.
-  - `feedback_settings`: Configuration store for enabling/disabling few-shot feedback and setting maximum example limits.
+- **Medallion Pipeline**:
+  - **Bronze (`bronze_raw_inputs`)**: Raw email payload sink.
+  - **Silver (`silver_extracted_transactions`)**: Staging layer for extracted fields pending review.
+  - **Gold (`gold_transactions`)**: Confirmed transaction ledger for analytics.
+- **Integer Cents**: All monetary values are stored in cents (e.g. `$10.50` is stored as `1050`) to avoid floating-point rounding errors.
+- **User Isolation**: Tables partition data by `user_id` parsed from AWS Cognito JWT sub claims (`req.auth.sub`).
 
 ---
 
-## Requirement Traceability & Software Quality Standards
+## Requirements-Driven Development
 
-To prevent knowledge decay and technical debt common in legacy software projects, this codebase enforces strict **Bidirectional Requirement Traceability**. Detailed documentation is available in [`REQUIREMENTS_DRIVEN_DEVELOPMENT.md`](REQUIREMENTS_DRIVEN_DEVELOPMENT.md).
+This project uses a test-first workflow to ensure that code changes are directly tied to documented requirements and bug logs:
 
-- **Requirement-to-Test Mapping**: Every functional requirement ([`FUNCTIONAL_DOCUMENTATION.md`](FUNCTIONAL_DOCUMENTATION.md)), non-functional requirement ([`NON_FUNCTIONAL_REQUIREMENTS.md`](NON_FUNCTIONAL_REQUIREMENTS.md)), and bug entry ([`BUG_REGISTRY.md`](BUG_REGISTRY.md)) is tagged with a unique ID (`[FUNC-*]`, `[NFR-*]`, `[BUG-*]`).
-- **Test Justification Annotations**: Every unit and integration test suite in Jest and Vitest explicitly declares the requirement or bug ID it validates.
-- **Automated RTM Matrix (`rtm_report.html`)**: Running `npm run rtm` executes an automated scanner ([`tools/rtm/generate-rtm.js`](tools/rtm/generate-rtm.js)) that verifies 100% test coverage across all requirements and produces an interactive visual report.
+- **Requirement Traceability**: Requirements ([`FUNCTIONAL_DOCUMENTATION.md`](FUNCTIONAL_DOCUMENTATION.md) and [`NON_FUNCTIONAL_REQUIREMENTS.md`](NON_FUNCTIONAL_REQUIREMENTS.md)) and defect reports ([`BUG_REGISTRY.md`](BUG_REGISTRY.md)) are assigned unique IDs (`[FUNC-*]`, `[NFR-*]`, `[BUG-*]`).
+- **Test Mapping**: Unit and integration tests annotate the specific ID they validate before code implementation begins.
+- **Traceability Report**: Running `npm run rtm` scans the codebase and generates an updated [`rtm_report.html`](rtm_report.html) showing requirement coverage across all test suites.
+
+For a full breakdown of the methodology and technical debt prevention strategy, see [`REQUIREMENTS_DRIVEN_DEVELOPMENT.md`](REQUIREMENTS_DRIVEN_DEVELOPMENT.md).
 
 ---
 
@@ -196,21 +181,18 @@ To prevent knowledge decay and technical debt common in legacy software projects
 
 - **Node.js**: v18.x or higher
 - **npm**: v9.x or higher
-- **Ollama**: Required for local LLM transaction extraction (`ollama run llama3`)
-- **AWS Cognito**: User Pool configured for frontend authentication and backend JWT verification
+- **Ollama**: Running locally with `llama3` (`ollama run llama3`)
+- **AWS Cognito**: User Pool set up for authentication
 
 ---
 
 ## Configuration
 
-1. **Backend Environment**:
-   Copy `.env.example` in `backend/` to `.env` and fill in your configuration:
-
+1. **Backend Setup**:
    ```bash
    cp backend/.env.example backend/.env
    ```
-
-   Key configuration variables in `backend/.env`:
+   Key variables in `backend/.env`:
    ```ini
    PORT=3001
    COGNITO_USER_POOL_ID=your_user_pool_id
@@ -224,14 +206,11 @@ To prevent knowledge decay and technical debt common in legacy software projects
    LOG_FILE_PATH=logs/app.log
    ```
 
-2. **Frontend Environment**:
-   Copy `.env.example` in `frontend/` to `.env`:
-
+2. **Frontend Setup**:
    ```bash
    cp frontend/.env.example frontend/.env
    ```
-
-   Key configuration variables in `frontend/.env`:
+   Key variables in `frontend/.env`:
    ```ini
    VITE_COGNITO_USER_POOL_ID=your_user_pool_id
    VITE_COGNITO_CLIENT_ID=your_client_id
@@ -242,40 +221,30 @@ To prevent knowledge decay and technical debt common in legacy software projects
 
 ---
 
-## Installation & Setup
+## Installation & Running
 
 1. **Install Dependencies**:
-
-   Backend:
    ```bash
-   cd backend
-   npm install
+   cd backend && npm install
+   cd ../frontend && npm install
    ```
 
-   Frontend:
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-2. **Start the Local LLM (Ollama)**:
+2. **Start Ollama**:
    ```bash
    ollama run llama3
    ```
 
-3. **Start the Backend Server**:
+3. **Start Backend**:
    ```bash
-   cd backend
-   npm run dev
+   cd backend && npm run dev
    ```
-   *Backend runs on `http://localhost:3001`.*
+   Runs on `http://localhost:3001`.
 
-4. **Start the Frontend Application**:
+4. **Start Frontend**:
    ```bash
-   cd frontend
-   npm run dev
+   cd frontend && npm run dev
    ```
-   *Frontend runs on `http://localhost:5173`.*
+   Runs on `http://localhost:5173`.
 
 ---
 
@@ -284,23 +253,23 @@ To prevent knowledge decay and technical debt common in legacy software projects
 ```
 daily_expense/
 ├── backend/
-│   ├── data/                 # SQLite database storage
-│   ├── logs/                 # Pino application log files
+│   ├── data/                 # SQLite database files
+│   ├── logs/                 # Log files
 │   ├── src/
 │   │   ├── db/               # SQLite repositories & Medallion pipeline logic
-│   │   ├── middleware/       # JWT Auth & error handling middlewares
-│   │   ├── routes/           # API endpoints (ingestion, pipeline, gold transactions)
-│   │   ├── services/         # Gmail API & LLM integration services
-│   │   └── server.ts         # Express entrypoint
-│   └── tests/                # Backend unit & integration test suites
+│   │   ├── middleware/       # Auth & error handling middlewares
+│   │   ├── routes/           # REST API routes
+│   │   ├── services/         # Gmail API & LLM integration
+│   │   └── server.ts         # Express server entrypoint
+│   └── tests/                # Jest unit & integration tests
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # UI components & charts
-│   │   ├── pages/            # Routes (Dashboard, Ingestion, Pipeline, Ledger, Analytics)
-│   │   ├── services/         # API HTTP client functions
-│   │   └── utils/            # Helper utilities
-│   └── vitest.config.ts      # Vitest configuration
-├── tools/                    # Administrative CLI maintenance scripts
+│   │   ├── components/       # React components
+│   │   ├── pages/            # Page views
+│   │   ├── services/         # API HTTP client
+│   │   └── utils/            # Utilities
+│   └── vitest.config.ts      # Vitest config
+├── tools/                    # CLI maintenance scripts
 ├── FUNCTIONAL_DOCUMENTATION.md
 ├── NON_FUNCTIONAL_REQUIREMENTS.md
 ├── REQUIREMENTS_DRIVEN_DEVELOPMENT.md
@@ -311,42 +280,22 @@ daily_expense/
 
 ---
 
-## Development & Utility Scripts
+## Development Scripts
 
-### Running Tests
+### Run Tests
 
-- **Backend Tests (Jest)**:
-  ```bash
-  cd backend
-  npm test
-  ```
+- **Backend**: `cd backend && npm test`
+- **Frontend**: `cd frontend && npm test`
 
-- **Frontend Tests (Vitest)**:
-  ```bash
-  cd frontend
-  npm test
-  ```
+### View Logs
 
-### Log Viewing
+- **Pretty Print**: `cd backend && npm run view-logs`
+- **Tail Logs**: `cd backend && npm run tail-logs`
 
-Pretty print backend logs using `pino-pretty`:
-```bash
-cd backend
-npm run view-logs
-# Or live tail:
-npm run tail-logs
-```
+### Administrative Utilities
 
-### Administrative Tools
-
-- **Generate Requirement Traceability Matrix (RTM) Report**:
-  ```bash
-  npm run rtm
-  ```
-- **Clear Database**:
-  ```bash
-  npm run clear-db
-  ```
+- **Generate RTM Report**: `npm run rtm`
+- **Clear Database**: `npm run clear-db`
 
 ---
 
