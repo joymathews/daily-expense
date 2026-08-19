@@ -6,7 +6,8 @@ import { DeleteConfirmationModal } from '../components/gmail/DeleteConfirmationM
 import { MultiSelect } from '../components/MultiSelect';
 import {
   getSignedAmount,
-  computeDailySpendTimeline
+  computeDailySpendTimeline,
+  formatLocalTransactionTime
 } from '../utils/transaction-helper';
 import { BatchEditModal } from '../components/gmail/BatchEditModal';
 import { useUserCycles } from '../hooks/use-user-cycles';
@@ -55,6 +56,7 @@ const GoldTransactions: React.FC = () => {
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
   // Sort state
   const [sortBy, setSortBy] = useState<'dateDesc' | 'dateAsc' | 'merchantAsc' | 'merchantDesc' | 'amountDesc' | 'amountAsc' | 'categoryAsc' | 'categoryDesc'>('dateDesc');
@@ -164,6 +166,14 @@ const GoldTransactions: React.FC = () => {
       return false;
     }
 
+    // Check Transaction Type Filter (multi-select)
+    if (selectedTypes.length > 0) {
+      const typeDisplay = tx.transactionType === 'refund' ? 'Refund' : tx.transactionType === 'transfer' ? 'Transfer' : 'Expense';
+      if (!selectedTypes.includes(typeDisplay)) {
+        return false;
+      }
+    }
+
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
 
@@ -173,6 +183,7 @@ const GoldTransactions: React.FC = () => {
       (tx.notes && tx.notes.toLowerCase().includes(query)) ||
       (tx.paymentMethod && tx.paymentMethod.toLowerCase().includes(query)) ||
       tx.sourceType.toLowerCase().includes(query) ||
+      (tx.transactionType && tx.transactionType.toLowerCase().includes(query)) ||
       tx.amount.toString().includes(query) ||
       tx.currency.toLowerCase().includes(query)
     );
@@ -370,6 +381,16 @@ const GoldTransactions: React.FC = () => {
             onChange={setSelectedCurrencies}
             placeholder="All Currencies"
           />
+
+          {/* Transaction Type Filter */}
+          <MultiSelect
+            id="type-filter"
+            label="Type:"
+            options={['Expense', 'Refund', 'Transfer']}
+            selectedValues={selectedTypes}
+            onChange={setSelectedTypes}
+            placeholder="All Types"
+          />
         </div>
 
         {/* Row 2: Keyword Search and Date Filters */}
@@ -450,6 +471,7 @@ const GoldTransactions: React.FC = () => {
               setSelectedMethods([]);
               setSelectedSources([]);
               setSelectedCurrencies([]);
+              setSelectedTypes([]);
               setStartDate('');
               setEndDate('');
             }}
@@ -975,8 +997,15 @@ const GoldTransactions: React.FC = () => {
                       />
                     </td>
                     {/* Date */}
-                    <td className="px-6 py-4 text-gray-500 whitespace-nowrap" title={tx.transactionDate}>
-                      {tx.transactionDate}
+                    <td className="px-6 py-4 text-gray-500 whitespace-nowrap" title={tx.sourceReceivedAt || tx.transactionDate}>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-gray-800">{tx.transactionDate}</span>
+                        {formatLocalTransactionTime(tx.sourceReceivedAt) && (
+                          <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide">
+                            🕒 {formatLocalTransactionTime(tx.sourceReceivedAt)}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Source Type */}

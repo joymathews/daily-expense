@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { SilverTransaction } from '../../hooks/use-gmail-integration';
 import { MultiSelect } from '../MultiSelect';
-import { getSignedAmount } from '../../utils/transaction-helper';
+import { getSignedAmount, formatLocalTransactionTime } from '../../utils/transaction-helper';
 import { BatchEditModal } from './BatchEditModal';
 
 interface SilverStagingListProps {
@@ -98,6 +98,7 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
     const category = (tx.inferredCategory || 'Other').toLowerCase();
     const method = (tx.paymentMethod || 'Unknown').toLowerCase();
     const currency = (tx.currency || '').toLowerCase();
+    const txType = (tx.transactionType || '').toLowerCase();
 
     return (
       merchant.includes(query) ||
@@ -105,6 +106,7 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
       category.includes(query) ||
       method.includes(query) ||
       currency.includes(query) ||
+      txType.includes(query) ||
       tx.amount.toString().includes(query)
     );
   });
@@ -375,8 +377,15 @@ export const SilverStagingList: React.FC<SilverStagingListProps> = (props) => {
                       className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     />
                   </td>
-                  <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
-                    {tx.transactionDate}
+                  <td className="px-2 py-2.5 text-gray-500 whitespace-nowrap" title={tx.sourceReceivedAt || tx.transactionDate}>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-gray-800">{tx.transactionDate}</span>
+                      {formatLocalTransactionTime(tx.sourceReceivedAt) && (
+                        <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide">
+                          🕒 {formatLocalTransactionTime(tx.sourceReceivedAt)}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-2 py-2.5 whitespace-nowrap">
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${

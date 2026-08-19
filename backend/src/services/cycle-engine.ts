@@ -52,8 +52,8 @@ export const generateDefaultCycles = (defaultStartDay: number = 17, referenceDat
   const refYear = referenceDate.getUTCFullYear();
   const refMonth = referenceDate.getUTCMonth();
 
-  // Generate 14 months of default cycles: 12 months past, current, 1 month future
-  for (let offset = -12; offset <= 1; offset++) {
+  // Generate default cycles up to current cycle (exclude future cycles)
+  for (let offset = -12; offset <= 0; offset++) {
     const sDate = new Date(Date.UTC(refYear, refMonth + offset, startDay, 0, 0, 0, 0));
     const eDate = new Date(Date.UTC(refYear, refMonth + offset + 1, startDay, 0, 0, 0, 0));
 
@@ -63,6 +63,7 @@ export const generateDefaultCycles = (defaultStartDay: number = 17, referenceDat
 
     const startDateStr = formatDateYYYYMMDD(sDate);
     const endDateStr = formatDateYYYYMMDD(endBoundaryDate);
+    const displayEndDateStr = formatDateYYYYMMDD(eDate);
 
     const startIso = sDate.toISOString();
     const endIso = endBoundaryDate.toISOString();
@@ -71,7 +72,7 @@ export const generateDefaultCycles = (defaultStartDay: number = 17, referenceDat
 
     cycles.push({
       id: `default-${startDateStr}`,
-      cycleName: `${formatCycleDisplayDate(startDateStr)} – ${formatCycleDisplayDate(endDateStr)}`,
+      cycleName: `${formatCycleDisplayDate(startDateStr)} – ${formatCycleDisplayDate(displayEndDateStr)}`,
       startType: 'default',
       startDate: startDateStr,
       startTimestamp: startIso,
@@ -177,7 +178,7 @@ export const buildUserCycleList = (
 
       return {
         ...cycle,
-        cycleName: `${formatCycleDisplayDate(cycle.startDate)} – ${formatCycleDisplayDate(endDateStr)}`,
+        cycleName: `${formatCycleDisplayDate(cycle.startDate)} – ${formatCycleDisplayDate(nextCycle.startDate)}`,
         endDate: endDateStr,
         endTimestamp: endIso,
         totalDays,

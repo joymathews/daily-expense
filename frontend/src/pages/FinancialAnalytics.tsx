@@ -3,7 +3,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { getActiveCycleRange } from '../utils/transaction-helper';
 import { useUserCycles } from '../hooks/use-user-cycles';
 import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
-import { filterTransactionsByCycle } from '../utils/cycle-helper';
+import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-helper';
 import {
   calculateDiscretionarySpend,
   calculateRunRateForecast,
@@ -140,9 +140,10 @@ const FinancialAnalytics: React.FC = () => {
 
   // Get active cycle range
   const currentCycle = selectedCycle || activeCycle;
+  const expectedEnd = currentCycle ? getExpectedCycleEnd(currentCycle.startDate, billingCycleStartDay) : todayStr;
   const cycleRange = currentCycle ? {
     start: currentCycle.startDate,
-    end: currentCycle.endDate || todayStr
+    end: currentCycle.endDate || expectedEnd
   } : getActiveCycleRange(billingCycleStartDay);
 
   const cycleFilteredTxs = currentCycle ? filterTransactionsByCycle(transactions, currentCycle) : transactions;

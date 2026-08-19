@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { UserCycleFrontend } from '../utils/cycle-helper';
+import { formatLocalTransactionTime } from '../utils/transaction-helper';
 
 export interface GoldTxOption {
   id: string;
@@ -15,7 +16,7 @@ interface CycleOverrideModalProps {
   isOpen: boolean;
   onClose: () => void;
   cycle?: UserCycleFrontend | null;
-  transactions?: GoldTxOption[];
+  transactions: GoldTxOption[];
   onSaveOverride: (payload: {
     startType: 'default' | 'transaction' | 'date';
     startTransactionId?: string;
@@ -30,21 +31,18 @@ export const CycleOverrideModal: React.FC<CycleOverrideModalProps> = ({
   isOpen,
   onClose,
   cycle,
-  transactions = [],
+  transactions,
   onSaveOverride,
   onResetDefault,
 }) => {
-  const [startType, setStartType] = useState<'default' | 'transaction' | 'date'>(
-    cycle?.startType || 'transaction'
-  );
-  const [selectedTxId, setSelectedTxId] = useState<string>(
-    cycle?.startTransactionId || ''
-  );
-  const [customDate, setCustomDate] = useState<string>(
-    cycle?.startDate || new Date().toISOString().split('T')[0]
-  );
-  const [loading, setLoading] = useState<boolean>(false);
+  const [startType, setStartType] = useState<'default' | 'transaction' | 'date'>('transaction');
+  const [selectedTxId, setSelectedTxId] = useState<string>('');
+  const [customDate, setCustomDate] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const eligibleTransactions = (transactions || []).filter(tx => tx.transactionDate <= todayStr);
 
   if (!isOpen) return null;
 
@@ -183,11 +181,15 @@ export const CycleOverrideModal: React.FC<CycleOverrideModalProps> = ({
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">-- Select Transaction --</option>
-                {transactions.map((tx) => (
-                  <option key={tx.id} value={tx.id}>
-                    {tx.transactionDate} - {tx.merchant} ({tx.currency} {tx.amount.toLocaleString()}) [{tx.category}]
-                  </option>
-                ))}
+                {eligibleTransactions.map((tx) => {
+                  const localTime = formatLocalTransactionTime(tx.sourceReceivedAt);
+                  const dateLabel = localTime ? `${tx.transactionDate} ${localTime}` : tx.transactionDate;
+                  return (
+                    <option key={tx.id} value={tx.id}>
+                      [{dateLabel}] - {tx.merchant} ({tx.currency} {tx.amount.toLocaleString()}) [{tx.category}]
+                    </option>
+                  );
+                })}
               </select>
             </div>
           )}

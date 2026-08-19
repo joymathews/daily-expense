@@ -6,7 +6,7 @@ import { computeSalaryAllocation, getDatesInRange, getActiveCycleRange } from '.
 import { useUserCycles } from '../hooks/use-user-cycles';
 import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
 import { CycleOverrideModal } from '../components/CycleOverrideModal';
-import { filterTransactionsByCycle } from '../utils/cycle-helper';
+import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-helper';
 import SpendCalendar from '../components/spend-calendar';
 
 interface DashboardProps {
@@ -199,8 +199,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
 
           // Calculate billing cycle trend data based on cycle range (up to current date)
           const currCycleForTrend = selectedCycle || activeCycle;
+          const expectedTrendEnd = currCycleForTrend ? getExpectedCycleEnd(currCycleForTrend.startDate, cycleStartDay) : todayStr;
           const range = currCycleForTrend 
-            ? { start: currCycleForTrend.startDate, end: currCycleForTrend.endDate || todayStr }
+            ? { start: currCycleForTrend.startDate, end: currCycleForTrend.endDate || expectedTrendEnd }
             : getActiveCycleRange(cycleStartDay);
 
           const trendEndLimit = todayStr < range.start ? range.start : (todayStr > range.end ? range.end : todayStr);
@@ -320,7 +321,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
 
   const availableCycles = React.useMemo(() => {
     return cycles
-      .filter(c => !c.isCurrent)
+      .filter(c => !c.isCurrent && c.startDate <= todayStr)
       .map((c, idx) => ({
         offset: idx + 1,
         cycleId: c.id,
@@ -1098,12 +1099,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
                   ● Current Cycle (₹{comparisonChartData.currentTotal.toFixed(0)})
                 </span>
               </label>
-
-              {(comparisonChartData.historicalData || []).map((hist) => (
-                <span key={hist.offset} className="text-xs font-bold text-gray-600 uppercase tracking-wider">
-                  ● {hist.label} (₹{hist.total.toFixed(0)})
-                </span>
-              ))}
 
               {/* Dynamic Dropdown Trigger */}
               <div className="relative inline-block text-left" data-testid="cycle-dropdown-container">

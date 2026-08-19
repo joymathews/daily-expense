@@ -80,3 +80,27 @@ export const isActiveCycle = (cycle: UserCycleFrontend | null | undefined): bool
   if (!cycle) return false;
   return cycle.isCurrent || cycle.endTimestamp === null;
 };
+
+/**
+ * Calculates the expected end date (+1 day beyond targetStartDay of next month) for an open active cycle.
+ */
+export const getExpectedCycleEnd = (startDateStr: string, targetStartDay: number = 17): string => {
+  if (!startDateStr) return new Date().toISOString().split('T')[0];
+  const parts = startDateStr.split('-').map(Number);
+  if (parts.length < 3) return startDateStr;
+
+  const year = parts[0];
+  const month = parts[1]; // 1-12
+
+  let nextYear = year;
+  let nextMonth = month + 1;
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+
+  const endDay = Math.min(31, targetStartDay + 1);
+  const dayStr = String(endDay).padStart(2, '0');
+  const monthStr = String(nextMonth).padStart(2, '0');
+  return `${nextYear}-${monthStr}-${dayStr}`;
+};
