@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
-import { getActiveCycleRange, computeSalaryAllocation, getDatesInRange, getCycleRangeForOffset } from '../utils/transaction-helper';
+import { computeSalaryAllocation, getDatesInRange, getActiveCycleRange } from '../utils/transaction-helper';
+import { useUserCycles } from '../hooks/use-user-cycles';
+import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
+import { CycleOverrideModal } from '../components/CycleOverrideModal';
+import { filterTransactionsByCycle } from '../utils/cycle-helper';
 import SpendCalendar from '../components/spend-calendar';
 
 interface DashboardProps {
@@ -11,6 +15,9 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const { llmAccuracyStats } = useGmailIntegration();
+  const { cycles, activeCycle, selectedCycle, setSelectedCycle, setCycleOverride, removeCycleOverride } = useUserCycles();
+  const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
+
   const [metrics, setMetrics] = useState({
     bronzeCount: 0,
     bronzeProcessedCount: 0,
@@ -29,7 +36,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [activeSeries, setActiveSeries] = useState({
     current: true,
   });
-  const [selectedOffsets, setSelectedOffsets] = useState<number[]>([-1]);
+  const [selectedOffsets, setSelectedOffsets] = useState<number[]>([1]);
   const [isCycleDropdownOpen, setIsCycleDropdownOpen] = useState(false);
   const [chartViewMode, setChartViewMode] = useState<'daily' | 'cumulative'>('cumulative');
   const [hoveredCompPoint, setHoveredCompPoint] = useState<any | null>(null);
@@ -52,6 +59,58 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [dailyTransactionsMap, setDailyTransactionsMap] = useState<Record<string, any[]>>({});
   const [todayDateString, setTodayDateString] = useState('');
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+
+  const [rawLedgerData, setRawLedgerData] = useState<{ goldTxs: any[]; prefs: any; fixedChargesList: any[] } | null>(null);
+
+  useEffect(() => {
+    if (!rawLedgerData) return;
+    const { goldTxs, prefs, fixedChargesList } = rawLedgerData;
+    const currentCycle = selectedCycle || activeCycle;
+    const cycleStartDay = prefs.billingCycleStartDay ?? 17;
+    const expectedSalary = prefs.expectedSalary ?? 100000;
+    const range = currentCycle ? {
+      start: currentCycle.startDate,
+      end: currentCycle.endDate || getActiveCycleRange(cycleStartDay).end
+    } : getActiveCycleRange(cycleStartDay);
+
+    setBillingCycleRange(range);
+
+    const cycleFilteredTxs = filterTransactionsByCycle(goldTxs, currentCycle);
+    const allocation = computeSalaryAllocation(cycleFilteredTxs, range, expectedSalary, fixedChargesList);
+    setSalaryAllocation(allocation);
+
+    const activeFCs = (fixedChargesList || []).filter((fc: any) => {
+      return fc.startDate <= range.end && fc.endDate >= range.start;
+    });
+    setActiveFixedCharges(activeFCs);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const trendEndLimit = todayStr < range.start ? range.start : (todayStr > range.end ? range.end : todayStr);
+    const cycleDates = getDatesInRange(range.start, trendEndLimit);
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const trendData = cycleDates.map((dateStr: string) => {
+      const dateParts = dateStr.split('-').map(Number);
+      const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+      const dayName = dayNames[d.getDay()];
+      const formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+      const amount = goldTxs
+        .filter((tx: any) => tx.transactionDate === dateStr)
+        .reduce((sum: number, tx: any) => {
+          if (tx.transactionType === 'transfer') return sum;
+          if (tx.transactionType === 'fixed') return sum;
+          const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
+          return sum + signedAmt;
+        }, 0);
+
+      return {
+        day: dayName,
+        date: formattedDate,
+        amount: Math.max(0, amount),
+      };
+    });
+    setWeeklyTrendData(trendData);
+  }, [selectedCycle, activeCycle, rawLedgerData]);
 
   useEffect(() => {
     const loadMetrics = async () => {
@@ -78,19 +137,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           const silverTxs = silver.transactions || [];
           const rawEmails = raw.emails || [];
           const cycleStartDay = prefs.billingCycleStartDay ?? 17;
-          const expectedSalary = prefs.expectedSalary ?? 100000;
           const fixedChargesList = fcData.fixedCharges || [];
+          setRawLedgerData({ goldTxs, prefs, fixedChargesList });
+          setGoldTransactions(goldTxs);
+          setPrefsStartDay(cycleStartDay);
 
-          const range = getActiveCycleRange(cycleStartDay);
-          setBillingCycleRange(range);
+          const pms = Array.from(new Set(goldTxs.map((tx: any) => tx.paymentMethod || 'Unknown').filter(Boolean))) as string[];
+          pms.sort((a, b) => a.localeCompare(b));
+          setUniquePaymentMethods(pms);
+          setSelectedPaymentMethods(pms);
 
-          const allocation = computeSalaryAllocation(goldTxs, range, expectedSalary, fixedChargesList);
-          setSalaryAllocation(allocation);
-
-          const activeFCs = (fixedChargesList || []).filter((fc: any) => {
-            return fc.startDate <= range.end && fc.endDate >= range.start;
-          });
-          setActiveFixedCharges(activeFCs);
           
           let bronzeProcessed = 0;
           let bronzeRejected = 0;
@@ -142,6 +198,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           });
 
           // Calculate billing cycle trend data based on cycle range (up to current date)
+          const currCycleForTrend = selectedCycle || activeCycle;
+          const range = currCycleForTrend 
+            ? { start: currCycleForTrend.startDate, end: currCycleForTrend.endDate || todayStr }
+            : getActiveCycleRange(cycleStartDay);
+
           const trendEndLimit = todayStr < range.start ? range.start : (todayStr > range.end ? range.end : todayStr);
           const cycleDates = getDatesInRange(range.start, trendEndLimit);
           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -166,15 +227,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
               amount: Math.max(0, amount),
             };
           });
-          setWeeklyTrendData(trendData);
-          setGoldTransactions(goldTxs);
-          setPrefsStartDay(cycleStartDay);
-
-          const pms = Array.from(new Set(goldTxs.map((tx: any) => tx.paymentMethod || 'Unknown').filter(Boolean))) as string[];
-          pms.sort((a, b) => a.localeCompare(b));
-          setUniquePaymentMethods(pms);
-          setSelectedPaymentMethods(pms);
-
           // Build daily spend map for the spending calendar (all recorded dates, not limited to cycle)
           const spendMap: Record<string, number> = {};
           goldTxs.forEach((tx: any) => {
@@ -267,34 +319,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   }, [goldTransactions, todayStr]);
 
   const availableCycles = React.useMemo(() => {
-    if (!minDate) return [];
-    const cycles = [];
-    let offset = -1;
-    while (offset >= -24) {
-      const range = getCycleRangeForOffset(prefsStartDay, offset);
-      
-      const formatLabel = (dateStr: string) => {
-        const parts = dateStr.split('-');
-        if (parts.length < 3) return dateStr;
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const monthIdx = parseInt(parts[1], 10) - 1;
-        const shortYear = parts[0].slice(2);
-        return `${parts[2]} ${months[monthIdx]} '${shortYear}`;
-      };
-
-      cycles.push({
-        offset,
-        range,
-        label: `${formatLabel(range.start)} - ${formatLabel(range.end)}`
-      });
-
-      if (range.start <= minDate) {
-        break;
-      }
-      offset--;
-    }
-    return cycles;
-  }, [minDate, prefsStartDay]);
+    return cycles
+      .filter(c => !c.isCurrent)
+      .map((c, idx) => ({
+        offset: idx + 1,
+        cycleId: c.id,
+        cycle: c,
+        range: { start: c.startDate, end: c.endDate || todayStr },
+        label: c.cycleName,
+      }));
+  }, [cycles, todayStr]);
 
   const comparisonChartData = React.useMemo(() => {
     try {
@@ -309,18 +343,22 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         };
       }
 
-      const currentRange = getCycleRangeForOffset(prefsStartDay, 0);
-      const currentDates = getDatesInRange(currentRange.start, currentRange.end);
+      const currCycle = selectedCycle || activeCycle;
+      const currentStart = currCycle?.startDate || todayStr;
+      const currentEnd = currCycle?.endDate || todayStr;
+      const currentDates = getDatesInRange(currentStart, currentEnd);
 
-      const getDailySpends = (datesList: string[], isCurrent: boolean) => {
+      const getDailySpends = (datesList: string[], isCurrent: boolean, cycleObj?: any) => {
         let cumulativeSum = 0;
         let totalSum = 0;
+        const cycleTxs = cycleObj ? filterTransactionsByCycle(goldTransactions, cycleObj) : goldTransactions;
+
         const data = datesList.map((dateStr) => {
           if (isCurrent && dateStr > todayStr) {
             return { date: dateStr, amount: null };
           }
 
-          const amount = goldTransactions
+          const amount = cycleTxs
             .filter((tx: any) => {
               if (tx.transactionDate !== dateStr) return false;
               if (tx.transactionType === 'transfer') return false;
@@ -347,31 +385,23 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         return { spends: data, total: totalSum };
       };
 
-      const currentData = getDailySpends(currentDates, true);
+      const currentData = getDailySpends(currentDates, true, currCycle);
 
-      const sortedOffsets = [...selectedOffsets].sort((a, b) => b - a);
-      const historicalData = sortedOffsets.map((offset) => {
-        const range = getCycleRangeForOffset(prefsStartDay, offset);
-        const dates = getDatesInRange(range.start, range.end);
-        const daily = getDailySpends(dates, false);
-        
-        const formatLabel = (dateStr: string) => {
-          const parts = dateStr.split('-');
-          if (parts.length < 3) return dateStr;
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          const monthIdx = parseInt(parts[1], 10) - 1;
-          const shortYear = parts[0].slice(2);
-          return `${parts[2]} ${months[monthIdx]} '${shortYear}`;
-        };
+      const historicalData = selectedOffsets.map((offset) => {
+        const matchingItem = availableCycles.find(a => a.offset === offset);
+        if (!matchingItem) return null;
+        const dates = getDatesInRange(matchingItem.range.start, matchingItem.range.end);
+        const daily = getDailySpends(dates, false, matchingItem.cycle);
 
         return {
           offset,
-          range,
+          range: matchingItem.range,
           spends: daily.spends,
           total: daily.total,
-          label: `${formatLabel(range.start)} - ${formatLabel(range.end)}`
+          label: matchingItem.label
         };
-      });
+      }).filter(Boolean) as any[];
+
 
       const maxDays = Math.max(
         currentDates.length,
@@ -407,7 +437,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         error: err.message || String(err)
       };
     }
-  }, [goldTransactions, prefsStartDay, selectedPaymentMethods, activeSeries, selectedOffsets, chartViewMode, todayStr]);
+  }, [goldTransactions, prefsStartDay, selectedPaymentMethods, activeSeries, selectedOffsets, chartViewMode, todayStr, selectedCycle, activeCycle, availableCycles]);
 
   const compStepX = comparisonChartData.daysCount > 1 ? 890 / (comparisonChartData.daysCount - 1) : 890;
 
@@ -470,14 +500,28 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             Personal Expense Ledger System
           </p>
         </div>
-        <div className="flex items-center space-x-3 bg-white border border-gray-100 rounded-xl px-4 py-2 shadow-sm self-start md:self-auto">
-          <span className="flex h-2.5 w-2.5 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-          </span>
-          <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">
-            Cognito Session: Active
-          </span>
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          <CycleSelectorDropdown
+            cycles={cycles}
+            selectedCycle={selectedCycle}
+            onSelectCycle={setSelectedCycle}
+          />
+          <button
+            type="button"
+            onClick={() => setIsCycleModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/60 text-indigo-700 text-xs font-extrabold uppercase tracking-wide hover:bg-indigo-100 transition-all cursor-pointer shadow-sm"
+          >
+            ✏️ Customize Start Date
+          </button>
+          <div className="flex items-center space-x-3 bg-white border border-gray-100 rounded-xl px-4 py-2 shadow-sm">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">
+              Cognito Session: Active
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1055,6 +1099,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
                 </span>
               </label>
 
+              {(comparisonChartData.historicalData || []).map((hist) => (
+                <span key={hist.offset} className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  ● {hist.label} (₹{hist.total.toFixed(0)})
+                </span>
+              ))}
+
               {/* Dynamic Dropdown Trigger */}
               <div className="relative inline-block text-left" data-testid="cycle-dropdown-container">
                 <button
@@ -1088,11 +1138,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
                               <input
                                 type="checkbox"
                                 checked={isChecked}
-                                onChange={() => {
-                                  if (isChecked) {
-                                    setSelectedOffsets(selectedOffsets.filter(o => o !== cycle.offset));
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    if (!selectedOffsets.includes(cycle.offset)) {
+                                      setSelectedOffsets([...selectedOffsets, cycle.offset]);
+                                    }
                                   } else {
-                                    setSelectedOffsets([...selectedOffsets, cycle.offset]);
+                                    setSelectedOffsets(selectedOffsets.filter(o => o !== cycle.offset));
                                   }
                                 }}
                                 className="rounded border-gray-300 text-indigo-650 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
@@ -1645,6 +1697,28 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             </div>
           </div>
         )}
+
+        {/* Cycle Override Configuration Modal */}
+        <CycleOverrideModal
+          isOpen={isCycleModalOpen}
+          onClose={() => setIsCycleModalOpen(false)}
+          cycle={selectedCycle || activeCycle}
+          transactions={(goldTransactions || []).map((tx: any) => ({
+            id: tx.id,
+            merchant: tx.merchant,
+            amount: tx.amount,
+            currency: tx.currency,
+            transactionDate: tx.transactionDate,
+            sourceReceivedAt: tx.sourceReceivedAt,
+            category: tx.category,
+          }))}
+          onSaveOverride={async (payload) => {
+            await setCycleOverride(payload);
+          }}
+          onResetDefault={async (cycleId) => {
+            await removeCycleOverride(cycleId);
+          }}
+        />
       </div>
     </div>
   );

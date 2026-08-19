@@ -87,6 +87,11 @@
 - [NFR-ANALYSIS-13] Reference Line Render Latency: Drawing the average reference lines and computing variance percentages on hover must resolve instantly (within 10ms of state changes).
 - [NFR-ANALYSIS-14] Savings Recommendations Performance: The compilation and matching of savings recommendations must complete within 20ms of state changes, and live recalibration on slider threshold updates must render instantly within 30ms to maintain fluid user interactivity.
 
+## Dynamic Cycle Performance & Usability [NFR-CYCLE]
+- [NFR-CYCLE-1] Cycle Engine API Resolution Performance: Fetching computed user cycles from the Cycle Engine API (GET /api/pipeline/user-cycles) must execute and return the formatted cycle list within 100ms.
+- [NFR-CYCLE-2] Intra-Day Boundary Evaluation Latency: Evaluating transactions against cycle start/end timestamps and filtering transactions for rendering must resolve within 20ms during UI render compilation.
+- [NFR-CYCLE-3] Cycle Override Persistence & Recalculation Performance: Saving or deleting a cycle start override (POST/DELETE /api/pipeline/user-cycles/override) must persist the override and return updated dynamic cycle data within 150ms at the API layer.
+
 ## Database Raw Table Viewer [NFR-DB-VIEWER]
 - [NFR-DB-VIEWER-1] Raw Table Query Latency & Data Isolation: The paginated database viewer API must execute raw table queries and return formatted cell payloads in under 200ms for page sizes up to 100 rows. All table queries must strictly enforce authentication (`checkJwt`) and user isolation by `user_id` context.
 

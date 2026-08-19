@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import type { GoldTransaction } from '../hooks/use-gmail-integration';
 import { EmailDetailModal } from '../components/gmail/EmailDetailModal';
@@ -9,8 +9,15 @@ import {
   computeDailySpendTimeline
 } from '../utils/transaction-helper';
 import { BatchEditModal } from '../components/gmail/BatchEditModal';
+import { useUserCycles } from '../hooks/use-user-cycles';
+import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
+import { CycleOverrideModal } from '../components/CycleOverrideModal';
+import { filterTransactionsByCycle } from '../utils/cycle-helper';
 
 const GoldTransactions: React.FC = () => {
+  const { cycles, activeCycle, selectedCycle, setSelectedCycle, setCycleOverride, removeCycleOverride } = useUserCycles();
+  const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
+
   const {
     startDate,
     setStartDate,
@@ -28,7 +35,19 @@ const GoldTransactions: React.FC = () => {
     fetchLlmLog,
   } = useGmailIntegration({ defaultToCycleRange: true });
 
+  useEffect(() => {
+    if (selectedCycle) {
+      setStartDate(selectedCycle.startDate);
+      if (selectedCycle.endDate) {
+        setEndDate(selectedCycle.endDate);
+      } else {
+        setEndDate(new Date().toISOString().split('T')[0]);
+      }
+    }
+  }, [selectedCycle]);
+
   // Search keyword state
+
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filters state
@@ -111,8 +130,14 @@ const GoldTransactions: React.FC = () => {
     });
   };
 
-  // 1. Filter transactions by search query, category, payment method, and source type
-  const filteredTransactions = goldTransactions.filter(tx => {
+  // 1. Filter transactions by selected billing cycle (intra-day precision) and criteria
+  const cycleFilteredTxs = useMemo(() => {
+    if (!selectedCycle) return goldTransactions;
+    const filtered = filterTransactionsByCycle(goldTransactions, selectedCycle);
+    return (filtered.length === 0 && goldTransactions.length > 0) ? goldTransactions : filtered;
+  }, [goldTransactions, selectedCycle]);
+
+  const filteredTransactions = cycleFilteredTxs.filter(tx => {
     // Check Category Filter (multi-select)
     if (selectedCategories.length > 0 && !selectedCategories.includes(tx.category)) {
       return false;
@@ -262,6 +287,20 @@ const GoldTransactions: React.FC = () => {
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mt-1">
             Confirmed Ledger Items & Verified Financial Accounts
           </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <CycleSelectorDropdown
+            cycles={cycles}
+            selectedCycle={selectedCycle}
+            onSelectCycle={setSelectedCycle}
+          />
+          <button
+            type="button"
+            onClick={() => setIsCycleModalOpen(true)}
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 shadow-sm transition-all"
+          >
+            ⚙️ Configure Cycle
+          </button>
         </div>
       </div>
 
@@ -1043,6 +1082,28 @@ const GoldTransactions: React.FC = () => {
         lineage={deleteLineage}
         sourceStage={deleteSourceStage}
         isManual={isDeleteManual}
+      />
+
+      {/* Cycle Override Configuration Modal */}
+      <CycleOverrideModal
+        isOpen={isCycleModalOpen}
+        onClose={() => setIsCycleModalOpen(false)}
+        cycle={selectedCycle}
+        transactions={goldTransactions.map(tx => ({
+          id: tx.id,
+          merchant: tx.merchant,
+          amount: tx.amount,
+          currency: tx.currency,
+          transactionDate: tx.transactionDate,
+          sourceReceivedAt: tx.sourceReceivedAt,
+          category: tx.category,
+        }))}
+        onSaveOverride={async (payload) => {
+          await setCycleOverride(payload);
+        }}
+        onResetDefault={async (cycleId) => {
+          await removeCycleOverride(cycleId);
+        }}
       />
 
       <BatchEditModal

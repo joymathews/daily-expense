@@ -114,11 +114,30 @@ export interface ITransactionRepository {
   getUserPreferences(userId: string): Promise<{ billingCycleStartDay: number; expectedSalary: number }>;
   updateUserPreferences(userId: string, cycleStartDay: number, expectedSalary: number): Promise<void>;
 
+  // Cycle overrides
+  getCycleOverrides(userId: string): Promise<CycleOverrideData[]>;
+  upsertCycleOverride(userId: string, override: CycleOverrideData): Promise<void>;
+  deleteCycleOverride(userId: string, cycleId: string): Promise<void>;
+  isCycleStartAnchor(userId: string, transactionId: string): Promise<boolean>;
+
   // Fixed charges
   getFixedCharges(userId: string): Promise<FixedCharge[]>;
   saveFixedCharge(charge: FixedCharge): Promise<void>;
   deleteFixedCharge(id: string, userId: string): Promise<void>;
 }
+
+export interface CycleOverrideData {
+  id?: string;
+  userId: string;
+  cycleName?: string;
+  startType: 'default' | 'transaction' | 'date';
+  startTransactionId?: string;
+  startDate: string;
+  startTimestamp: string;
+  endDate?: string | null;
+  endTimestamp?: string | null;
+}
+
 
 export interface FixedCharge {
   id: string;

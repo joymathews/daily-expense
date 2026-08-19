@@ -3,8 +3,15 @@ import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import { FilterPanel } from '../components/gmail/FilterPanel';
 import { STANDARD_CATEGORIES } from '../utils/transaction-helper';
 import LlmFeedbackSettings from '../components/llm-feedback-settings';
+import { useUserCycles } from '../hooks/use-user-cycles';
+import { formatCycleLabel, type UserCycleFrontend } from '../utils/cycle-helper';
+import { CycleOverrideModal } from '../components/CycleOverrideModal';
 
 const DataIngestion: React.FC = () => {
+  const { cycles, setCycleOverride, removeCycleOverride } = useUserCycles();
+  const [overrideTargetCycle, setOverrideTargetCycle] = useState<UserCycleFrontend | null>(null);
+  const [isCycleModalOpen, setIsCycleModalOpen] = useState<boolean>(false);
+
   const {
     senders,
     currentSender,
@@ -950,27 +957,12 @@ const DataIngestion: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Left Column: Forms */}
               <div className="space-y-8">
-                {/* Cycle and Salary Settings Form */}
+                {/* Salary Settings Form */}
                 <div className="space-y-4">
                   <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
-                    Cycle & Salary Configuration
+                    Monthly Salary Configuration
                   </h4>
                   <form onSubmit={handleSaveSettings} className="space-y-4" data-testid="analysis-settings-form">
-                    <div className="flex flex-col">
-                      <label htmlFor="cycle-day-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
-                        Billing Cycle Start Day (1-28):
-                      </label>
-                      <input
-                        id="cycle-day-input"
-                        type="number"
-                        min="1"
-                        max="28"
-                        value={localCycleDay}
-                        onChange={(e) => setLocalCycleDay(e.target.value)}
-                        className="bg-gray-50/50 border border-gray-250 rounded-xl outline-none text-xs font-bold text-gray-800 px-3.5 py-2 focus:border-indigo-500 focus:bg-white transition-all font-semibold"
-                      />
-                    </div>
-
                     <div className="flex flex-col">
                       <label htmlFor="salary-input" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 font-sans">
                         Expected Monthly Salary:
@@ -989,7 +981,7 @@ const DataIngestion: React.FC = () => {
                       type="submit"
                       className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all uppercase tracking-wider cursor-pointer"
                     >
-                      Save Preferences
+                      Save Salary Preference
                     </button>
                   </form>
                   {settingsMessage && (
@@ -997,6 +989,62 @@ const DataIngestion: React.FC = () => {
                       {settingsMessage.text}
                     </p>
                   )}
+
+                  {/* Cycle History Manager [FUNC-CYCLE-2] */}
+                  <div className="pt-4 border-t border-gray-100 space-y-3">
+                    <h5 className="text-[11px] font-extrabold text-gray-800 uppercase tracking-wider">
+                      📜 Cycle History & Anchors
+                    </h5>
+                    <div className="bg-gray-50/70 border border-gray-200 rounded-xl overflow-hidden text-xs">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-gray-100/70 text-[10px] text-gray-500 uppercase font-bold border-b border-gray-200">
+                            <th className="p-2">Cycle</th>
+                            <th className="p-2">Start Type</th>
+                            <th className="p-2 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {cycles.slice(0, 8).map((c) => (
+                            <tr key={c.id} className="hover:bg-white transition-colors">
+                              <td className="p-2 font-medium">
+                                {c.isCurrent ? '⭐ ' : ''}{formatCycleLabel(c)}
+                              </td>
+                              <td className="p-2">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                  c.startType === 'transaction' ? 'bg-indigo-100 text-indigo-800' :
+                                  c.startType === 'date' ? 'bg-amber-100 text-amber-800' : 'bg-gray-200 text-gray-700'
+                                }`}>
+                                  {c.startType}
+                                </span>
+                              </td>
+                              <td className="p-2 text-right space-x-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOverrideTargetCycle(c);
+                                    setIsCycleModalOpen(true);
+                                  }}
+                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                >
+                                  ✏️ Customize Start Date
+                                </button>
+                                {c.startType !== 'default' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCycleOverride(c.id)}
+                                    className="text-[10px] font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
+                                  >
+                                    Reset
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Fixed Charges Template Form */}
@@ -1216,6 +1264,28 @@ const DataIngestion: React.FC = () => {
             <LlmFeedbackSettings />
           </div>
         )}
+
+        {/* Cycle Override Configuration Modal */}
+        <CycleOverrideModal
+          isOpen={isCycleModalOpen}
+          onClose={() => setIsCycleModalOpen(false)}
+          cycle={overrideTargetCycle}
+          transactions={(goldTransactions || []).map((tx: any) => ({
+            id: tx.id,
+            merchant: tx.merchant,
+            amount: tx.amount,
+            currency: tx.currency,
+            transactionDate: tx.transactionDate,
+            sourceReceivedAt: tx.sourceReceivedAt,
+            category: tx.category,
+          }))}
+          onSaveOverride={async (payload) => {
+            await setCycleOverride(payload);
+          }}
+          onResetDefault={async (cycleId) => {
+            await removeCycleOverride(cycleId);
+          }}
+        />
       </div>
     </div>
   );

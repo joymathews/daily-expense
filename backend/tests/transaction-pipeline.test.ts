@@ -254,6 +254,10 @@ describe('Transaction Processing Pipeline Integration', () => {
       getFixedCharges: jest.fn().mockResolvedValue([]),
       saveFixedCharge: jest.fn().mockResolvedValue(undefined),
       deleteFixedCharge: jest.fn().mockResolvedValue(undefined),
+      getCycleOverrides: jest.fn().mockResolvedValue([]),
+      upsertCycleOverride: jest.fn().mockResolvedValue(undefined),
+      deleteCycleOverride: jest.fn().mockResolvedValue(undefined),
+      isCycleStartAnchor: jest.fn().mockResolvedValue(false),
     };
 
     const ingestion = new TransactionIngestionService(mockRepo, extractor);
