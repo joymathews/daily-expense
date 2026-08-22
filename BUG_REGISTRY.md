@@ -324,3 +324,30 @@ In `EmailDetailModal.tsx` and `DataIngestion.tsx`, the datalist suggestions opti
 ### Verification Test
 * **Test Case**: `frontend/src/App.test.tsx`
   - *suggests custom categories dynamically in the edit modal and creation forms [BUG-018]*
+
+---
+
+## [BUG-019] Transaction Edit Save Modal Persistence & Closing Behavior
+
+### Description
+When editing a transaction inside `EmailDetailModal`:
+1. Clicking **"Save Updates"** on a Silver staging transaction updates the database record but does not close the modal, leaving the user with no explicit visual acknowledgment of completion.
+2. Clicking **"Save Corrections"** on a Gold transaction calls `updateGoldTransaction`, but `updateGoldTransaction` silently swallows API errors without throwing, causing the modal to close even when the server request fails.
+3. Neither save button displays an inline error alert message or a pending loading state (**"Saving..."**) during submission.
+
+### Root Cause
+1. `handleUpdateSilver` in `EmailDetailModal.tsx` did not invoke `setSelectedEmail(null)` after completing the update API call.
+2. `updateGoldTransaction` and `updateSilverTransaction` in `use-gmail-integration.ts` caught errors internally without checking `response.ok` or re-throwing exceptions, preventing `EmailDetailModal.tsx` from catching API failures.
+3. `EmailDetailModal.tsx` lacked `isSaving` and `saveError` state management and error banner rendering.
+
+### Resolution
+1. Refactored `updateGoldTransaction` and `updateSilverTransaction` in `use-gmail-integration.ts` to check `response.ok` and throw an `Error` on failure.
+2. Added `isSaving` and `saveError` local state to `EmailDetailModal.tsx`.
+3. Updated `handleUpdateSilver` to call `setSelectedEmail(null)` upon success, and catch errors to populate `saveError` while leaving the modal open.
+4. Updated `handleSave` (Gold mode) to call `setSelectedGoldTransaction(null)` upon success, and catch errors to populate `saveError` while leaving the modal open.
+5. Rendered a prominent inline red error alert banner inside the modal body when `saveError` is present, and displayed `"Saving..."` loading state on save buttons.
+
+### Verification Test
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *automatically closes modal on successful transaction update and presents error banner on failure [BUG-019]*
+
