@@ -3,9 +3,11 @@ import crypto from 'crypto';
 import { SQLiteTransactionRepository } from '../db/sqlite-transaction-repository';
 import { TransactionExtractorFactory } from '../services/transaction-extractor';
 import { CorrectionLearningService } from '../services/correction-learning-service';
+import { buildUserCycleList } from '../services/cycle-engine';
 
 const router = Router();
 const correctionLearningService = new CorrectionLearningService();
+
 
 /**
  * [FUNC-GMAIL-15], [FUNC-GMAIL-16] GET /api/pipeline/raw-inputs
@@ -778,6 +780,107 @@ router.put('/user-preferences', async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to update user preferences' });
   }
 });
+
+/**
+ * GET /api/pipeline/user-cycles
+ * [FUNC-CYCLE-5, NFR-CYCLE-1]
+ * Returns calculated user cycles list and active cycle details.
+ */
+router.get('/user-cycles', async (req, res) => {
+  const userId = (req as any).auth?.sub || 'default-user';
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    const prefs = await repository.getUserPreferences(userId);
+    const overrides = await repository.getCycleOverrides(userId);
+    await repository.close();
+
+    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, overrides);
+    const activeCycle = cycles.find(c => c.isCurrent) || cycles[0] || null;
+
+    res.status(200).json({ cycles, activeCycle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch user cycles' });
+  }
+});
+
+/**
+ * POST /api/pipeline/user-cycles/override
+ * [FUNC-CYCLE-1, NFR-CYCLE-3]
+ * Saves or updates a cycle start override (transaction anchor or custom date).
+ */
+router.post('/user-cycles/override', async (req, res) => {
+  const userId = (req as any).auth?.sub || 'default-user';
+  const { startType, startTransactionId, startDate, startTimestamp, cycleName } = req.body;
+
+  if (!startType || !startDate || !startTimestamp) {
+    return res.status(400).json({ error: 'startType, startDate, and startTimestamp are required' });
+  }
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    let finalTimestamp = startTimestamp;
+    let finalTxId = startTransactionId;
+
+    // If transaction anchor mode, verify and extract transaction source_received_at if available
+    if (startType === 'transaction' && startTransactionId) {
+      const goldTxs = await repository.getGoldTransactions(userId);
+      const targetTx = goldTxs.find(tx => tx.id === startTransactionId);
+      if (targetTx && targetTx.sourceReceivedAt) {
+        finalTimestamp = targetTx.sourceReceivedAt;
+      }
+    }
+
+    const overrideData = {
+      id: `override-${startDate}`,
+      userId,
+      cycleName: cycleName || `Cycle from ${startDate}`,
+      startType,
+      startTransactionId: finalTxId || null,
+      startDate,
+      startTimestamp: finalTimestamp,
+    };
+
+    await repository.upsertCycleOverride(userId, overrideData);
+
+    const prefs = await repository.getUserPreferences(userId);
+    const overrides = await repository.getCycleOverrides(userId);
+    await repository.close();
+
+    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, overrides);
+    res.status(200).json({ status: 'updated', cycles });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update cycle override' });
+  }
+});
+
+/**
+ * DELETE /api/pipeline/user-cycles/override/:id
+ * [FUNC-CYCLE-2, NFR-CYCLE-3]
+ * Removes a cycle override, reverting that cycle to default start day rule.
+ */
+router.delete('/user-cycles/override/:id', async (req, res) => {
+  const userId = (req as any).auth?.sub || 'default-user';
+  const { id } = req.params;
+
+  try {
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+    await repository.deleteCycleOverride(userId, id);
+
+    const prefs = await repository.getUserPreferences(userId);
+    const overrides = await repository.getCycleOverrides(userId);
+    await repository.close();
+
+    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, overrides);
+    res.status(200).json({ status: 'deleted', cycles });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to delete cycle override' });
+  }
+});
+
 
 
 /**

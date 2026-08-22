@@ -25,6 +25,7 @@ describe('Database Viewer Repository Integration', () => {
     expect(tableNames).toContain('gold_transactions');
     expect(tableNames).toContain('silver_extracted_transactions');
     expect(tableNames).toContain('bronze_raw_inputs');
+    expect(tableNames).toContain('user_cycles');
     expect(tableNames).toContain('fixed_charges');
     expect(tableNames).toContain('user_preferences');
 
@@ -45,12 +46,12 @@ describe('Database Viewer Repository Integration', () => {
     const userIdB = 'user-viewer-b';
 
     // Insert gold records for User A
-    await repository.saveGoldTransaction({
+    await repository.addDirectGoldTransaction({
       id: 'gold-a-1',
       userId: userIdA,
       sourceType: 'manual',
       merchant: 'Supermarket Alpha',
-      amountCents: 4500,
+      amount: 45,
       currency: 'INR',
       transactionDate: '2026-07-01',
       category: 'Groceries',
@@ -58,12 +59,12 @@ describe('Database Viewer Repository Integration', () => {
       transactionType: 'expense'
     });
 
-    await repository.saveGoldTransaction({
+    await repository.addDirectGoldTransaction({
       id: 'gold-a-2',
       userId: userIdA,
       sourceType: 'manual',
       merchant: 'Tech Store',
-      amountCents: 12000,
+      amount: 120,
       currency: 'INR',
       transactionDate: '2026-07-02',
       category: 'Electronics',
@@ -72,12 +73,12 @@ describe('Database Viewer Repository Integration', () => {
     });
 
     // Insert gold record for User B
-    await repository.saveGoldTransaction({
+    await repository.addDirectGoldTransaction({
       id: 'gold-b-1',
       userId: userIdB,
       sourceType: 'manual',
       merchant: 'User B Merchant',
-      amountCents: 9900,
+      amount: 99,
       currency: 'INR',
       transactionDate: '2026-07-03',
       category: 'Shopping',

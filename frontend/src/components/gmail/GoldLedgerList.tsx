@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { GoldTransaction, SilverTransaction } from '../../hooks/use-gmail-integration';
 import { MultiSelect } from '../MultiSelect';
-import { getSignedAmount } from '../../utils/transaction-helper';
+import { getSignedAmount, formatLocalTransactionTime } from '../../utils/transaction-helper';
 import { BatchEditModal } from './BatchEditModal';
 
 interface GoldLedgerListProps {
@@ -88,6 +88,7 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
       (tx.notes || '').toLowerCase().includes(query) ||
       (tx.paymentMethod || '').toLowerCase().includes(query) ||
       (tx.currency || '').toLowerCase().includes(query) ||
+      (tx.transactionType || '').toLowerCase().includes(query) ||
       tx.amount.toString().includes(query)
     );
   });
@@ -339,8 +340,15 @@ export const GoldLedgerList: React.FC<GoldLedgerListProps> = (props) => {
                       className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-350 cursor-pointer"
                     />
                   </td>
-                  <td className="px-2 py-2.5 text-gray-500 max-w-[120px] truncate" title={tx.transactionDate}>
-                    {tx.transactionDate}
+                  <td className="px-2 py-2.5 text-gray-500 whitespace-nowrap" title={tx.sourceReceivedAt || tx.transactionDate}>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-gray-800">{tx.transactionDate}</span>
+                      {formatLocalTransactionTime(tx.sourceReceivedAt) && (
+                        <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide">
+                          🕒 {formatLocalTransactionTime(tx.sourceReceivedAt)}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-2 py-2.5 whitespace-nowrap">
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${

@@ -181,6 +181,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
         payment_method TEXT,
         transaction_type TEXT DEFAULT 'expense' CHECK (transaction_type IN ('expense', 'refund', 'transfer', 'fixed')),
         parent_transaction_id TEXT,
+        source_received_at TEXT,
         deleted_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'utc')),
         updated_at TEXT DEFAULT (datetime('now', 'utc')),
@@ -190,7 +191,27 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
       );
     `);
 
-    // 3.1 LLM Ingestion Logs: Immutable log of parser output
+    await this.migrateSourceReceivedAtColumnIfNeeded();
+
+
+    // 3.1 User Cycles Overrides table
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS user_cycles (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        cycle_name TEXT,
+        start_type TEXT NOT NULL CHECK (start_type IN ('default', 'transaction', 'date')),
+        start_transaction_id TEXT,
+        start_date TEXT NOT NULL,
+        start_timestamp TEXT NOT NULL,
+        end_date TEXT,
+        end_timestamp TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'utc')),
+        UNIQUE(user_id, start_date)
+      );
+    `);
+
+    // 3.2 LLM Ingestion Logs: Immutable log of parser output
     await this.run(`
       CREATE TABLE IF NOT EXISTS llm_extraction_logs (
         id TEXT PRIMARY KEY,
@@ -215,7 +236,10 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     await this.run('CREATE INDEX IF NOT EXISTS idx_bronze_inputs_sender ON bronze_raw_inputs(sender);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_silver_tx_status ON silver_extracted_transactions(status);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_gold_tx_user_date ON gold_transactions(user_id, transaction_date);');
+    await this.run('CREATE INDEX IF NOT EXISTS idx_gold_tx_received_at ON gold_transactions(user_id, source_received_at);');
+    await this.run('CREATE INDEX IF NOT EXISTS idx_user_cycles_user ON user_cycles(user_id, start_date);');
     await this.run('CREATE INDEX IF NOT EXISTS idx_llm_logs_bronze ON llm_extraction_logs(user_id, bronze_input_id);');
+
 
     // 5. Payment Standardization tables
     await this.run(`
@@ -301,6 +325,28 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     // 8. LLM Feedback Learning tables
     await this.initializeFeedbackSchema();
   }
+
+  private async migrateSourceReceivedAtColumnIfNeeded(): Promise<void> {
+    const goldInfo = await this.all<{ name: string }>("PRAGMA table_info(gold_transactions);");
+    const hasCol = goldInfo.some(col => col.name === 'source_received_at');
+    if (!hasCol) {
+      await this.run("ALTER TABLE gold_transactions ADD COLUMN source_received_at TEXT;");
+    }
+    await this.run(`
+      UPDATE gold_transactions
+      SET source_received_at = COALESCE(
+        (
+          SELECT b.received_at
+          FROM silver_extracted_transactions s
+          JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id
+          WHERE s.id = gold_transactions.silver_tx_id
+        ),
+        transaction_date || 'T00:00:00.000Z'
+      )
+      WHERE source_received_at IS NULL OR source_received_at = '';
+    `);
+  }
+
 
   /**
    * Detects whether the silver/gold/llm_logs tables were created with the old
@@ -599,8 +645,13 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
       // 2. Insert validated transaction in gold ledger table
       await this.run(
         `INSERT OR IGNORE INTO gold_transactions 
-         (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type, parent_transaction_id) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type, parent_transaction_id, source_received_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (
+           SELECT b.received_at
+           FROM silver_extracted_transactions s
+           JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id
+           WHERE s.id = ?
+         ))`,
         [
           tx.id,
           pendingId,
@@ -615,6 +666,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
           tx.paymentMethod || null,
           tx.transactionType || 'expense',
           tx.parentTransactionId || null,
+          pendingId,
         ]
       );
 
@@ -634,11 +686,12 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     }
 
     const amountCents = Math.round(tx.amount * 100);
+    const sourceReceivedAt = tx.sourceReceivedAt || `${tx.transactionDate}T00:00:00.000Z`;
 
     await this.run(
       `INSERT OR IGNORE INTO gold_transactions 
-       (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type, parent_transaction_id) 
-       VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, silver_tx_id, user_id, source_type, merchant, amount_cents, currency, transaction_date, category, notes, payment_method, transaction_type, parent_transaction_id, source_received_at) 
+       VALUES (?, NULL, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tx.id,
         tx.userId,
@@ -651,6 +704,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
         tx.paymentMethod,
         tx.transactionType || 'expense',
         tx.parentTransactionId || null,
+        sourceReceivedAt,
       ]
     );
   }
@@ -1565,6 +1619,66 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     }
   }
 
+  async getCycleOverrides(userId: string): Promise<any[]> {
+    const rows = await this.all<any>(
+      'SELECT * FROM user_cycles WHERE user_id = ? ORDER BY start_date DESC',
+      [userId]
+    );
+    return rows.map(r => ({
+      id: r.id,
+      userId: r.user_id,
+      cycleName: r.cycle_name || undefined,
+      startType: r.start_type,
+      startTransactionId: r.start_transaction_id || undefined,
+      startDate: r.start_date,
+      startTimestamp: r.start_timestamp,
+      endDate: r.end_date || null,
+      endTimestamp: r.end_timestamp || null,
+    }));
+  }
+
+  async upsertCycleOverride(userId: string, override: any): Promise<void> {
+    const id = override.id || `override-${override.startDate}`;
+    await this.run(
+      `INSERT INTO user_cycles (id, user_id, cycle_name, start_type, start_transaction_id, start_date, start_timestamp, end_date, end_timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, start_date) DO UPDATE SET
+         cycle_name = excluded.cycle_name,
+         start_type = excluded.start_type,
+         start_transaction_id = excluded.start_transaction_id,
+         start_timestamp = excluded.start_timestamp,
+         end_date = excluded.end_date,
+         end_timestamp = excluded.end_timestamp`,
+      [
+        id,
+        userId,
+        override.cycleName || null,
+        override.startType,
+        override.startTransactionId || null,
+        override.startDate,
+        override.startTimestamp,
+        override.endDate || null,
+        override.endTimestamp || null,
+      ]
+    );
+  }
+
+  async deleteCycleOverride(userId: string, cycleId: string): Promise<void> {
+    await this.run(
+      'DELETE FROM user_cycles WHERE user_id = ? AND (id = ? OR start_date = ?)',
+      [userId, cycleId, cycleId.replace('default-', '').replace('override-', '')]
+    );
+  }
+
+  async isCycleStartAnchor(userId: string, transactionId: string): Promise<boolean> {
+    const row = await this.get<any>(
+      'SELECT id FROM user_cycles WHERE user_id = ? AND start_transaction_id = ?',
+      [userId, transactionId]
+    );
+    return !!row;
+  }
+
+
   async getFixedCharges(userId: string): Promise<FixedCharge[]> {
     const rows = await this.all<any>(
       'SELECT id, name, amount, currency, category, start_date, end_date, payment_method, created_at FROM fixed_charges WHERE user_id = ? ORDER BY created_at DESC',
@@ -2072,6 +2186,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     'gold_transactions',
     'silver_extracted_transactions',
     'bronze_raw_inputs',
+    'user_cycles',
     'fixed_charges',
     'user_preferences',
     'payment_methods',

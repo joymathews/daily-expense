@@ -11,6 +11,20 @@ export interface HelperTransaction {
   paymentMethod?: string;
 }
 
+/**
+ * Formats ISO timestamp or date-only string into user local time (12-hour AM/PM format)
+ */
+export const formatLocalTransactionTime = (isoString?: string): string | null => {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return null;
+  // Date-only UTC fallback (00:00:00.000Z) returns null
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0) {
+    return null;
+  }
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
 export const getSignedAmount = (t: HasAmountAndTransactionType): number => {
   if (t.transactionType === 'refund') return -t.amount;
   if (t.transactionType === 'transfer') return 0;

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { getActiveCycleRange } from '../utils/transaction-helper';
+import { useUserCycles } from '../hooks/use-user-cycles';
+import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
+import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-helper';
 import {
   calculateDiscretionarySpend,
   calculateRunRateForecast,
@@ -20,6 +23,8 @@ import type {
 } from '../utils/analytics-helper';
 
 const FinancialInsights: React.FC = () => {
+  const { cycles, activeCycle, selectedCycle, setSelectedCycle } = useUserCycles();
+
   const [transactions, setTransactions] = useState<any[]>([]);
   const [fixedCharges, setFixedCharges] = useState<any[]>([]);
   const [billingCycleStartDay, setBillingCycleStartDay] = useState(17);
@@ -114,16 +119,25 @@ const FinancialInsights: React.FC = () => {
   }
 
   // Set up calculation parameters
-  const cycleRange = getActiveCycleRange(billingCycleStartDay);
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  
+  const currentCycle = selectedCycle || activeCycle;
+  const expectedEnd = currentCycle ? getExpectedCycleEnd(currentCycle.startDate, billingCycleStartDay) : todayStr;
+  const cycleRange = currentCycle ? {
+    start: currentCycle.startDate,
+    end: currentCycle.endDate || expectedEnd
+  } : getActiveCycleRange(billingCycleStartDay);
+
+  const cycleFilteredTxs = filterTransactionsByCycle(transactions, currentCycle);
 
   const activeFixedCharges = (fixedCharges || []).filter((fc: any) => {
     return fc.startDate <= cycleRange.end && fc.endDate >= cycleRange.start;
   });
   const totalFixedCharges = activeFixedCharges.reduce((sum: number, fc: any) => sum + fc.amount, 0);
 
-  const discretionarySpend = calculateDiscretionarySpend(transactions, cycleRange.start, cycleRange.end);
+  const discretionarySpend = calculateDiscretionarySpend(cycleFilteredTxs, cycleRange.start, cycleRange.end);
+
   
   // Read target budget percent slider value (default 50)
   const savedPercent = localStorage.getItem('analytics_target_budget_percent');
@@ -142,10 +156,13 @@ const FinancialInsights: React.FC = () => {
   const dayOfMonthPeaks: DayPeakPoint[] = calculateDayOfMonthPeaks(transactions);
   const dayOfWeekPeaks: DayOfWeekPeakPoint[] = calculateDayOfWeekPeaks(transactions);
 
+
   // Scan multiple frequencies to detect all recurring subscriptions
   const billsMonthly = detectRecurringBills(transactions, todayStr, 'monthly');
   const billsWeekly = detectRecurringBills(transactions, todayStr, 'weekly');
   const billsBiweekly = detectRecurringBills(transactions, todayStr, 'biweekly');
+
+
   
   const allRecurringBillsMap: Record<string, RecurringBillPrediction> = {};
   [...billsMonthly, ...billsWeekly, ...billsBiweekly].forEach(b => {
@@ -232,13 +249,20 @@ const FinancialInsights: React.FC = () => {
             Dynamic savings recommendations, habit corrections, and wealth strategies compiled from transaction history.
           </p>
         </div>
-        <button
-          onClick={() => setShowCalibrationSettings(!showCalibrationSettings)}
-          className="text-xs font-bold text-gray-655 hover:text-indigo-650 hover:bg-indigo-50/50 uppercase tracking-wider border border-gray-200 px-4 py-2 rounded-xl shadow-3xs transition-all duration-200 cursor-pointer flex items-center space-x-1.5 shrink-0"
-          data-testid="toggle-calibration-btn"
-        >
-          <span>⚙️ Calibrate Insights</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <CycleSelectorDropdown
+            cycles={cycles}
+            selectedCycle={selectedCycle}
+            onSelectCycle={setSelectedCycle}
+          />
+          <button
+            onClick={() => setShowCalibrationSettings(!showCalibrationSettings)}
+            className="text-xs font-bold text-gray-655 hover:text-indigo-650 hover:bg-indigo-50/50 uppercase tracking-wider border border-gray-200 px-4 py-2 rounded-xl shadow-3xs transition-all duration-200 cursor-pointer flex items-center space-x-1.5 shrink-0"
+            data-testid="toggle-calibration-btn"
+          >
+            <span>⚙️ Calibrate Insights</span>
+          </button>
+        </div>
       </div>
 
       {/* Calibration settings card */}

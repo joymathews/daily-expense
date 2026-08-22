@@ -381,8 +381,9 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
     global.fetch = globalFetchMock;
     
     // Default fetch mocks
-    globalFetchMock.mockImplementation((url: string) => {
-      if (url.includes('/api/pipeline/gold-transactions')) {
+    globalFetchMock.mockImplementation((url: any) => {
+      const urlString = typeof url === 'string' ? url : (url?.url || String(url));
+      if (urlString.includes('/api/pipeline/gold-transactions')) {
         return Promise.resolve({
           json: () => Promise.resolve({
             transactions: [
@@ -408,7 +409,7 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
           })
         });
       }
-      if (url.includes('/api/pipeline/user-preferences')) {
+      if (urlString.includes('/api/pipeline/user-preferences')) {
         return Promise.resolve({
           json: () => Promise.resolve({
             billingCycleStartDay: 17,
@@ -416,10 +417,33 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
           })
         });
       }
-      if (url.includes('/api/pipeline/fixed-charges')) {
+      if (urlString.includes('/api/pipeline/user-cycles')) {
         return Promise.resolve({
           json: () => Promise.resolve({
-            fixedCharges: []
+            cycles: [
+              {
+                id: 'default-2026-06-17',
+                cycleName: 'Jun 17 – Jul 16, 2026',
+                startType: 'default',
+                startDate: '2026-06-17',
+                startTimestamp: '2026-06-17T00:00:00.000Z',
+                endDate: '2026-07-16',
+                endTimestamp: '2026-07-16T23:59:59.999Z',
+                totalDays: 30,
+                isCurrent: true,
+              }
+            ],
+            activeCycle: {
+              id: 'default-2026-06-17',
+              cycleName: 'Jun 17 – Jul 16, 2026',
+              startType: 'default',
+              startDate: '2026-06-17',
+              startTimestamp: '2026-06-17T00:00:00.000Z',
+              endDate: '2026-07-16',
+              endTimestamp: '2026-07-16T23:59:59.999Z',
+              totalDays: 30,
+              isCurrent: true,
+            }
           })
         });
       }
@@ -459,7 +483,9 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
     // Run-rate panel should render discretionary spent correctly
     // Uber rides inside cycle range (2026-06-17 to 2026-07-16) is just t-1 (800)
     // (t-2 is on 2026-07-20 which is out of range)
-    expect(screen.getByTestId('discretionary-spent-value')).toHaveTextContent('₹800.00');
+    await waitFor(() => {
+      expect(screen.getByTestId('discretionary-spent-value')).toHaveTextContent('₹800.00');
+    });
 
     // Should detect the recurring Uber bill
     expect(screen.getByText('Predicted Recurring Bills & Subscriptions')).toBeInTheDocument();

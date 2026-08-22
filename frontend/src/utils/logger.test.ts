@@ -16,6 +16,7 @@ describe('Frontend Logger Utility', () => {
   let fetchSpy: any;
 
   beforeEach(() => {
+    vi.stubEnv('VITE_ENABLE_LOG_FORWARDING', 'false');
     fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
       Promise.resolve({
         ok: true,

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { getActiveCycleRange } from '../utils/transaction-helper';
+import { useUserCycles } from '../hooks/use-user-cycles';
+import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
+import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-helper';
 import {
   calculateDiscretionarySpend,
   calculateRunRateForecast,
@@ -9,6 +12,7 @@ import {
   detectRecurringBills,
   getDaysDiff
 } from '../utils/analytics-helper';
+
 import type {
   RunRateForecastResult,
   DayPeakPoint,
@@ -47,11 +51,13 @@ const getBillingProgress = (lastDateStr: string, predictedNextDate: string, toda
 };
 
 const FinancialAnalytics: React.FC = () => {
+  const { cycles, activeCycle, selectedCycle, setSelectedCycle } = useUserCycles();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [fixedCharges, setFixedCharges] = useState<any[]>([]);
   const [billingCycleStartDay, setBillingCycleStartDay] = useState(17);
   const [expectedSalary, setExpectedSalary] = useState(100000);
   const [primaryCurrency, setPrimaryCurrency] = useState('INR');
+
   
   // Slider State (default target consumption limit is 50%)
   const [targetBudgetPercent, setTargetBudgetPercent] = useState<number>(() => {
@@ -128,12 +134,19 @@ const FinancialAnalytics: React.FC = () => {
     );
   }
 
-  // Get active cycle range
-  const cycleRange = getActiveCycleRange(billingCycleStartDay);
-  
   // Format today's date safely in local time
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  // Get active cycle range
+  const currentCycle = selectedCycle || activeCycle;
+  const expectedEnd = currentCycle ? getExpectedCycleEnd(currentCycle.startDate, billingCycleStartDay) : todayStr;
+  const cycleRange = currentCycle ? {
+    start: currentCycle.startDate,
+    end: currentCycle.endDate || expectedEnd
+  } : getActiveCycleRange(billingCycleStartDay);
+
+  const cycleFilteredTxs = currentCycle ? filterTransactionsByCycle(transactions, currentCycle) : transactions;
 
   // Compute active fixed charges and net savings forecast
   const activeFixedCharges = (fixedCharges || []).filter((fc: any) => {
@@ -142,7 +155,7 @@ const FinancialAnalytics: React.FC = () => {
   const totalFixedCharges = activeFixedCharges.reduce((sum: number, fc: any) => sum + fc.amount, 0);
 
   // Computations
-  const discretionarySpent = calculateDiscretionarySpend(transactions, cycleRange.start, cycleRange.end);
+  const discretionarySpent = calculateDiscretionarySpend(cycleFilteredTxs, cycleRange.start, cycleRange.end);
   const forecast: RunRateForecastResult = calculateRunRateForecast(
     discretionarySpent,
     expectedSalary,
@@ -154,6 +167,8 @@ const FinancialAnalytics: React.FC = () => {
 
   const dayOfMonthPeaks: DayPeakPoint[] = calculateDayOfMonthPeaks(transactions);
   const dayOfWeekPeaks: DayOfWeekPeakPoint[] = calculateDayOfWeekPeaks(transactions);
+
+
   const recurringBills: RecurringBillPrediction[] = detectRecurringBills(transactions, todayStr, detectionFrequency);
 
   // Calculate monthly burden total (normalizing weekly/quarterly charges to a monthly rate)
@@ -229,8 +244,15 @@ const FinancialAnalytics: React.FC = () => {
             Predictive forecasts, recurring bill patterns, and peak outflow analysis computed from your ledger history.
           </p>
         </div>
-        <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-2 text-indigo-850 text-xs font-bold Outfit">
-          Billing Cycle: {formatDate(cycleRange.start)} &ndash; {formatDate(cycleRange.end)}
+        <div className="flex flex-wrap items-center gap-3">
+          <CycleSelectorDropdown
+            cycles={cycles}
+            selectedCycle={selectedCycle}
+            onSelectCycle={setSelectedCycle}
+          />
+          <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-2 text-indigo-850 text-xs font-bold Outfit">
+            Billing Cycle: {formatDate(cycleRange.start)} &ndash; {formatDate(cycleRange.end)}
+          </div>
         </div>
       </div>
 
