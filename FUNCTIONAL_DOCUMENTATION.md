@@ -17,6 +17,7 @@
 - [FUNC-SYS-4] Frontend Error Logging Ingestion: The system must support a dedicated `/api/logs` API endpoint that receives, validates, and logs client-side logs sent from the frontend application, marking their metadata source as `frontend`.
 - [FUNC-SYS-5] Consolidated Log Persistence: The system must support writing both backend and frontend logs to the same central log file to provide a single, unified timeline of events for auditing and troubleshooting.
 - [FUNC-SYS-6] Open Source Log Viewer Integration: The maintainers must be able to use standard open-source log tools (specifically `pino-pretty` for the terminal and `Logdy` for local web-based filtering) to parse, view, and search the consolidated JSON logs.
+- [FUNC-SYS-7] Dual Database Provider Switch: The system maintainer must be able to switch the backend data persistence engine between local SQLite and cloud Azure SQL Database dynamically via server environment configuration (`DB_PROVIDER=azuresql` or `sqlite`) without modifying application source code.
 
 ## User Authentication [FUNC-AUTH]
 - [FUNC-AUTH-1] The user must be challenged for credentials (username/email and password) before being allowed to access protected system areas.

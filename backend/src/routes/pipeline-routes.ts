@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { SQLiteTransactionRepository } from '../db/sqlite-transaction-repository';
+import { getRepository } from '../db/transaction-repository-factory';
 import { TransactionExtractorFactory } from '../services/transaction-extractor';
 import { CorrectionLearningService } from '../services/correction-learning-service';
 import { buildUserCycleList } from '../services/cycle-engine';
@@ -17,7 +17,7 @@ router.get(['/raw-inputs', '/raw-emails'], async (req, res) => {
   const { startDate, endDate } = req.query;
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     const inputs = await repository.getRawInputs(userId, {
@@ -46,7 +46,7 @@ router.put(['/raw-inputs/:id', '/raw-emails/:id'], async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // Check ownership
@@ -92,7 +92,7 @@ router.get('/silver-transactions', async (req, res) => {
   const { startDate, endDate } = req.query;
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     const transactions = await repository.getSilverTransactions(userId, {
@@ -115,7 +115,7 @@ router.get('/gold-transactions', async (req, res) => {
   const { startDate, endDate } = req.query;
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     const transactions = await repository.getGoldTransactions(userId, {
@@ -139,7 +139,7 @@ router.put('/silver-transactions/:id', async (req, res) => {
   const updates = req.body;
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // Fetch Silver record before update to retrieve bronzeInputId
@@ -153,7 +153,7 @@ router.put('/silver-transactions/:id', async (req, res) => {
     // [FUNC-FEEDBACK-1] Fire-and-forget: capture corrections for learning.
     // Only runs if the feature is enabled. Never affects the response above.
     if (silverTx?.bronzeInputId) {
-      const captureRepository = new SQLiteTransactionRepository();
+      const captureRepository = getRepository();
       await captureRepository.initializeSchema();
       const llmLog = await captureRepository.getLlmExtractionLogByBronzeId(silverTx.bronzeInputId, userId);
       const rawInput = await captureRepository.getRawInputById(silverTx.bronzeInputId, userId);
@@ -200,7 +200,7 @@ router.put('/gold-transactions/:id', async (req, res) => {
   const updates = req.body;
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // Fetch Gold record before update to trace back to bronzeInputId via Silver
@@ -215,7 +215,7 @@ router.put('/gold-transactions/:id', async (req, res) => {
     // [FUNC-FEEDBACK-1] Fire-and-forget: capture corrections for learning.
     const bronzeInputId = goldTx?.bronzeInputId;
     if (bronzeInputId) {
-      const captureRepository = new SQLiteTransactionRepository();
+      const captureRepository = getRepository();
       await captureRepository.initializeSchema();
       const llmLog = await captureRepository.getLlmExtractionLogByBronzeId(bronzeInputId, userId);
       const rawInput = await captureRepository.getRawInputById(bronzeInputId, userId);
@@ -269,7 +269,7 @@ router.post('/silver-transactions/batch-update', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     await repository.updatePendingTransactionsBatch(ids, userId, updates);
@@ -297,7 +297,7 @@ router.post('/gold-transactions/batch-update', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     await repository.updateGoldTransactionsBatch(ids, userId, updates);
@@ -322,7 +322,7 @@ router.post('/approve', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // Fetch Silver record before promoting so we can trace to bronzeInputId
@@ -350,7 +350,7 @@ router.post('/approve', async (req, res) => {
     // [FUNC-FEEDBACK-1] Fire-and-forget: capture corrections at approval time.
     // The approved field values are diffed against the original LLM log.
     if (silverTx?.bronzeInputId) {
-      const captureRepository = new SQLiteTransactionRepository();
+      const captureRepository = getRepository();
       await captureRepository.initializeSchema();
       const llmLog = await captureRepository.getLlmExtractionLogByBronzeId(silverTx.bronzeInputId, userId);
       const rawInput = await captureRepository.getRawInputById(silverTx.bronzeInputId, userId);
@@ -396,7 +396,7 @@ router.post('/approve-batch', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     const approvedIds: string[] = [];
@@ -443,7 +443,7 @@ router.post('/reject-batch', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     for (const id of rawEmailIds) {
@@ -475,7 +475,7 @@ router.post('/extract', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     const extractor = TransactionExtractorFactory.createExtractor();
@@ -549,7 +549,7 @@ router.post('/add-transaction', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     await repository.addDirectGoldTransaction({
@@ -587,7 +587,7 @@ router.post('/revert-to-silver', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.revertGoldToSilver(userId, goldId);
     await repository.close();
@@ -610,7 +610,7 @@ router.post('/revert-to-bronze', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.revertSilverToBronze(userId, silverId);
     await repository.close();
@@ -633,7 +633,7 @@ router.post('/delete', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.deleteBronzeInput(userId, bronzeId);
     await repository.close();
@@ -656,7 +656,7 @@ router.post('/restore', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     if (bronzeId) {
       await repository.restoreBronzeInput(userId, bronzeId);
@@ -678,7 +678,7 @@ router.get('/deleted', async (req, res) => {
   const userId = (req as any).auth?.sub;
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const inputs = await repository.getDeletedRawInputs(userId);
     const goldTx = await repository.getDeletedGoldTransactions(userId);
@@ -702,7 +702,7 @@ router.get('/llm-logs/:bronzeInputId', async (req, res) => {
   const bronzeInputId = req.params.bronzeInputId;
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const log = await repository.getLlmExtractionLogByBronzeId(bronzeInputId, userId);
     await repository.close();
@@ -720,7 +720,7 @@ router.get('/llm-accuracy-stats', async (req, res) => {
   const userId = (req as any).auth?.sub;
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const stats = await repository.getLlmAccuracyStats(userId);
     await repository.close();
@@ -737,7 +737,7 @@ router.get('/llm-accuracy-stats', async (req, res) => {
 router.get('/user-preferences', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const preferences = await repository.getUserPreferences(userId);
     await repository.close();
@@ -771,7 +771,7 @@ router.put('/user-preferences', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.updateUserPreferences(userId, startDay, salary);
     await repository.close();
@@ -789,13 +789,14 @@ router.put('/user-preferences', async (req, res) => {
 router.get('/user-cycles', async (req, res) => {
   const userId = (req as any).auth?.sub || 'default-user';
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const prefs = await repository.getUserPreferences(userId);
     const overrides = await repository.getCycleOverrides(userId);
     await repository.close();
 
-    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, overrides);
+    const formattedOverrides = overrides.map(o => ({ ...o, id: o.id || `override-${o.startDate}` }));
+    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, formattedOverrides);
     const activeCycle = cycles.find(c => c.isCurrent) || cycles[0] || null;
 
     res.status(200).json({ cycles, activeCycle });
@@ -818,7 +819,7 @@ router.post('/user-cycles/override', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     let finalTimestamp = startTimestamp;
@@ -849,7 +850,8 @@ router.post('/user-cycles/override', async (req, res) => {
     const overrides = await repository.getCycleOverrides(userId);
     await repository.close();
 
-    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, overrides);
+    const formattedOverrides = overrides.map(o => ({ ...o, id: o.id || `override-${o.startDate}` }));
+    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, formattedOverrides);
     res.status(200).json({ status: 'updated', cycles });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update cycle override' });
@@ -866,7 +868,7 @@ router.delete('/user-cycles/override/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.deleteCycleOverride(userId, id);
 
@@ -874,7 +876,8 @@ router.delete('/user-cycles/override/:id', async (req, res) => {
     const overrides = await repository.getCycleOverrides(userId);
     await repository.close();
 
-    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, overrides);
+    const formattedOverrides = overrides.map(o => ({ ...o, id: o.id || `override-${o.startDate}` }));
+    const cycles = buildUserCycleList(prefs.billingCycleStartDay || 17, formattedOverrides);
     res.status(200).json({ status: 'deleted', cycles });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to delete cycle override' });
@@ -890,7 +893,7 @@ router.delete('/user-cycles/override/:id', async (req, res) => {
 router.get('/fixed-charges', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const fixedCharges = await repository.getFixedCharges(userId);
     await repository.close();
@@ -918,7 +921,7 @@ router.post('/fixed-charges', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const chargeId = id || crypto.randomUUID();
     
@@ -949,7 +952,7 @@ router.delete('/fixed-charges/:id', async (req, res) => {
   const { id } = req.params;
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.deleteFixedCharge(id, userId);
     await repository.close();
@@ -974,7 +977,7 @@ router.get('/db/tables', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     const tables = await repository.getInspectableTables();
@@ -1002,7 +1005,7 @@ router.get('/db/tables/:tableName', async (req, res) => {
   const search = (req.query.search as string) || '';
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     const result = await repository.getTableRows(tableName, userId, limit, offset, search);

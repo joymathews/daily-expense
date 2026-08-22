@@ -28,8 +28,9 @@
 - [NFR-GMAIL-6] Category Extraction Robustness: The LLM extraction service must analyze the email body content to classify the transaction into a specific category, mapping to standard expense domains such as Restaurant, Medical, Online Food Order, Transport, Shopping, or Utilities, and fallback to "Other" when context is insufficient.
 
 ## Database & LLM Architecture Constraints [NFR-ARCH]
-- [NFR-DB-1] Database Portability & Zero-Recode Migration: The storage layer must allow transitioning from a lightweight local environment to a cloud production platform (such as AWS RDS) without requiring modifications to the core business logic code.
+- [NFR-DB-1] Database Portability & Zero-Recode Migration: The storage layer must support seamlessly transitioning from a lightweight local environment (SQLite) to a cloud production platform (Azure SQL Database) via repository factory abstractions without requiring modifications to core business logic code or route controllers.
 - [NFR-DB-2] Relational Data Coherence: The system must maintain relational integrity and enforce transaction constraints to prevent orphaned data records and duplicate entries.
+- [NFR-DB-3] Azure SQL Connection Security & Pooling: Connections to Azure SQL Database must use TLS network encryption (`encrypt: true`) and connection pooling to ensure high performance and zero credential exposure.
 - [NFR-LLM-1] Swap-Ready LLM Ingress: The application must support running a local model on the user's machine during development and switching to cloud-hosted intelligence APIs via configurations without code modifications.
 - [NFR-ARCH-2] Medallion Separation: The database architecture must strictly isolate Bronze, Silver, and Gold structures, ensuring clean transition actions on user verification.
 
