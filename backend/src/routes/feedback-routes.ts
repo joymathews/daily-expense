@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SQLiteTransactionRepository } from '../db/sqlite-transaction-repository';
+import { getRepository } from '../db/transaction-repository-factory';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ const router = Router();
 router.get('/settings', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const settings = await repository.getFeedbackSettings(userId);
     await repository.close();
@@ -41,7 +41,7 @@ router.put('/settings', async (req, res) => {
   const clampedThreshold = Math.min(1.0, Math.max(0.0, isNaN(threshold) ? 0.3 : threshold));
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.saveFeedbackSettings(userId, {
       isEnabled,
@@ -68,7 +68,7 @@ router.put('/settings', async (req, res) => {
 router.get('/examples', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const examples = await repository.listCorrectionExamples(userId);
     await repository.close();
@@ -86,7 +86,7 @@ router.delete('/examples/:id', async (req, res) => {
   const userId = (req as any).auth?.sub;
   const { id } = req.params;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.deleteCorrectionExample(id, userId);
     await repository.close();
@@ -103,7 +103,7 @@ router.delete('/examples/:id', async (req, res) => {
 router.delete('/examples', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.clearAllCorrectionExamples(userId);
     await repository.close();
@@ -120,7 +120,7 @@ router.delete('/examples', async (req, res) => {
 router.get('/effectiveness', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const effectiveness = await repository.getFeedbackEffectiveness(userId);
     await repository.close();

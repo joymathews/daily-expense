@@ -21,7 +21,7 @@ For ALL future changes, feature implementations, and code modifications, you mus
 9. **Post-Change Verification:** Explicitly run the relevant test suites (Unit or Integration) and verify that all tests pass.
 
 ## 3. Tech Stack & Engineering Standards
-* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail). Database: `sqlite3` (Bronze, Silver, Gold layers, and LLM extraction audit logs). LLM Integration: Ollama (localhost API interface). Environment Configuration: `dotenv`.
+* **Backend:** Node.js (TypeScript), Express, Jest. Identity: AWS Cognito. JWT Validation: `express-jwt` + `jwks-rsa`. External APIs: `googleapis` (for Gmail). Database: `sqlite3` and Azure SQL Database (`mssql` driver with connection pooling, selected dynamically via `DB_PROVIDER` environment variable and Repository Factory pattern). LLM Integration: Ollama (localhost API interface). Environment Configuration: `dotenv`.
 * **Frontend:** React (TypeScript), Vite, Tailwind CSS, Vitest. Auth: AWS Amplify (for Cognito), `@react-oauth/google` (for Gmail). Navigation: `react-router-dom` (routes: `/` for Dashboard, `/ingestion` for Data Ingestion, `/pipeline` for Transaction Pipeline, `/transactions` for Gold Ledger Transactions, `/analytics` for Financial Analytics, and `/insights` for Smart Financial Insights).
 * **Logging System:** Unified logger persisting to a consolidated file (`logs/app.log`). Backend utilizes `pino` for low-overhead asynchronous logging and `pino-http` for Express request details. Frontend uses `loglevel` with network log forwarding disabled statically via `VITE_ENABLE_LOG_FORWARDING` (or dynamically via `localStorage` override) to minimize network overhead. The logs are viewed and formatted locally using open-source parsers like `pino-pretty` and `Logdy`.
 * **Architecture:** Strictly adhere to SOLID principles and Clean Code rules.
@@ -32,6 +32,9 @@ For ALL future changes, feature implementations, and code modifications, you mus
 * **Typography & Fonts:** The application standard is Google Font 'Outfit' to provide clean, high-readability UI typography, loaded dynamically through the `index.html` head section.
 
 * **User Isolation Standard**: Every endpoint under `/api/ingestion` and `/api/pipeline` must use `checkJwt` to authenticate users. The database tables (Bronze, Silver, and Gold layers) must strictly isolate records by `user_id` parsed from `req.auth.sub`. In the frontend, the Cognito JWT token retrieved via `fetchAuthSession` must be attached to the `Authorization` header of all API calls.
+
+* **Dependency Security Standard**: Zero Critical and High vulnerabilities permitted across backend and frontend dependencies. Routine `npm audit` checks must be performed to maintain package health.
+
 
 
 ## 4. Coding & Naming Conventions

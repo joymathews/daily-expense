@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { GmailService } from '../services/gmail-service';
-import { SQLiteTransactionRepository } from '../db/sqlite-transaction-repository';
+import { getRepository } from '../db/transaction-repository-factory';
 
 const router = Router();
 const gmailService = new GmailService();
@@ -28,7 +28,7 @@ router.post(['/gmail/fetch', '/fetch'], async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // Auto-save fetcher email list targets to database
@@ -52,6 +52,7 @@ router.post(['/gmail/fetch', '/fetch'], async (req, res) => {
         rawBody: email.body || '',
         rawPayload: JSON.stringify(email),
         receivedAt: email.date,
+        hasTransaction: email.hasTransaction,
       });
     }
 
@@ -84,7 +85,7 @@ router.post(['/gmail/fetch-list', '/fetch-list'], async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // Auto-save fetcher email list targets to database
@@ -118,7 +119,7 @@ router.post(['/gmail/fetch-detail', '/fetch-detail'], async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // Deduplication check
@@ -141,6 +142,7 @@ router.post(['/gmail/fetch-detail', '/fetch-detail'], async (req, res) => {
       rawBody: email.body || '',
       rawPayload: JSON.stringify(email),
       receivedAt: email.date,
+      hasTransaction: email.hasTransaction,
     });
 
     await repository.close();
@@ -156,7 +158,7 @@ router.post(['/gmail/fetch-detail', '/fetch-detail'], async (req, res) => {
 router.get('/payment-methods', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const methods = await repository.getPaymentMethods(userId);
     await repository.close();
@@ -176,7 +178,7 @@ router.post('/payment-methods', async (req, res) => {
     return res.status(400).json({ error: 'Payment method name is required' });
   }
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const id = crypto.randomUUID();
     await repository.savePaymentMethod({ id, userId, name: name.trim() });
@@ -198,7 +200,7 @@ router.put('/payment-methods/:id', async (req, res) => {
     return res.status(400).json({ error: 'Payment method name is required' });
   }
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.updatePaymentMethod(id, userId, name.trim());
     await repository.close();
@@ -215,7 +217,7 @@ router.delete('/payment-methods/:id', async (req, res) => {
   const userId = (req as any).auth?.sub;
   const { id } = req.params;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.deletePaymentMethod(id, userId);
     await repository.close();
@@ -231,7 +233,7 @@ router.delete('/payment-methods/:id', async (req, res) => {
 router.get('/payment-rules', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const rules = await repository.getPaymentMappingRules(userId);
     await repository.close();
@@ -254,7 +256,7 @@ router.post('/payment-rules', async (req, res) => {
     return res.status(400).json({ error: 'Payment method ID is required' });
   }
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const id = crypto.randomUUID();
     await repository.savePaymentMappingRule({ id, userId, aliasPattern: aliasPattern.trim(), paymentMethodId });
@@ -279,7 +281,7 @@ router.put('/payment-rules/:id', async (req, res) => {
     return res.status(400).json({ error: 'Payment method ID is required' });
   }
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.updatePaymentMappingRule(id, userId, aliasPattern.trim(), paymentMethodId);
     await repository.close();
@@ -296,7 +298,7 @@ router.delete('/payment-rules/:id', async (req, res) => {
   const userId = (req as any).auth?.sub;
   const { id } = req.params;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.deletePaymentMappingRule(id, userId);
     await repository.close();
@@ -312,7 +314,7 @@ router.delete('/payment-rules/:id', async (req, res) => {
 router.post('/standardize-retroactive', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
 
     // 1. Fetch Silver (pending + error)
@@ -354,7 +356,7 @@ router.post('/standardize-retroactive', async (req, res) => {
 router.get('/fetcher-emails', async (req, res) => {
   const userId = (req as any).auth?.sub;
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     const emails = await repository.getFetcherEmails(userId);
     await repository.close();
@@ -382,7 +384,7 @@ router.post('/fetcher-emails', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.saveFetcherEmail(userId, trimmedEmail);
     await repository.close();
@@ -404,7 +406,7 @@ router.delete('/fetcher-emails/:email', async (req, res) => {
   }
 
   try {
-    const repository = new SQLiteTransactionRepository();
+    const repository = getRepository();
     await repository.initializeSchema();
     await repository.deleteFetcherEmail(userId, email.trim().toLowerCase());
     await repository.close();

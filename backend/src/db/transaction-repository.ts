@@ -124,6 +124,11 @@ export interface ITransactionRepository {
   getFixedCharges(userId: string): Promise<FixedCharge[]>;
   saveFixedCharge(charge: FixedCharge): Promise<void>;
   deleteFixedCharge(id: string, userId: string): Promise<void>;
+  rejectRawInput(id: string, userId: string): Promise<void>;
+  updatePendingTransactionsBatch(ids: string[], userId: string, updates: Partial<PendingTransaction>): Promise<void>;
+  updateGoldTransactionsBatch(ids: string[], userId: string, updates: Partial<Transaction>): Promise<void>;
+  getInspectableTables(): Promise<Array<{ name: string; columns: string[] }>>;
+  getTableRows(tableName: string, userId: string, limit: number, offset: number, search?: string): Promise<{ rows: any[]; totalCount: number; columns: string[] }>;
 }
 
 export interface CycleOverrideData {

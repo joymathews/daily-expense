@@ -3,6 +3,9 @@
  */
 /// <reference types="jest" />
 
+// Ensure unit tests run against SQLite by default regardless of local .env DB_PROVIDER settings
+process.env.DB_PROVIDER = 'sqlite';
+
 // Mock the authentication middleware globally to avoid ESM parsing issues with 'jose' and 'jwks-rsa'
 jest.mock('../src/middleware/auth-middleware', () => ({
   checkJwt: (req: any, res: any, next: any) => {

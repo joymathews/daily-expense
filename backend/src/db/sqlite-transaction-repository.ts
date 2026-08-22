@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge } from './transaction-repository';
 import { IFeedbackRepository, FeedbackSettings, CorrectionExample, CorrectionFieldName, FeedbackEffectiveness } from './feedback-repository';
 import { normalizeCategory } from '../utils/category-helper';
+import { PaymentStandardizationService } from '../services/payment-standardization-service';
 import { logger } from '../utils/logger';
 
 export class SQLiteTransactionRepository implements ITransactionRepository, IFeedbackRepository {
@@ -1375,56 +1376,9 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
   }
 
   async standardizePaymentMethod(userId: string, rawPaymentMethod: string | undefined): Promise<string> {
-    if (!rawPaymentMethod || rawPaymentMethod.trim() === '' || rawPaymentMethod === 'Unknown' || rawPaymentMethod === 'N/A') {
-      return 'Unknown';
-    }
-
-    const trimmedRaw = rawPaymentMethod.trim();
-    const lowerRaw = trimmedRaw.toLowerCase();
-
-    // 1. Fetch rules (supports +, & or , for AND combinations)
     const rules = await this.getPaymentMappingRules(userId);
-    let bestRule: any = null;
-    let maxPartsCount = 0;
-    let bestPatternLength = 0;
-
-    for (const rule of rules) {
-      if (rule.aliasPattern) {
-        const parts = rule.aliasPattern.split(/[+&,]/).map((p: string) => p.trim().toLowerCase()).filter(Boolean);
-        if (parts.length > 0) {
-          const allMatch = parts.every((part: string) => lowerRaw.includes(part));
-          if (allMatch) {
-            const partsCount = parts.length;
-            const patternLength = rule.aliasPattern.length;
-            // Pick rule with more parts, or tie-break on pattern length
-            if (partsCount > maxPartsCount || (partsCount === maxPartsCount && patternLength > bestPatternLength)) {
-              bestRule = rule;
-              maxPartsCount = partsCount;
-              bestPatternLength = patternLength;
-            }
-          }
-        }
-      }
-    }
-
-    if (bestRule) {
-      return bestRule.paymentMethodName || 'Unknown';
-    }
-
-    // 2. If no rule matches, check if it matches any standardized method name exactly (case-insensitive)
     const methods = await this.getPaymentMethods(userId);
-    const exactMatch = methods.find(m => m.name.toLowerCase() === lowerRaw);
-    if (exactMatch) {
-      return exactMatch.name;
-    }
-
-    // 3. Fallback: check if any standardized method name is contained in the raw string
-    const partialMatch = methods.find(m => lowerRaw.includes(m.name.toLowerCase()));
-    if (partialMatch) {
-      return partialMatch.name;
-    }
-
-    return trimmedRaw; // Fallback to raw if no match
+    return PaymentStandardizationService.standardize(rawPaymentMethod, rules, methods);
   }
 
   private async seedDefaultPaymentMethodsAndRules(userId: string): Promise<void> {

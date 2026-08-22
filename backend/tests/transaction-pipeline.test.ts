@@ -258,6 +258,11 @@ describe('Transaction Processing Pipeline Integration', () => {
       upsertCycleOverride: jest.fn().mockResolvedValue(undefined),
       deleteCycleOverride: jest.fn().mockResolvedValue(undefined),
       isCycleStartAnchor: jest.fn().mockResolvedValue(false),
+      rejectRawInput: jest.fn().mockResolvedValue(undefined),
+      updatePendingTransactionsBatch: jest.fn().mockResolvedValue(undefined),
+      updateGoldTransactionsBatch: jest.fn().mockResolvedValue(undefined),
+      getInspectableTables: jest.fn().mockResolvedValue([]),
+      getTableRows: jest.fn().mockResolvedValue({ rows: [], totalCount: 0, columns: [] }),
     };
 
     const ingestion = new TransactionIngestionService(mockRepo, extractor);

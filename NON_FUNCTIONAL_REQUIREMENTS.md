@@ -6,6 +6,8 @@
 - [NFR-SEC-3] Token Validation: Security tokens must be validated against an official public key set (JWKS) on every inbound request.
 - [NFR-SEC-4] Input Validation: The system must validate all user-provided filters for external API integrations to prevent malformed queries and ensure mandatory criteria are met.
 - [NFR-SEC-5] Data Segregation Enforcement: The database schemas and API logic must enforce strict data boundaries between users, validating that the authenticated user context matching the request payload matches the database records being modified or read, preventing cross-tenant access.
+- [NFR-SEC-6] Dependency Security Vulnerability Management: All third-party direct and transitive npm dependencies across backend and frontend modules must be regularly audited and maintained to eliminate Critical and High security vulnerabilities.
+
 
 ## Performance & Reliability [NFR-PERF]
 - [NFR-PERF-1] Availability Monitoring: The system must provide a health validation service that responds within 100ms.
@@ -28,8 +30,9 @@
 - [NFR-GMAIL-6] Category Extraction Robustness: The LLM extraction service must analyze the email body content to classify the transaction into a specific category, mapping to standard expense domains such as Restaurant, Medical, Online Food Order, Transport, Shopping, or Utilities, and fallback to "Other" when context is insufficient.
 
 ## Database & LLM Architecture Constraints [NFR-ARCH]
-- [NFR-DB-1] Database Portability & Zero-Recode Migration: The storage layer must allow transitioning from a lightweight local environment to a cloud production platform (such as AWS RDS) without requiring modifications to the core business logic code.
+- [NFR-DB-1] Database Portability & Zero-Recode Migration: The storage layer must support seamlessly transitioning from a lightweight local environment (SQLite) to a cloud production platform (Azure SQL Database) via repository factory abstractions without requiring modifications to core business logic code or route controllers.
 - [NFR-DB-2] Relational Data Coherence: The system must maintain relational integrity and enforce transaction constraints to prevent orphaned data records and duplicate entries.
+- [NFR-DB-3] Azure SQL Connection Security & Pooling: Connections to Azure SQL Database must use TLS network encryption (`encrypt: true`) and connection pooling to ensure high performance and zero credential exposure.
 - [NFR-LLM-1] Swap-Ready LLM Ingress: The application must support running a local model on the user's machine during development and switching to cloud-hosted intelligence APIs via configurations without code modifications.
 - [NFR-ARCH-2] Medallion Separation: The database architecture must strictly isolate Bronze, Silver, and Gold structures, ensuring clean transition actions on user verification.
 
@@ -79,6 +82,7 @@
 - [NFR-ANALYSIS-6] Allocation Breakdown Recalculation: Re-evaluating the active cycle budget split (incorporating templates) must resolve in less than 50ms upon ledger page load.
 - [NFR-USAB-34] Header Bulk Action Dropdown & Batch Editing Usability: The bulk action table header transition must occur instantly (within 50ms) of selection updates, and saving batch edits must execute in less than 200ms at the API layer to maintain high platform responsiveness.
 - [NFR-USAB-35] Cycle Comparison Trend Responsiveness: Filtering payment methods, toggling comparison series, or switching view modes (daily vs. cumulative) in the cycle comparison graph must recalculate data and redraw the SVG lines within 100ms, maintaining smooth UI rendering.
+- [NFR-USAB-36] Modal Edit Save Feedback & Closure Latency: Executing transaction update requests via 'Save Updates' or 'Save Corrections' buttons must update the backend, close the detail modal, and refresh the active transaction view within 150ms of a successful API response. On network or server failure, the system must maintain modal state, retain typed inputs, and display an inline error banner instantly (within 100ms).
 - [NFR-ANALYSIS-8] The budget slider interaction and projected forecasts must update the UI metrics instantly (within 50ms) to ensure interactive responsiveness.
 - [NFR-ANALYSIS-9] The Outflow Peaks periodicity charts and lists must load and render within 150ms of ledger data retrieval.
 - [NFR-ANALYSIS-10] Interactive Hover Response: The hover transition and badge render on the periodicity charts must display and update within 50ms of a mouse-over event, ensuring smooth, lag-free user interaction.

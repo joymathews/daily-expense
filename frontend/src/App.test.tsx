@@ -3565,7 +3565,13 @@ describe('Requirement Traceability Matrix Verification', () => {
       status: 'pending'
     };
 
-    const updateSilverMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'updated' }) });
+    const updateSilverMock = vi.fn().mockImplementation((url, init) => {
+      if (init && init.body) {
+        const body = JSON.parse(init.body);
+        Object.assign(mockSilver, body);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'updated' }) });
+    });
     const approveMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'approved' }) });
 
     const mockFetch = vi.fn().mockImplementation((url, init) => {
@@ -3638,6 +3644,9 @@ describe('Requirement Traceability Matrix Verification', () => {
     const lastUpdateCallArgs = JSON.parse(updateSilverMock.mock.calls[0][1].body);
     expect(lastUpdateCallArgs.amount).toBe(10.5);
     expect(lastUpdateCallArgs.currency).toBe('EUR');
+
+    // Re-open modal to test Approve & Save
+    fireEvent.click(silverMerchantCell);
 
     // Click Approve & Promote
     const approveBtn = screen.getByRole('button', { name: /Approve & Save/i });
@@ -5254,6 +5263,113 @@ describe('Requirement Traceability Matrix Verification', () => {
       expect(batchUpdatesReceived.ids).toContain('tx-1');
       expect(batchUpdatesReceived.ids).toContain('tx-2');
       expect(batchUpdatesReceived.updates.merchant).toBe('Batch Overwrite Merchant');
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * [FUNC-GMAIL-36] Transaction Edit Modal Save & Closure
+   * [NFR-USAB-36] Modal Edit Save Feedback & Closure Latency
+   * [BUG-019] Transaction Edit Save Modal Persistence & Closing Behavior
+   */
+  it('automatically closes modal on successful transaction update and presents error banner on failure [FUNC-GMAIL-36] [BUG-019]', async () => {
+    let returnApiError = false;
+
+    const mockSilverTx = {
+      id: 'silv-101',
+      rawEmailId: 'email-101',
+      merchantRaw: 'Initial Merchant',
+      merchantNormalized: 'Initial Merchant',
+      amount: 45.00,
+      currency: 'INR',
+      transactionDate: '2026-08-20',
+      inferredCategory: 'Food',
+      status: 'pending',
+      paymentMethod: 'UPI',
+    };
+
+    const mockFetch = vi.fn().mockImplementation((url, init) => {
+      if (url.includes('/api/pipeline/silver-transactions/silv-101')) {
+        if (returnApiError) {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: () => Promise.resolve({ error: 'Database constraint violation' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        });
+      }
+      if (url.includes('/api/pipeline/silver-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [mockSilverTx] }),
+        });
+      }
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ transactions: [] }),
+        });
+      }
+      if (url.includes('/api/gmail/raw-emails')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ emails: [] }),
+        });
+      }
+      if (url.includes('/api/user/preferences') || url.includes('/api/pipeline/user-cycles')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ preferences: {}, cycles: [] }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    window.history.pushState({}, 'Dashboard', '/');
+    render(<App />);
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Switch to Silver tab
+    const silverTabBtn = await screen.findByRole('button', { name: /Silver \(Staging Queue\)/i });
+    fireEvent.click(silverTabBtn);
+
+    // Open detail modal by clicking merchant
+    const merchantCell = await screen.findByText('Initial Merchant');
+    fireEvent.click(merchantCell);
+
+    const modal = await screen.findByTestId('email-detail-modal');
+    expect(modal).toBeInTheDocument();
+
+    // 1. Test Failure Case: set returnApiError = true and click 'Save Updates'
+    returnApiError = true;
+    const saveUpdatesBtn = within(modal).getByRole('button', { name: 'Save Updates' });
+    fireEvent.click(saveUpdatesBtn);
+
+    // Modal should stay open and display error banner
+    const errorBanner = await within(modal).findByTestId('modal-error-banner');
+    expect(errorBanner).toBeInTheDocument();
+    expect(errorBanner).toHaveTextContent('Database constraint violation');
+    expect(screen.getByTestId('email-detail-modal')).toBeInTheDocument();
+
+    // 2. Test Success Case: set returnApiError = false and click 'Save Updates' again
+    returnApiError = false;
+    fireEvent.click(within(modal).getByRole('button', { name: 'Save Updates' }));
+
+    // Modal should close automatically on success
+    await waitFor(() => {
+      expect(screen.queryByTestId('email-detail-modal')).not.toBeInTheDocument();
     });
 
     vi.unstubAllGlobals();

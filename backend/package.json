@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "test": "jest",
+    "test": "NODE_ENV=test jest --runInBand",
     "view-logs": "pino-pretty -f -c < logs/app.log",
     "view-log": "npm run view-logs",
     "tail-logs": "tail -f logs/app.log | pino-pretty -c",
@@ -21,6 +21,7 @@
     "express-jwt": "^8.5.1",
     "googleapis": "^173.0.0",
     "jwks-rsa": "^4.0.1",
+    "mssql": "^11.0.1",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "sqlite3": "^6.0.1"
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
+    "@types/mssql": "^9.0.5",
     "@types/node": "^25.9.2",
     "@types/pino-http": "^5.8.4",
     "@types/sqlite3": "^3.1.11",

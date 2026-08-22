@@ -1107,9 +1107,13 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       });
       if (response.ok) {
         await loadSilverTransactions();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update staging transaction');
       }
     } catch (err) {
       console.error('Failed to update silver transaction:', err);
+      throw err;
     }
   };
 
@@ -1126,9 +1130,13 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       });
       if (response.ok) {
         await loadGoldTransactions();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update gold transaction');
       }
     } catch (err) {
       console.error('Failed to update gold transaction:', err);
+      throw err;
     }
   };
 

@@ -80,9 +80,15 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const [rawBodyForGoldLineage, setRawBodyForGoldLineage] = useState('');
   const [llmLog, setLlmLog] = useState<any | null>(null);
 
+  // Save pending and error feedback state
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const bronzeInputIdForLog = selectedGoldTransaction?.bronzeInputId || selectedEmail?.id;
 
   useEffect(() => {
+    setSaveError(null);
+    setIsSaving(false);
     if (bronzeInputIdForLog && fetchLlmLog) {
       fetchLlmLog(bronzeInputIdForLog)
         .then(log => setLlmLog(log))
@@ -148,36 +154,47 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 
   const handleUpdateSilver = async () => {
     if (selectedEmail?.extracted && updateSilverTransaction) {
-      await updateSilverTransaction(selectedEmail.extracted.id, {
-        merchantRaw: merchant,
-        merchantNormalized: merchant,
-        amount: amount,
-        currency: currency,
-        transactionDate: date,
-        paymentMethod: paymentMethod,
-        inferredCategory: category,
-        transactionType: transactionType as any,
-        parentTransactionId: parentTransactionId || null as any,
-      });
-      
-      const isErr = !merchant.trim() || !date.trim() || date === 'N/A' || amount === 0 || !paymentMethod.trim() || paymentMethod === 'Unknown' || paymentMethod === 'N/A' || !currency.trim();
-      const updatedStatus = isErr ? 'error' : 'pending';
-
-      setSelectedEmail({
-        ...selectedEmail,
-        extracted: {
-          ...selectedEmail.extracted,
-          merchant,
-          amount,
-          currency,
-          date,
-          category,
-          paymentMethod,
-          status: updatedStatus,
+      setIsSaving(true);
+      setSaveError(null);
+      try {
+        await updateSilverTransaction(selectedEmail.extracted.id, {
+          merchantRaw: merchant,
+          merchantNormalized: merchant,
+          amount: amount,
+          currency: currency,
+          transactionDate: date,
+          paymentMethod: paymentMethod,
+          inferredCategory: category,
           transactionType: transactionType as any,
-          parentTransactionId: parentTransactionId || undefined,
-        }
-      });
+          parentTransactionId: parentTransactionId || null as any,
+        });
+        
+        const isErr = !merchant.trim() || !date.trim() || date === 'N/A' || amount === 0 || !paymentMethod.trim() || paymentMethod === 'Unknown' || paymentMethod === 'N/A' || !currency.trim();
+        const updatedStatus = isErr ? 'error' : 'pending';
+
+        setSelectedEmail({
+          ...selectedEmail,
+          extracted: {
+            ...selectedEmail.extracted,
+            merchant,
+            amount,
+            currency,
+            date,
+            category,
+            paymentMethod,
+            status: updatedStatus,
+            transactionType: transactionType as any,
+            parentTransactionId: parentTransactionId || undefined,
+          }
+        });
+
+        // Close modal automatically on successful save
+        setSelectedEmail(null);
+      } catch (err: any) {
+        setSaveError(err.message || 'Failed to update transaction');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -292,18 +309,26 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 
   const handleSave = async () => {
     if (isGoldMode && selectedGoldTransaction && updateGoldTransaction) {
-      await updateGoldTransaction(selectedGoldTransaction.id, {
-        merchant,
-        amount,
-        currency,
-        category,
-        transactionDate: date,
-        notes,
-        paymentMethod,
-        transactionType: transactionType as any,
-        parentTransactionId: parentTransactionId || null as any,
-      });
-      setSelectedGoldTransaction!(null);
+      setIsSaving(true);
+      setSaveError(null);
+      try {
+        await updateGoldTransaction(selectedGoldTransaction.id, {
+          merchant,
+          amount,
+          currency,
+          category,
+          transactionDate: date,
+          notes,
+          paymentMethod,
+          transactionType: transactionType as any,
+          parentTransactionId: parentTransactionId || null as any,
+        });
+        setSelectedGoldTransaction!(null);
+      } catch (err: any) {
+        setSaveError(err.message || 'Failed to update gold transaction');
+      } finally {
+        setIsSaving(false);
+      }
     } else if (selectedEmail && selectedEmail.extracted) {
       await approveTransaction(
         selectedEmail.extracted.id,
@@ -381,6 +406,24 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 
         {/* Scrollable Body */}
         <div className="p-5 overflow-y-auto flex-1 bg-white space-y-5">
+          {saveError && (
+            <div 
+              data-testid="modal-error-banner"
+              className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center justify-between animate-fade-in"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="text-rose-500 font-bold">⚠️</span>
+                <span>{saveError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSaveError(null)}
+                className="text-rose-500 hover:text-rose-700 font-bold text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           
           {/* Medallion Pipeline Lineage Explorer */}
           <div className="border border-gray-150/70 rounded-2xl bg-gray-50/30 p-4 space-y-3">
@@ -881,16 +924,25 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={handleUpdateSilver}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
+                    disabled={isSaving}
+                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm flex items-center space-x-1.5"
                   >
-                    Save Updates
+                    {isSaving ? (
+                      <>
+                        <span className="animate-spin text-xs">⏳</span>
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <span>Save Updates</span>
+                    )}
                   </button>
                 )}
                 {isSilver && selectedEmail?.extracted?.status !== 'rejected' && (
                   <button
                     type="button"
                     onClick={handleRejectSilver}
-                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
+                    disabled={isSaving}
+                    className="bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
                     data-testid="modal-reject-btn"
                   >
                     Reject
@@ -899,10 +951,17 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={hasValidationErrors}
-                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm"
+                  disabled={hasValidationErrors || isSaving}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors uppercase tracking-wider cursor-pointer shadow-sm flex items-center space-x-1.5"
                 >
-                  {isGoldMode ? 'Save Corrections' : 'Approve & Save'}
+                  {isSaving ? (
+                    <>
+                      <span className="animate-spin text-xs">⏳</span>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    isGoldMode ? 'Save Corrections' : 'Approve & Save'
+                  )}
                 </button>
               </>
             ) : selectedEmail && !selectedEmail.extracted && !resolvedLineage.silverRecord && !resolvedLineage.goldRecord ? (
