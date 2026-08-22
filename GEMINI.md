@@ -33,6 +33,9 @@ For ALL future changes, feature implementations, and code modifications, you mus
 
 * **User Isolation Standard**: Every endpoint under `/api/ingestion` and `/api/pipeline` must use `checkJwt` to authenticate users. The database tables (Bronze, Silver, and Gold layers) must strictly isolate records by `user_id` parsed from `req.auth.sub`. In the frontend, the Cognito JWT token retrieved via `fetchAuthSession` must be attached to the `Authorization` header of all API calls.
 
+* **Dependency Security Standard**: Zero Critical and High vulnerabilities permitted across backend and frontend dependencies. Routine `npm audit` checks must be performed to maintain package health.
+
+
 
 ## 4. Coding & Naming Conventions
 * **Files:** Use `kebab-case` for all file names.

@@ -6,6 +6,8 @@
 - [NFR-SEC-3] Token Validation: Security tokens must be validated against an official public key set (JWKS) on every inbound request.
 - [NFR-SEC-4] Input Validation: The system must validate all user-provided filters for external API integrations to prevent malformed queries and ensure mandatory criteria are met.
 - [NFR-SEC-5] Data Segregation Enforcement: The database schemas and API logic must enforce strict data boundaries between users, validating that the authenticated user context matching the request payload matches the database records being modified or read, preventing cross-tenant access.
+- [NFR-SEC-6] Dependency Security Vulnerability Management: All third-party direct and transitive npm dependencies across backend and frontend modules must be regularly audited and maintained to eliminate Critical and High security vulnerabilities.
+
 
 ## Performance & Reliability [NFR-PERF]
 - [NFR-PERF-1] Availability Monitoring: The system must provide a health validation service that responds within 100ms.
