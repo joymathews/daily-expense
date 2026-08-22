@@ -75,8 +75,8 @@ BEGIN
         deleted_at NVARCHAR(50),
         created_at DATETIME2 DEFAULT SYSUTCDATETIME(),
         updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),
-        CONSTRAINT UQ_gold_user_silver UNIQUE (user_id, silver_tx_id)
     );
+    CREATE UNIQUE INDEX UQ_gold_user_silver ON gold_transactions(user_id, silver_tx_id) WHERE silver_tx_id IS NOT NULL;
     CREATE INDEX idx_gold_tx_user_date ON gold_transactions(user_id, transaction_date);
     CREATE INDEX idx_gold_tx_received_at ON gold_transactions(user_id, source_received_at);
 END;

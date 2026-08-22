@@ -53,8 +53,30 @@ export function querySqlite<T>(db: sqlite3.Database, query: string, params: any[
   });
 }
 
+/** Reset Azure SQL tables to ensure clean schema recreation on re-runs */
+export async function resetAzureSchema(pool: sql.ConnectionPool): Promise<void> {
+  const reverseTables = [
+    'llm_correction_examples',
+    'llm_feedback_settings',
+    'llm_extraction_logs',
+    'user_cycles',
+    'gold_transactions',
+    'silver_extracted_transactions',
+    'bronze_raw_inputs',
+    'fixed_charges',
+    'payment_mapping_rules',
+    'payment_methods',
+    'fetcher_emails',
+    'user_preferences',
+  ];
+  for (const table of reverseTables) {
+    await pool.request().query(`IF OBJECT_ID('dbo.${table}', 'U') IS NOT NULL DROP TABLE dbo.${table};`);
+  }
+}
+
 /** Execute T-SQL DDL Schema Script against Azure SQL */
 export async function executeAzureSchema(pool: sql.ConnectionPool): Promise<void> {
+  await resetAzureSchema(pool);
   const schemaPath = path.resolve(__dirname, 'azure-sql-schema.sql');
   if (!fs.existsSync(schemaPath)) {
     throw new Error(`Schema file not found at: ${schemaPath}`);
