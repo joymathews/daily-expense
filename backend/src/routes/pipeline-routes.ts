@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { getRepository } from '../db/transaction-repository-factory';
 import { TransactionExtractorFactory } from '../services/transaction-extractor';
 import { CorrectionLearningService } from '../services/correction-learning-service';
+import { PaymentStandardizationService } from '../services/payment-standardization-service';
 import { buildUserCycleList } from '../services/cycle-engine';
 
 const router = Router();
@@ -399,29 +400,7 @@ router.post('/approve-batch', async (req, res) => {
     const repository = getRepository();
     await repository.initializeSchema();
 
-    const approvedIds: string[] = [];
-
-    for (const silverId of silverIds) {
-      const tx = await repository.getSilverTransactionById(silverId, userId);
-      if (tx && tx.status === 'pending') {
-        await repository.promoteToTransaction(silverId, {
-          id: crypto.randomUUID(),
-          pendingTxId: silverId,
-          userId,
-          sourceType: tx.sourceType || 'email',
-          merchant: tx.merchantNormalized || tx.merchantRaw,
-          amount: tx.amount,
-          currency: tx.currency,
-          transactionDate: tx.transactionDate,
-          category: tx.inferredCategory || 'Other',
-          notes: 'Batch approved',
-          paymentMethod: tx.paymentMethod,
-          transactionType: tx.transactionType || 'expense',
-          parentTransactionId: tx.parentTransactionId || undefined,
-        });
-        approvedIds.push(silverId);
-      }
-    }
+    const approvedIds = await repository.approvePendingTransactionsBatch(silverIds, userId);
 
     await repository.close();
     res.status(200).json({ status: 'approved', approvedIds });
@@ -446,13 +425,7 @@ router.post('/reject-batch', async (req, res) => {
     const repository = getRepository();
     await repository.initializeSchema();
 
-    for (const id of rawEmailIds) {
-      const input = await repository.getRawInputById(id, userId);
-      if (input) {
-        // Rejecting a record also marks it as non-transactional (atomic operation)
-        await repository.rejectRawInput(id, userId);
-      }
-    }
+    await repository.rejectRawInputsBatch(rawEmailIds, userId);
 
     await repository.close();
     res.status(200).json({ status: 'rejected', rejectedIds: rawEmailIds });
@@ -481,6 +454,10 @@ router.post('/extract', async (req, res) => {
     const extractor = TransactionExtractorFactory.createExtractor();
     const results: any[] = [];
 
+    // Pre-fetch payment mapping rules and methods once outside the extraction loop
+    const rules = await repository.getPaymentMappingRules(userId);
+    const methods = await repository.getPaymentMethods(userId);
+
     for (const id of rawEmailIds) {
       const rawInput = await repository.getRawInputById(id, userId);
       if (!rawInput) {
@@ -500,7 +477,7 @@ router.post('/extract', async (req, res) => {
       const extracted = await extractor.extractTransaction(rawInput.rawBody, fewShotBlock);
 
       if (extracted) {
-        const standardizedMethod = await repository.standardizePaymentMethod(userId, extracted.paymentMethod);
+        const standardizedMethod = PaymentStandardizationService.standardize(extracted.paymentMethod, rules, methods);
         const pendingTx = {
           id: crypto.randomUUID(),
           bronzeInputId: rawInput.id,

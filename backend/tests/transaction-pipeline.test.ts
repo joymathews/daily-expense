@@ -259,6 +259,8 @@ describe('Transaction Processing Pipeline Integration', () => {
       deleteCycleOverride: jest.fn().mockResolvedValue(undefined),
       isCycleStartAnchor: jest.fn().mockResolvedValue(false),
       rejectRawInput: jest.fn().mockResolvedValue(undefined),
+      rejectRawInputsBatch: jest.fn().mockResolvedValue(undefined),
+      approvePendingTransactionsBatch: jest.fn().mockResolvedValue([]),
       updatePendingTransactionsBatch: jest.fn().mockResolvedValue(undefined),
       updateGoldTransactionsBatch: jest.fn().mockResolvedValue(undefined),
       getInspectableTables: jest.fn().mockResolvedValue([]),

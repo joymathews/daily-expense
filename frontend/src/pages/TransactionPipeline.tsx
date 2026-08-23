@@ -46,8 +46,6 @@ const TransactionPipeline: React.FC = () => {
     fetchLlmLog,
   } = useGmailIntegration();
 
-  console.log('DEBUG: rawEmails length =', rawEmails.length, 'rawEmails =', rawEmails);
-
   // Multi-select state for Bronze batch extraction
   const [checkedEmailIds, setCheckedEmailIds] = useState<string[]>([]);
 

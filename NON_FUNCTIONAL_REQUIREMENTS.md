@@ -17,6 +17,9 @@
 - [NFR-PERF-5] Non-Blocking Logging: Backend logging must execute asynchronously and use memory buffering to prevent file I/O operations from introducing latency in API responses.
 - [NFR-PERF-6] Dynamic Frontend Log Level: The frontend logger must support runtime level configuration via browser developer console commands and persist selections across page reloads.
 - [NFR-PERF-7] Configurable Frontend Network Log Forwarding: The frontend logger must support disabling network log forwarding entirely (via environment variables or local storage) to avoid unnecessary API requests and network usage.
+- [NFR-PERF-8] Single WAN Round-Trip Batching & Query Projection: Database repository layers must execute batch approvals/rejections in 1 single network round-trip and omit heavy text payloads (`raw_body`) on list views to optimize cloud DB WAN performance.
+- [NFR-PERF-9] HTTP Payload Compression: The Express API server must compress JSON response payloads using Gzip/Brotli to reduce network transfer sizes by at least 70%.
+- [NFR-PERF-10] Glitch-Free Client SWR Caching: The frontend architecture must use a React 18 synchronized external store (`useSyncExternalStore`) to provide instant (0ms) tab navigation while revalidating data in the background and invalidating cache on mutations.
 
 ## Availability [NFR-AVAIL]
 - [NFR-AVAIL-1] The system should target 99.9% availability for the core platform and third-party integration pipelines.

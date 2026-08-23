@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import App from './App';
+import { resetSharedCache } from './hooks/use-gmail-integration';
 
 // Mock Amplify and Authenticator
 vi.mock('@aws-amplify/ui-react', async () => {
@@ -51,6 +52,7 @@ vi.mock('@react-oauth/google', async () => {
 
 describe('Requirement Traceability Matrix Verification', () => {
   beforeEach(() => {
+    resetSharedCache();
     (globalThis as any).isAuthenticated = true;
     (globalThis as any).mockSignOut = vi.fn();
     vi.clearAllMocks();
@@ -588,7 +590,10 @@ describe('Requirement Traceability Matrix Verification', () => {
           json: () => Promise.resolve({ transactions: [] }),
         });
       }
-      return Promise.reject(new Error('Unknown url'));
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
     });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -613,7 +618,9 @@ describe('Requirement Traceability Matrix Verification', () => {
     fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
 
     // Wait for the emails to appear - Inv 456 (unprocessed) must be visible
-    expect(await screen.findByText('Inv 456')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Inv 456')).toBeInTheDocument();
+    });
     
     // Inv 123 (processed) must NOT be visible
     expect(screen.queryByText('Inv 123')).not.toBeInTheDocument();

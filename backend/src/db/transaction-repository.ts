@@ -125,6 +125,8 @@ export interface ITransactionRepository {
   saveFixedCharge(charge: FixedCharge): Promise<void>;
   deleteFixedCharge(id: string, userId: string): Promise<void>;
   rejectRawInput(id: string, userId: string): Promise<void>;
+  rejectRawInputsBatch(ids: string[], userId: string): Promise<void>;
+  approvePendingTransactionsBatch(silverIds: string[], userId: string): Promise<string[]>;
   updatePendingTransactionsBatch(ids: string[], userId: string, updates: Partial<PendingTransaction>): Promise<void>;
   updateGoldTransactionsBatch(ids: string[], userId: string, updates: Partial<Transaction>): Promise<void>;
   getInspectableTables(): Promise<Array<{ name: string; columns: string[] }>>;

@@ -711,7 +711,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
   }
 
   async getRawInputs(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawInput[]> {
-    let sql = 'SELECT * FROM bronze_raw_inputs WHERE user_id = ? AND deleted_at IS NULL';
+    let sql = 'SELECT id, user_id, source_type, sender, title, snippet, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs WHERE user_id = ? AND deleted_at IS NULL';
     const params: any[] = [userId];
     if (filters?.startDate) {
       sql += ' AND date(received_at) >= date(?)';
@@ -730,7 +730,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
       sender: row.sender,
       title: row.title,
       snippet: row.snippet || '',
-      rawBody: row.raw_body,
+      rawBody: row.raw_body || '',
       rawPayload: row.raw_payload || '',
       receivedAt: row.received_at,
       hasTransaction: row.has_transaction === 1,
@@ -1070,6 +1070,49 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
       `UPDATE silver_extracted_transactions SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`,
       params
     );
+  }
+
+  async rejectRawInputsBatch(ids: string[], userId: string): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const placeholders = ids.map(() => '?').join(', ');
+    await this.run(
+      `UPDATE bronze_raw_inputs SET status = 'rejected', has_transaction = 0 WHERE id IN (${placeholders}) AND user_id = ?`,
+      [...ids, userId]
+    );
+  }
+
+  async approvePendingTransactionsBatch(silverIds: string[], userId: string): Promise<string[]> {
+    if (!silverIds || silverIds.length === 0) return [];
+    await this.run('BEGIN TRANSACTION');
+    try {
+      const approvedIds: string[] = [];
+      for (const silverId of silverIds) {
+        const tx = await this.getSilverTransactionById(silverId, userId);
+        if (tx && tx.status === 'pending') {
+          await this.promoteToTransaction(silverId, {
+            id: crypto.randomUUID(),
+            pendingTxId: silverId,
+            userId,
+            sourceType: tx.sourceType || 'email',
+            merchant: tx.merchantNormalized || tx.merchantRaw,
+            amount: tx.amount,
+            currency: tx.currency,
+            transactionDate: tx.transactionDate,
+            category: tx.inferredCategory || 'Other',
+            notes: 'Batch approved',
+            paymentMethod: tx.paymentMethod,
+            transactionType: tx.transactionType || 'expense',
+            parentTransactionId: tx.parentTransactionId || undefined,
+          });
+          approvedIds.push(silverId);
+        }
+      }
+      await this.run('COMMIT');
+      return approvedIds;
+    } catch (err) {
+      await this.run('ROLLBACK');
+      throw err;
+    }
   }
 
   async updatePendingTransactionsBatch(ids: string[], userId: string, updates: Partial<PendingTransaction>): Promise<void> {

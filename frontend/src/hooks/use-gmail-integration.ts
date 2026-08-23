@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { getActiveCycleRange } from '../utils/transaction-helper';
@@ -79,89 +79,156 @@ export interface GoldTransaction {
   currency: string;
   transactionDate: string;
   category: string;
+  paymentMethod: string;
+  transactionType: 'expense' | 'refund' | 'transfer' | 'fixed';
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
-  sourceTitle?: string;
-  sourceSender?: string;
-  sourceReceivedAt?: string;
   bronzeInputId?: string;
-  rawEmailId?: string; // Compatibility
-  emailSubject?: string; // Compatibility
-  emailSender?: string; // Compatibility
-  emailReceivedAt?: string; // Compatibility
-  paymentMethod?: string;
   deletedAt?: string;
-  transactionType?: 'expense' | 'refund' | 'transfer' | 'fixed';
   parentTransactionId?: string;
 }
 
 export interface PaymentMethod {
   id: string;
-  userId: string;
   name: string;
+  type: string;
+  lastFourDigits?: string;
+  isDefault?: boolean;
 }
 
 export interface PaymentMappingRule {
   id: string;
-  userId: string;
-  aliasPattern: string;
+  keyword: string;
   paymentMethodId: string;
-  paymentMethodName?: string;
 }
 
 export interface LlmAccuracyStats {
-  overallAccuracy: number;
-  merchantAccuracy: number;
-  amountAccuracy: number;
-  categoryAccuracy: number;
-  paymentMethodAccuracy: number;
-  totalTested: number;
+  totalExtracted: number;
+  totalCorrected: number;
+  accuracyRatePercentage: number;
+  totalApprovedUnchanged: number;
 }
 
-export interface LlmExtractionLog {
-  id: string;
-  userId: string;
-  bronzeInputId: string;
+export interface LlmLogEntry {
+  rawInputId: string;
+  promptSent: string;
+  rawLlmResponse: string;
   extractedMerchant: string;
   extractedAmount: number;
   extractedCurrency: string;
   extractedDate: string;
   extractedCategory: string;
-  extractedPaymentMethod: string;
-  extractedTransactionType: string;
-  confidenceScore?: number;
-  extractedAt?: string;
 }
 
 export interface GmailIntegrationOptions {
   defaultToCycleRange?: boolean;
 }
 
+// React 18 External Store Factory for Glitch-Free In-Memory Caching & SWR Sync
+function createExternalStore<T>(initialValue: T) {
+  let data = initialValue;
+  const listeners = new Set<() => void>();
+  return {
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot() {
+      return data;
+    },
+    set(action: React.SetStateAction<T>) {
+      const next = typeof action === 'function' ? (action as any)(data) : action;
+      data = next;
+      listeners.forEach(l => l());
+    },
+    reset(val: T) {
+      data = val;
+      listeners.forEach(l => l());
+    }
+  };
+}
+
+const rawEmailsStore = createExternalStore<GmailMessage[]>([]);
+const silverTransactionsStore = createExternalStore<SilverTransaction[]>([]);
+const goldTransactionsStore = createExternalStore<GoldTransaction[]>([]);
+const deletedRawEmailsStore = createExternalStore<GmailMessage[]>([]);
+const deletedSilverTransactionsStore = createExternalStore<SilverTransaction[]>([]);
+const deletedGoldTransactionsStore = createExternalStore<GoldTransaction[]>([]);
+const paymentMethodsStore = createExternalStore<PaymentMethod[]>([]);
+const paymentRulesStore = createExternalStore<PaymentMappingRule[]>([]);
+const fetcherEmailsStore = createExternalStore<string[]>([]);
+const billingCycleStartDayStore = createExternalStore<number>(17);
+const expectedSalaryStore = createExternalStore<number>(100000);
+const fixedChargesStore = createExternalStore<FixedChargeTemplate[]>([]);
+const llmAccuracyStatsStore = createExternalStore<LlmAccuracyStats | null>(null);
+
+export function resetSharedCache() {
+  rawEmailsStore.reset([]);
+  silverTransactionsStore.reset([]);
+  goldTransactionsStore.reset([]);
+  deletedRawEmailsStore.reset([]);
+  deletedSilverTransactionsStore.reset([]);
+  deletedGoldTransactionsStore.reset([]);
+  paymentMethodsStore.reset([]);
+  paymentRulesStore.reset([]);
+  fetcherEmailsStore.reset([]);
+  billingCycleStartDayStore.reset(17);
+  expectedSalaryStore.reset(100000);
+  fixedChargesStore.reset([]);
+  llmAccuracyStatsStore.reset(null);
+}
+
 export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const [senders, setSenders] = useState<string[]>([]);
   const [currentSender, setCurrentSender] = useState('');
-  const [fetcherEmails, setFetcherEmails] = useState<string[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [paymentRules, setPaymentRules] = useState<PaymentMappingRule[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [hasInitializedDefaultDates, setHasInitializedDefaultDates] = useState(false);
   const [subject, setSubject] = useState('');
-  const [emails, setEmails] = useState<GmailMessage[]>([]); // backwards compatibility for tests
-  
-  // Medallion Layer States
-  const [rawEmails, setRawEmails] = useState<GmailMessage[]>([]);
-  const [silverTransactions, setSilverTransactions] = useState<SilverTransaction[]>([]);
-  const [goldTransactions, setGoldTransactions] = useState<GoldTransaction[]>([]);
-  const [deletedRawEmails, setDeletedRawEmails] = useState<GmailMessage[]>([]);
-  const [deletedSilverTransactions, setDeletedSilverTransactions] = useState<SilverTransaction[]>([]);
-  const [deletedGoldTransactions, setDeletedGoldTransactions] = useState<GoldTransaction[]>([]);
-  const [llmAccuracyStats, setLlmAccuracyStats] = useState<LlmAccuracyStats | null>(null);
-  const [billingCycleStartDay, setBillingCycleStartDay] = useState<number>(17);
-  const [expectedSalary, setExpectedSalary] = useState<number>(100000);
-  const [fixedCharges, setFixedCharges] = useState<FixedChargeTemplate[]>([]);
-  
+
+  // Synchronized In-Memory Medallion Stores
+  const rawEmails = useSyncExternalStore(rawEmailsStore.subscribe, rawEmailsStore.getSnapshot);
+  const setRawEmails = rawEmailsStore.set;
+  const emails = rawEmails; // compatibility
+  const setEmails = rawEmailsStore.set;
+
+  const silverTransactions = useSyncExternalStore(silverTransactionsStore.subscribe, silverTransactionsStore.getSnapshot);
+  const setSilverTransactions = silverTransactionsStore.set;
+
+  const goldTransactions = useSyncExternalStore(goldTransactionsStore.subscribe, goldTransactionsStore.getSnapshot);
+  const setGoldTransactions = goldTransactionsStore.set;
+
+  const deletedRawEmails = useSyncExternalStore(deletedRawEmailsStore.subscribe, deletedRawEmailsStore.getSnapshot);
+  const setDeletedRawEmails = deletedRawEmailsStore.set;
+
+  const deletedSilverTransactions = useSyncExternalStore(deletedSilverTransactionsStore.subscribe, deletedSilverTransactionsStore.getSnapshot);
+  const setDeletedSilverTransactions = deletedSilverTransactionsStore.set;
+
+  const deletedGoldTransactions = useSyncExternalStore(deletedGoldTransactionsStore.subscribe, deletedGoldTransactionsStore.getSnapshot);
+  const setDeletedGoldTransactions = deletedGoldTransactionsStore.set;
+
+  const paymentMethods = useSyncExternalStore(paymentMethodsStore.subscribe, paymentMethodsStore.getSnapshot);
+  const setPaymentMethods = paymentMethodsStore.set;
+
+  const paymentRules = useSyncExternalStore(paymentRulesStore.subscribe, paymentRulesStore.getSnapshot);
+  const setPaymentRules = paymentRulesStore.set;
+
+  const fetcherEmails = useSyncExternalStore(fetcherEmailsStore.subscribe, fetcherEmailsStore.getSnapshot);
+  const setFetcherEmails = fetcherEmailsStore.set;
+
+  const billingCycleStartDay = useSyncExternalStore(billingCycleStartDayStore.subscribe, billingCycleStartDayStore.getSnapshot);
+  const setBillingCycleStartDay = billingCycleStartDayStore.set;
+
+  const expectedSalary = useSyncExternalStore(expectedSalaryStore.subscribe, expectedSalaryStore.getSnapshot);
+  const setExpectedSalary = expectedSalaryStore.set;
+
+  const fixedCharges = useSyncExternalStore(fixedChargesStore.subscribe, fixedChargesStore.getSnapshot);
+  const setFixedCharges = fixedChargesStore.set;
+
+  const llmAccuracyStats = useSyncExternalStore(llmAccuracyStatsStore.subscribe, llmAccuracyStatsStore.getSnapshot);
+  const setLlmAccuracyStats = llmAccuracyStatsStore.set;
+
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -511,7 +578,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
   const loadAllLayers = async (start = startDate, end = endDate) => {
     setIsLoading(true);
-    await Promise.all([
+    await Promise.allSettled([
       loadRawEmails(start, end),
       loadSilverTransactions(start, end),
       loadGoldTransactions(start, end),
@@ -996,11 +1063,6 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
   const login = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      if (senders.length === 0 || !startDate || !endDate) {
-        setError("Please provide at least one sender and a date range.");
-        return;
-      }
-
       setIsFetching(true);
       setError(null);
       setFetchProgress({ status: 'started', current: 0, total: 0 });
