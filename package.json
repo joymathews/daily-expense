@@ -7,7 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "rtm": "node tools/rtm/generate-rtm.js",
     "clear-db": "node tools/clear-db.js",
-    "migrate-transfer": "node tools/migrate-transfer-constraint.js"
+    "migrate-transfer": "node tools/migrate-transfer-constraint.js",
+    "dev:extraction": "cd services/extraction-service && npm run dev",
+    "test:extraction": "cd services/extraction-service && npm test"
   },
   "keywords": [],
   "author": "",

@@ -13,19 +13,12 @@ export interface ITransactionExtractor {
   extractTransaction(textBody: string, contextBlock?: string): Promise<ExtractedTransaction | null>;
 }
 
-import { OllamaExtractor } from './ollama-extractor';
+import { RemoteHttpExtractor } from './remote-extractor';
 
 export class TransactionExtractorFactory {
   static createExtractor(): ITransactionExtractor {
-    const provider = process.env.LLM_PROVIDER || 'ollama';
-
-    if (provider === 'ollama') {
-      const model = process.env.LLM_MODEL || 'qwen2.5-coder:7b';
-      const endpoint = process.env.LLM_ENDPOINT || 'http://localhost:11434';
-      return new OllamaExtractor(model, endpoint);
-    }
-
-    // Default to Ollama fallback
-    return new OllamaExtractor('qwen2.5-coder:7b', 'http://localhost:11434');
+    const serviceUrl = process.env.LLM_EXTRACTION_SERVICE_URL || 'http://localhost:3002';
+    const serviceSecret = process.env.LLM_EXTRACTION_SERVICE_SECRET || 'dev-internal-secret-key-123';
+    return new RemoteHttpExtractor(serviceUrl, serviceSecret);
   }
 }
