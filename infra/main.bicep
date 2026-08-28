@@ -11,7 +11,7 @@
 // ==============================================================================
 
 @description('Azure region for all resources')
-param location string = 'westus'
+param location string = 'westus2'
 
 @description('Name prefix for application resources')
 param appName string = 'daily-expense'
