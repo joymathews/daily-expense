@@ -277,7 +277,7 @@ describe('Gmail API Integration [BUG-010]', () => {
         data: Buffer.from('<div>Hello <style>body{}</style><script>alert()</script>HTML <b>world</b></div>').toString('base64')
       }
     };
-    expect(service.extractBody(htmlPayload)).toBe('Hello HTML world');
+    expect(service.extractBody(htmlPayload).replace(/\s+/g, ' ')).toBe('Hello HTML world');
 
     // Test nested parts recursion
     const nestedPayload = {
@@ -402,9 +402,42 @@ describe('Gmail API Integration [BUG-010]', () => {
 
     expect(txEmail).toBeDefined();
     expect(txEmail.hasTransaction).toBe(true);
+    expect(txEmail.rawBody).toBe('Full email body');
 
     expect(otpEmail).toBeDefined();
     expect(otpEmail.hasTransaction).toBe(false);
+    expect(otpEmail.rawBody).toBe('Do not share');
+  });
+
+  /**
+   * [BUG-020] Missing Raw Email Message Body in Detail Popup Modal
+   * Test verifies getRawInputs projects rawBody and rawPayload columns.
+   */
+  it('should return raw inputs with complete rawBody and rawPayload in getRawInputs [BUG-020]', async () => {
+    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const repository = new SQLiteTransactionRepository();
+    await repository.initializeSchema();
+
+    const sampleBody = 'Dear customer, your payment of 450 INR to HDFC was successful.';
+    await repository.saveRawInput({
+      id: 'test_bug_020_msg',
+      userId: 'user-123',
+      sourceType: 'email',
+      sender: 'alerts@hdfcbank.bank.in',
+      title: 'Account update for your HDFC Bank A/c',
+      snippet: 'payment of 450 INR',
+      rawBody: sampleBody,
+      rawPayload: JSON.stringify({ messageId: 'test_bug_020_msg' }),
+      receivedAt: '2026-08-24T12:54:00Z',
+    });
+
+    const inputs = await repository.getRawInputs('user-123');
+    await repository.close();
+
+    const target = inputs.find((e: any) => e.id === 'test_bug_020_msg');
+    expect(target).toBeDefined();
+    expect(target?.rawBody).toBe(sampleBody);
+    expect(target?.rawPayload).toContain('test_bug_020_msg');
   });
 
   /**

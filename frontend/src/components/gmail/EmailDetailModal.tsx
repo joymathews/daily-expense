@@ -848,7 +848,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               {(rawBodyForGoldLineage || resolvedLineage.bronzeRecord?.body) && (
                 <div>
                   <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Message Body (Bronze Raw Data)</div>
-                  <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-48 overflow-y-auto leading-relaxed">
+                  <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-[30rem] overflow-y-auto leading-relaxed">
                     {rawBodyForGoldLineage || resolvedLineage.bronzeRecord?.body}
                   </pre>
                 </div>
@@ -857,11 +857,11 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
           )}
 
           {/* Standard raw email body for non-Gold mode */}
-          {!isGoldMode && selectedEmail?.body && (
+          {!isGoldMode && selectedEmail && (
             <div>
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Message Body (Bronze Raw Data)</div>
-              <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-48 overflow-y-auto leading-relaxed">
-                {selectedEmail.body}
+              <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-[30rem] overflow-y-auto leading-relaxed">
+                {selectedEmail.body || selectedEmail.snippet || 'No message content available.'}
               </pre>
             </div>
           )}

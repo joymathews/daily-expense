@@ -131,6 +131,8 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
           CONSTRAINT PK_bronze_raw_inputs PRIMARY KEY (user_id, id)
         );
         CREATE INDEX idx_bronze_inputs_sender ON bronze_raw_inputs(sender);
+        IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_bronze_user_status_date')
+          CREATE INDEX idx_bronze_user_status_date ON bronze_raw_inputs(user_id, status, deleted_at, received_at DESC);
       END
     `);
 
@@ -161,6 +163,8 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
           CONSTRAINT UQ_silver_user_bronze UNIQUE (user_id, bronze_input_id)
         );
         CREATE INDEX idx_silver_tx_status ON silver_extracted_transactions(status);
+        IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_silver_user_status')
+          CREATE INDEX idx_silver_user_status ON silver_extracted_transactions(user_id, deleted_at, status);
       END
     `);
 
@@ -489,7 +493,7 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
 
   async getRawInputs(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawInput[]> {
     const pool = await this.getPool();
-    let query = 'SELECT * FROM bronze_raw_inputs WHERE user_id = @user_id AND deleted_at IS NULL AND status != \'processed\'';
+    let query = 'SELECT id, user_id, source_type, sender, title, snippet, raw_body, raw_payload, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs WHERE user_id = @user_id AND deleted_at IS NULL AND status != \'processed\'';
     const req = pool.request().input('user_id', sql.NVarChar(255), userId);
 
     if (filters?.startDate) {
@@ -559,16 +563,220 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
     await this.updateRawInputStatus(id, userId, 'rejected');
   }
 
-  async updatePendingTransactionsBatch(ids: string[], userId: string, updates: Partial<PendingTransaction>): Promise<void> {
-    for (const id of ids) {
-      await this.updatePendingTransaction(id, userId, updates);
+  async rejectRawInputsBatch(ids: string[], userId: string): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const pool = await this.getPool();
+    const req = pool.request().input('userId', sql.NVarChar(255), userId);
+    const params: string[] = [];
+    ids.forEach((id, index) => {
+      const param = `id${index}`;
+      params.push(`@${param}`);
+      req.input(param, sql.NVarChar(255), id);
+    });
+    await req.query(`UPDATE bronze_raw_inputs SET status = 'rejected', has_transaction = 0 WHERE id IN (${params.join(', ')}) AND user_id = @userId`);
+  }
+
+  async approvePendingTransactionsBatch(silverIds: string[], userId: string): Promise<string[]> {
+    if (!silverIds || silverIds.length === 0) return [];
+    const pool = await this.getPool();
+
+    const req = pool.request().input('userId', sql.NVarChar(255), userId);
+    const paramNames: string[] = [];
+    silverIds.forEach((id, index) => {
+      const param = `id${index}`;
+      paramNames.push(`@${param}`);
+      req.input(param, sql.NVarChar(255), id);
+    });
+
+    const inClause = paramNames.join(', ');
+    const selectQuery = `
+      SELECT s.id as pendingId, s.bronze_input_id, s.source_type, s.merchant_raw, s.merchant_normalized,
+             s.amount, s.amount_cents, s.currency, s.transaction_date, s.inferred_category, s.payment_method,
+             s.transaction_type, s.parent_transaction_id, b.received_at as source_received_at
+      FROM silver_extracted_transactions s
+      LEFT JOIN bronze_raw_inputs b ON s.bronze_input_id = b.id AND s.user_id = b.user_id
+      WHERE s.id IN (${inClause}) AND s.user_id = @userId AND s.status = 'pending' AND s.deleted_at IS NULL
+    `;
+
+    const pendingRes = await req.query(selectQuery);
+    const pendingRows = pendingRes.recordset;
+    if (pendingRows.length === 0) return [];
+
+    const approvedIds = pendingRows.map(r => r.pendingId);
+    const transaction = pool.transaction();
+    await transaction.begin();
+
+    try {
+      for (const row of pendingRows) {
+        const goldId = crypto.randomUUID();
+        const merchant = row.merchant_normalized || row.merchant_raw;
+        const category = normalizeCategory(row.inferred_category || 'Other');
+        const amountCents = row.amount_cents || Math.round(row.amount * 100);
+
+        await transaction.request()
+          .input('id', sql.NVarChar(255), goldId)
+          .input('silver_tx_id', sql.NVarChar(255), row.pendingId)
+          .input('user_id', sql.NVarChar(255), userId)
+          .input('source_type', sql.NVarChar(50), row.source_type || 'email')
+          .input('merchant', sql.NVarChar(255), merchant)
+          .input('amount_cents', sql.BigInt, amountCents)
+          .input('amount', sql.Decimal(18, 2), row.amount)
+          .input('currency', sql.NVarChar(10), row.currency)
+          .input('transaction_date', sql.NVarChar(50), row.transaction_date)
+          .input('category', sql.NVarChar(100), category)
+          .input('notes', sql.NVarChar(sql.MAX), 'Batch approved')
+          .input('payment_method', sql.NVarChar(100), row.payment_method || null)
+          .input('transaction_type', sql.NVarChar(50), row.transaction_type || 'expense')
+          .input('parent_transaction_id', sql.NVarChar(255), row.parent_transaction_id || null)
+          .input('source_received_at', sql.NVarChar(50), row.source_received_at || null)
+          .query(`
+            INSERT INTO gold_transactions (id, silver_tx_id, user_id, source_type, merchant, amount_cents, amount, currency, transaction_date, category, notes, payment_method, transaction_type, parent_transaction_id, source_received_at)
+            VALUES (@id, @silver_tx_id, @user_id, @source_type, @merchant, @amount_cents, @amount, @currency, @transaction_date, @category, @notes, @payment_method, @transaction_type, @parent_transaction_id, @source_received_at)
+          `);
+      }
+
+      const silverReq = transaction.request().input('userId', sql.NVarChar(255), userId);
+      const silverParams: string[] = [];
+      approvedIds.forEach((id, index) => {
+        const param = `sid${index}`;
+        silverParams.push(`@${param}`);
+        silverReq.input(param, sql.NVarChar(255), id);
+      });
+      await silverReq.query(`UPDATE silver_extracted_transactions SET status = 'approved' WHERE id IN (${silverParams.join(', ')}) AND user_id = @userId`);
+
+      const bronzeInputIds = pendingRows.map(r => r.bronze_input_id).filter(Boolean);
+      if (bronzeInputIds.length > 0) {
+        const bronzeReq = transaction.request().input('userId', sql.NVarChar(255), userId);
+        const bronzeParams: string[] = [];
+        bronzeInputIds.forEach((id, index) => {
+          const param = `bid${index}`;
+          bronzeParams.push(`@${param}`);
+          bronzeReq.input(param, sql.NVarChar(255), id);
+        });
+        await bronzeReq.query(`UPDATE bronze_raw_inputs SET status = 'processed' WHERE id IN (${bronzeParams.join(', ')}) AND user_id = @userId`);
+      }
+
+      await transaction.commit();
+      return approvedIds;
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
     }
   }
 
-  async updateGoldTransactionsBatch(ids: string[], userId: string, updates: Partial<Transaction>): Promise<void> {
-    for (const id of ids) {
-      await this.updateGoldTransaction(id, userId, updates);
+  async updatePendingTransactionsBatch(ids: string[], userId: string, updates: Partial<PendingTransaction>): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const pool = await this.getPool();
+    const setClauses: string[] = [];
+    const req = pool.request().input('user_id', sql.NVarChar(255), userId);
+
+    if (updates.merchantNormalized !== undefined) {
+      setClauses.push('merchant_normalized = @merchantNormalized');
+      req.input('merchantNormalized', sql.NVarChar(255), updates.merchantNormalized);
     }
+    if (updates.merchantRaw !== undefined) {
+      setClauses.push('merchant_raw = @merchantRaw');
+      req.input('merchantRaw', sql.NVarChar(255), updates.merchantRaw);
+    }
+    if (updates.amount !== undefined) {
+      setClauses.push('amount = @amount');
+      setClauses.push('amount_cents = @amount_cents');
+      req.input('amount', sql.Decimal(18, 2), updates.amount);
+      req.input('amount_cents', sql.BigInt, Math.round(updates.amount * 100));
+    }
+    if (updates.currency !== undefined) {
+      setClauses.push('currency = @currency');
+      req.input('currency', sql.NVarChar(10), updates.currency);
+    }
+    if (updates.transactionDate !== undefined) {
+      setClauses.push('transaction_date = @transactionDate');
+      req.input('transactionDate', sql.NVarChar(50), updates.transactionDate);
+    }
+    if (updates.inferredCategory !== undefined) {
+      setClauses.push('inferred_category = @inferredCategory');
+      req.input('inferredCategory', sql.NVarChar(100), normalizeCategory(updates.inferredCategory));
+    }
+    if (updates.confidenceScore !== undefined) {
+      setClauses.push('confidence_score = @confidenceScore');
+      req.input('confidenceScore', sql.Float, updates.confidenceScore);
+    }
+    if (updates.status !== undefined) {
+      setClauses.push('status = @status');
+      req.input('status', sql.NVarChar(50), updates.status);
+    }
+    if (updates.paymentMethod !== undefined) {
+      setClauses.push('payment_method = @paymentMethod');
+      req.input('paymentMethod', sql.NVarChar(100), updates.paymentMethod || null);
+    }
+    if (updates.transactionType !== undefined) {
+      setClauses.push('transaction_type = @transactionType');
+      req.input('transactionType', sql.NVarChar(50), updates.transactionType);
+    }
+
+    if (setClauses.length === 0) return;
+
+    const paramNames: string[] = [];
+    ids.forEach((id, index) => {
+      const param = `id${index}`;
+      paramNames.push(`@${param}`);
+      req.input(param, sql.NVarChar(255), id);
+    });
+
+    await req.query(`UPDATE silver_extracted_transactions SET ${setClauses.join(', ')} WHERE id IN (${paramNames.join(', ')}) AND user_id = @user_id`);
+  }
+
+  async updateGoldTransactionsBatch(ids: string[], userId: string, updates: Partial<Transaction>): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const pool = await this.getPool();
+    const setClauses: string[] = [];
+    const req = pool.request().input('user_id', sql.NVarChar(255), userId);
+
+    if (updates.merchant !== undefined) {
+      setClauses.push('merchant = @merchant');
+      req.input('merchant', sql.NVarChar(255), updates.merchant);
+    }
+    if (updates.amount !== undefined) {
+      setClauses.push('amount = @amount');
+      setClauses.push('amount_cents = @amount_cents');
+      req.input('amount', sql.Decimal(18, 2), updates.amount);
+      req.input('amount_cents', sql.BigInt, Math.round(updates.amount * 100));
+    }
+    if (updates.currency !== undefined) {
+      setClauses.push('currency = @currency');
+      req.input('currency', sql.NVarChar(10), updates.currency);
+    }
+    if (updates.transactionDate !== undefined) {
+      setClauses.push('transaction_date = @transactionDate');
+      req.input('transactionDate', sql.NVarChar(50), updates.transactionDate);
+    }
+    if (updates.category !== undefined) {
+      setClauses.push('category = @category');
+      req.input('category', sql.NVarChar(100), normalizeCategory(updates.category));
+    }
+    if (updates.notes !== undefined) {
+      setClauses.push('notes = @notes');
+      req.input('notes', sql.NVarChar(sql.MAX), updates.notes || null);
+    }
+    if (updates.paymentMethod !== undefined) {
+      setClauses.push('payment_method = @paymentMethod');
+      req.input('paymentMethod', sql.NVarChar(100), updates.paymentMethod || null);
+    }
+    if (updates.transactionType !== undefined) {
+      setClauses.push('transaction_type = @transactionType');
+      req.input('transactionType', sql.NVarChar(50), updates.transactionType);
+    }
+
+    if (setClauses.length === 0) return;
+
+    setClauses.push('updated_at = SYSUTCDATETIME()');
+    const paramNames: string[] = [];
+    ids.forEach((id, index) => {
+      const param = `id${index}`;
+      paramNames.push(`@${param}`);
+      req.input(param, sql.NVarChar(255), id);
+    });
+
+    await req.query(`UPDATE gold_transactions SET ${setClauses.join(', ')} WHERE id IN (${paramNames.join(', ')}) AND user_id = @user_id`);
   }
 
   async updateGoldTransaction(id: string, userId: string, updates: Partial<Transaction>): Promise<void> {

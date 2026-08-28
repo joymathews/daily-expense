@@ -2,10 +2,14 @@ import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-reposi
 import { TransactionIngestionService } from '../src/services/transaction-ingestion-service';
 import { ITransactionExtractor, ExtractedTransaction, TransactionExtractorFactory } from '../src/services/transaction-extractor';
 import { ITransactionRepository } from '../src/db/transaction-repository';
-import { OllamaExtractor } from '../src/services/ollama-extractor';
+import { RemoteHttpExtractor } from '../src/services/remote-extractor';
 import crypto from 'crypto';
 
 class MockTransactionExtractor implements ITransactionExtractor {
+  async isAvailable(): Promise<boolean> {
+    return true;
+  }
+
   async extractTransaction(textBody: string): Promise<ExtractedTransaction | null> {
     if (textBody.includes('fail')) {
       return null;
@@ -259,6 +263,8 @@ describe('Transaction Processing Pipeline Integration', () => {
       deleteCycleOverride: jest.fn().mockResolvedValue(undefined),
       isCycleStartAnchor: jest.fn().mockResolvedValue(false),
       rejectRawInput: jest.fn().mockResolvedValue(undefined),
+      rejectRawInputsBatch: jest.fn().mockResolvedValue(undefined),
+      approvePendingTransactionsBatch: jest.fn().mockResolvedValue([]),
       updatePendingTransactionsBatch: jest.fn().mockResolvedValue(undefined),
       updateGoldTransactionsBatch: jest.fn().mockResolvedValue(undefined),
       getInspectableTables: jest.fn().mockResolvedValue([]),
@@ -416,44 +422,36 @@ describe('Transaction Processing Pipeline Integration', () => {
    * based on the LLM_PROVIDER configuration without editing core client code.
    */
   it('supports swap-ready LLM strategies resolved dynamically via environment variables', () => {
-    const originalProvider = process.env.LLM_PROVIDER;
-    
-    // Switch provider to ollama
-    process.env.LLM_PROVIDER = 'ollama';
     const extractorInstance = TransactionExtractorFactory.createExtractor();
     expect(extractorInstance).toBeDefined();
-    expect(extractorInstance.constructor.name).toBe('OllamaExtractor');
-
-    // Restore environment
-    process.env.LLM_PROVIDER = originalProvider;
+    expect(extractorInstance.constructor.name).toBe('RemoteHttpExtractor');
   });
 
   /**
    * [FUNC-GMAIL-43] LLM Category Extraction Inference
    * [NFR-GMAIL-6] Category Extraction Robustness
    */
-  it('should infer category from overall context using Ollama category list and map to fallback if context is unclear', async () => {
-    const extractor = new OllamaExtractor('llama3', 'http://localhost:11434');
+  it('should infer category from overall context using RemoteHttpExtractor', async () => {
+    const extractor = new RemoteHttpExtractor('http://localhost:3002', 'dev-secret');
 
-    // Mock global fetch
     const mockFetch = jest.fn().mockImplementation(() => {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({
-          message: {
-            content: JSON.stringify({
-              merchant: 'Uber Inc',
-              amount: 14.50,
-              currency: 'USD',
-              date: '2026-06-12',
-              category: 'Cabs & Transport',
-              paymentMethod: 'UPI',
-              transactionType: 'expense'
-            })
+          success: true,
+          transaction: {
+            merchant: 'Uber Inc',
+            amount: 14.50,
+            currency: 'USD',
+            date: '2026-06-12',
+            category: 'Cabs & Transport',
+            paymentMethod: 'UPI',
+            transactionType: 'expense'
           }
         })
       });
     });
+
     const originalFetch = global.fetch;
     global.fetch = mockFetch as any;
 
@@ -463,14 +461,13 @@ describe('Transaction Processing Pipeline Integration', () => {
       expect(result?.merchant).toBe('Uber Inc');
       expect(result?.category).toBe('Cabs & Transport');
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:11434/api/chat',
+        'http://localhost:3002/api/v1/extract',
         expect.objectContaining({
           method: 'POST',
-          body: expect.stringContaining('Cabs & Transport')
+          body: expect.stringContaining('Uber ride receipt detail')
         })
       );
     } finally {
-      // Restore fetch
       global.fetch = originalFetch;
     }
   });
