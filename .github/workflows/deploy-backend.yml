@@ -83,14 +83,13 @@ jobs:
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
           imageToDeploy: ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           targetPort: ${{ env.TARGET_PORT }}
-          environmentVariables: |
+          environmentVariables: >-
             NODE_ENV=production
             PORT=3001
             COGNITO_USER_POOL_ID=${{ vars.COGNITO_USER_POOL_ID }}
             COGNITO_CLIENT_ID=${{ vars.COGNITO_CLIENT_ID }}
             COGNITO_REGION=${{ vars.COGNITO_REGION }}
             DB_PROVIDER=${{ vars.DB_PROVIDER }}
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
             AZURE_SQL_SERVER=${{ vars.AZURE_SQL_SERVER }}
             AZURE_SQL_DATABASE=${{ vars.AZURE_SQL_DATABASE }}
             AZURE_SQL_USER=${{ secrets.AZURE_SQL_USER }}

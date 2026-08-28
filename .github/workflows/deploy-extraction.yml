@@ -76,7 +76,7 @@ jobs:
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
           imageToDeploy: ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           targetPort: ${{ env.TARGET_PORT }}
-          environmentVariables: |
+          environmentVariables: >-
             PORT=3002
             SERVICE_SECRET=${{ secrets.LLM_EXTRACTION_SERVICE_SECRET }}
             LLM_PROVIDER=${{ vars.LLM_PROVIDER }}
