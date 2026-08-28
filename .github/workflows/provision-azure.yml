@@ -16,7 +16,7 @@
 #    - AZURE_SUBSCRIPTION_ID : Azure Subscription ID (e.g., 0201e489-b179-...)
 # 2. GitHub Repository Variables (Settings -> Secrets and variables -> Actions -> Variables):
 #    - AZURE_RESOURCE_GROUP : Resource group for new Container Apps (Default: rg-daily-expense-dev)
-#    - AZURE_LOCATION       : Azure Region (Default: westus)
+#    - AZURE_LOCATION       : Azure Region (Default: westus2)
 # ==============================================================================
 
 name: Provision Azure Container Apps Infrastructure
@@ -30,7 +30,7 @@ permissions:
 
 env:
   AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-daily-expense-dev' }}
-  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'westus' }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'westus2' }}
 
 jobs:
   provision-infrastructure:
