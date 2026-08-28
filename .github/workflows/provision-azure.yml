@@ -1,0 +1,72 @@
+# ==============================================================================
+# GitHub Actions Workflow: Provision Zero-Cost ($0/mo) Azure Infrastructure
+# ==============================================================================
+#
+# PURPOSE:
+#   Provisions $0/month Azure Container Apps infrastructure for Daily Expense.
+#   - Uses GitHub Container Registry (ghcr.io) -> $0/month
+#   - Uses Azure Container Apps Free Grant (180k vCPU-sec/mo free) -> $0/month
+#   - Uses Log Analytics Free Grant (5 GB/mo free) -> $0/month
+#
+# GITHUB SECRETS REQUIRED BEFORE RUNNING:
+# ------------------------------------------------------------------------------
+# Settings -> Secrets and variables -> Actions:
+#    - AZURE_CLIENT_ID       : Client ID of Azure App Registration / Managed Identity
+#    - AZURE_TENANT_ID       : Azure Active Directory (Entra ID) Tenant ID
+#    - AZURE_SUBSCRIPTION_ID : Azure Subscription ID (e.g., 0201e489-b179-...)
+# 2. GitHub Repository Variables (Settings -> Secrets and variables -> Actions -> Variables):
+#    - AZURE_RESOURCE_GROUP : Resource group for new Container Apps (Default: rg-daily-expense-dev)
+#    - AZURE_LOCATION       : Azure Region (Default: westus)
+# ==============================================================================
+
+name: Provision Azure Container Apps Infrastructure
+
+on:
+  workflow_dispatch: # Manual execution only from GitHub Actions UI
+
+permissions:
+  id-token: write # Required for requesting OIDC JWT token from GitHub
+  contents: read
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-daily-expense-dev' }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'westus' }}
+
+jobs:
+  provision-infrastructure:
+    name: Provision Zero-Cost Azure Infrastructure Shells
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Target Resource Group
+        run: |
+          echo "==> Ensuring Resource Group exists in ${{ env.AZURE_LOCATION }}..."
+          az group create --name ${{ env.AZURE_RESOURCE_GROUP }} --location ${{ env.AZURE_LOCATION }}
+
+      - name: Validate Bicep Template
+        run: |
+          echo "==> Validating Bicep deployment syntax..."
+          az deployment group validate \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --template-file ./infra/main.bicep \
+            --parameters location=${{ env.AZURE_LOCATION }} environment=dev
+
+      - name: Deploy Zero-Cost Azure Infrastructure Stack
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: ./infra/main.bicep
+          parameters: >
+            location=${{ env.AZURE_LOCATION }}
+            environment=dev
