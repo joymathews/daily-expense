@@ -711,7 +711,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
   }
 
   async getRawInputs(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawInput[]> {
-    let sql = 'SELECT id, user_id, source_type, sender, title, snippet, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs WHERE user_id = ? AND deleted_at IS NULL';
+    let sql = 'SELECT id, user_id, source_type, sender, title, snippet, raw_body, raw_payload, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs WHERE user_id = ? AND deleted_at IS NULL';
     const params: any[] = [userId];
     if (filters?.startDate) {
       sql += ' AND date(received_at) >= date(?)';

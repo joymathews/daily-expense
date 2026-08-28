@@ -17,7 +17,7 @@
 - [NFR-PERF-5] Non-Blocking Logging: Backend logging must execute asynchronously and use memory buffering to prevent file I/O operations from introducing latency in API responses.
 - [NFR-PERF-6] Dynamic Frontend Log Level: The frontend logger must support runtime level configuration via browser developer console commands and persist selections across page reloads.
 - [NFR-PERF-7] Configurable Frontend Network Log Forwarding: The frontend logger must support disabling network log forwarding entirely (via environment variables or local storage) to avoid unnecessary API requests and network usage.
-- [NFR-PERF-8] Single WAN Round-Trip Batching & Query Projection: Database repository layers must execute batch approvals/rejections in 1 single network round-trip and omit heavy text payloads (`raw_body`) on list views to optimize cloud DB WAN performance.
+- [NFR-PERF-8] Single WAN Round-Trip Batching & Query Projection: Database repository layers must execute batch approvals/rejections in 1 single network round-trip and project raw input fields (`raw_body`, `raw_payload`) to support full email detail modal presentation and data lineage tracing.
 - [NFR-PERF-9] HTTP Payload Compression: The Express API server must compress JSON response payloads using Gzip/Brotli to reduce network transfer sizes by at least 70%.
 - [NFR-PERF-10] Glitch-Free Client SWR Caching: The frontend architecture must use a React 18 synchronized external store (`useSyncExternalStore`) to provide instant (0ms) tab navigation while revalidating data in the background and invalidating cache on mutations.
 
@@ -37,6 +37,7 @@
 - [NFR-DB-2] Relational Data Coherence: The system must maintain relational integrity and enforce transaction constraints to prevent orphaned data records and duplicate entries.
 - [NFR-DB-3] Azure SQL Connection Security & Pooling: Connections to Azure SQL Database must use TLS network encryption (`encrypt: true`) and connection pooling to ensure high performance and zero credential exposure.
 - [NFR-LLM-1] Swap-Ready LLM Ingress: The application must support running a local model on the user's machine during development and switching to cloud-hosted intelligence APIs via configurations without code modifications.
+- [NFR-LLM-4] Extraction Service Availability Probing & Resiliency: The LLM extraction client must support fast availability probing (`isAvailable()`) with a 1500ms timeout threshold. When the remote microservice is offline or unreachable, API routes must respond with HTTP status `503 Service Unavailable` and standard error code `LLM_SERVICE_UNAVAILABLE`, preventing internal server crashes.
 - [NFR-ARCH-2] Medallion Separation: The database architecture must strictly isolate Bronze, Silver, and Gold structures, ensuring clean transition actions on user verification.
 
 ## Usability [NFR-USAB]

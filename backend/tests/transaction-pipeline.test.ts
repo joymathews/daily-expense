@@ -6,6 +6,10 @@ import { RemoteHttpExtractor } from '../src/services/remote-extractor';
 import crypto from 'crypto';
 
 class MockTransactionExtractor implements ITransactionExtractor {
+  async isAvailable(): Promise<boolean> {
+    return true;
+  }
+
   async extractTransaction(textBody: string): Promise<ExtractedTransaction | null> {
     if (textBody.includes('fail')) {
       return null;

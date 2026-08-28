@@ -44,6 +44,8 @@ const TransactionPipeline: React.FC = () => {
     rejectBronzeInputsBatch,
     updateBronzeStatus,
     fetchLlmLog,
+    isLlmAvailable,
+    error,
   } = useGmailIntegration();
 
   // Multi-select state for Bronze batch extraction
@@ -365,6 +367,20 @@ const TransactionPipeline: React.FC = () => {
           Trash Bin
         </button>
       </div>
+
+      {(isLlmAvailable === false || error?.includes('LLM extraction service is unavailable')) && (
+        <div data-testid="llm-unavailable-alert" className="w-full mb-4 p-4 rounded-2xl bg-amber-50/90 border border-amber-250/80 text-amber-900 shadow-sm flex items-start gap-3">
+          <div className="p-2 rounded-xl bg-amber-100/80 text-amber-800 font-black text-sm">⚠️</div>
+          <div className="flex-1">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+              LLM Extraction Service Unavailable
+            </h4>
+            <p className="text-xs font-medium text-amber-800 leading-relaxed">
+              Extraction cannot be performed right now because the LLM extraction service is unavailable. Please check your local LLM microservice status. Manual transaction entries and Gold ledger features remain fully operational.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main lists view card */}
       <div className="w-full bg-white border border-gray-150/60 rounded-3xl overflow-hidden shadow-sm">

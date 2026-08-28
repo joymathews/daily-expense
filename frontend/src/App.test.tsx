@@ -5381,6 +5381,62 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('displays LLM service unavailable alert banner when extraction endpoint returns 503 [FUNC-GMAIL-56] [NFR-LLM-4]', async () => {
+    const mockFetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/pipeline/raw-inputs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            emails: [{
+              id: 'email_offline_1',
+              sender: 'test@bank.com',
+              subject: 'Bank Statement',
+              date: '2023-01-01',
+              snippet: 'Paid $50',
+              hasTransaction: true,
+              status: 'unprocessed'
+            }]
+          }),
+        });
+      }
+      if (url.includes('/api/pipeline/extract') || url.includes('/api/pipeline/llm-status')) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          json: () => Promise.resolve({
+            error: 'Extraction cannot be performed right now because the LLM extraction service is unavailable.',
+            code: 'LLM_SERVICE_UNAVAILABLE'
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ transactions: [], emails: [] }),
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Navigate to Pipeline
+    fireEvent.click(screen.getByRole('link', { name: /Transaction Pipeline/i }));
+
+    // Select email checkbox and click Extract Selected
+    const checkbox = await screen.findByRole('checkbox');
+    fireEvent.click(checkbox);
+
+    const extractBtn = screen.getByText(/Extract Selected/i);
+    fireEvent.click(extractBtn);
+
+    // Verify alert banner is displayed
+    await waitFor(() => {
+      expect(screen.getByTestId('llm-unavailable-alert')).toBeInTheDocument();
+      expect(screen.getByText(/LLM Extraction Service Unavailable/i)).toBeInTheDocument();
+    });
+
+    vi.unstubAllGlobals();
+  });
 });
 
 

@@ -1,0 +1,32 @@
+services:
+  extraction-service:
+    build:
+      context: ./services/extraction-service
+      dockerfile: Dockerfile
+    container_name: local-extraction-service
+    ports:
+      - "3002:3002"
+    env_file:
+      - ./services/extraction-service/.env
+    environment:
+      - PORT=3002
+      - OLLAMA_ENDPOINT=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: local-backend-api
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=3001
+      - LLM_EXTRACTION_SERVICE_URL=http://extraction-service:3002
+    depends_on:
+      - extraction-service
+    restart: unless-stopped

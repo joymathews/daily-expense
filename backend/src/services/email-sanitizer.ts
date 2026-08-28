@@ -14,12 +14,22 @@ export class EmailSanitizer {
         const decoded = Buffer.from(base64Data, 'base64').toString('utf-8');
         
         if (part.mimeType === 'text/html') {
-          // Strip styles, scripts, and HTML tags to obtain safe, clean text
+          // Strip styles, scripts, convert block tags to newlines, and unescape entities for readable text
           return decoded
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
             .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
+            .replace(/<(br|p|div|tr|li|h[1-6])[^>]*>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;/gi, "'")
+            .split('\n')
+            .map(line => line.trim())
+            .filter((line, idx, arr) => line.length > 0 || (idx > 0 && arr[idx - 1].length > 0))
+            .join('\n')
             .trim();
         }
         return decoded;

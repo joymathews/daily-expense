@@ -9,7 +9,9 @@
     "clear-db": "node tools/clear-db.js",
     "migrate-transfer": "node tools/migrate-transfer-constraint.js",
     "dev:extraction": "cd services/extraction-service && npm run dev",
-    "test:extraction": "cd services/extraction-service && npm test"
+    "test:extraction": "cd services/extraction-service && npm test",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
   },
   "keywords": [],
   "author": "",

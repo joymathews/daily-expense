@@ -11,6 +11,7 @@ export interface ExtractedTransaction {
 
 export interface ITransactionExtractor {
   extractTransaction(textBody: string, contextBlock?: string): Promise<ExtractedTransaction | null>;
+  isAvailable(): Promise<boolean>;
 }
 
 import { RemoteHttpExtractor } from './remote-extractor';

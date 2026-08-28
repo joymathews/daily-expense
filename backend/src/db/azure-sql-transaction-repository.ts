@@ -493,7 +493,7 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
 
   async getRawInputs(userId: string, filters?: { startDate?: string; endDate?: string }): Promise<RawInput[]> {
     const pool = await this.getPool();
-    let query = 'SELECT id, user_id, source_type, sender, title, snippet, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs WHERE user_id = @user_id AND deleted_at IS NULL AND status != \'processed\'';
+    let query = 'SELECT id, user_id, source_type, sender, title, snippet, raw_body, raw_payload, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs WHERE user_id = @user_id AND deleted_at IS NULL AND status != \'processed\'';
     const req = pool.request().input('user_id', sql.NVarChar(255), userId);
 
     if (filters?.startDate) {

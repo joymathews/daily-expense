@@ -162,6 +162,7 @@ const billingCycleStartDayStore = createExternalStore<number>(17);
 const expectedSalaryStore = createExternalStore<number>(100000);
 const fixedChargesStore = createExternalStore<FixedChargeTemplate[]>([]);
 const llmAccuracyStatsStore = createExternalStore<LlmAccuracyStats | null>(null);
+const isLlmAvailableStore = createExternalStore<boolean | null>(null);
 
 export function resetSharedCache() {
   rawEmailsStore.reset([]);
@@ -177,6 +178,7 @@ export function resetSharedCache() {
   expectedSalaryStore.reset(100000);
   fixedChargesStore.reset([]);
   llmAccuracyStatsStore.reset(null);
+  isLlmAvailableStore.reset(null);
 }
 
 export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
@@ -228,6 +230,32 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
   const llmAccuracyStats = useSyncExternalStore(llmAccuracyStatsStore.subscribe, llmAccuracyStatsStore.getSnapshot);
   const setLlmAccuracyStats = llmAccuracyStatsStore.set;
+
+  const isLlmAvailable = useSyncExternalStore(isLlmAvailableStore.subscribe, isLlmAvailableStore.getSnapshot);
+  const setIsLlmAvailable = isLlmAvailableStore.set;
+
+  const checkLlmStatus = async (): Promise<boolean> => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pipeline/llm-status', { headers: { ...authHeaders } });
+      if (!res.ok) {
+        setIsLlmAvailable(false);
+        setError("Extraction cannot be performed right now because the LLM extraction service is unavailable. Please check your LLM microservice status.");
+        return false;
+      }
+      const data = await res.json();
+      const avail = data.available !== false;
+      setIsLlmAvailable(avail);
+      if (!avail) {
+        setError("Extraction cannot be performed right now because the LLM extraction service is unavailable. Please check your LLM microservice status.");
+      }
+      return avail;
+    } catch {
+      setIsLlmAvailable(false);
+      setError("Extraction cannot be performed right now because the LLM extraction service is unavailable. Please check your LLM microservice status.");
+      return false;
+    }
+  };
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -1007,6 +1035,13 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
           if (!response.ok) {
             const errData = await response.json();
+            if (response.status === 503 || errData.code === 'LLM_SERVICE_UNAVAILABLE') {
+              setIsLlmAvailable(false);
+              const errMsg = errData.error || 'Extraction cannot be performed right now because the LLM extraction service is unavailable.';
+              setError(errMsg);
+              setExtractionProgress(prev => ({ ...prev, status: 'error' }));
+              throw new Error(errMsg);
+            }
             throw new Error(errData.error || `Extraction failed for message ${id}`);
           }
 
@@ -1592,5 +1627,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     loadFixedCharges,
     saveFixedCharge,
     deleteFixedCharge,
+    isLlmAvailable,
+    checkLlmStatus,
   };
 };

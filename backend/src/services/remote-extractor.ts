@@ -41,4 +41,35 @@ export class RemoteHttpExtractor implements ITransactionExtractor {
       return null;
     }
   }
+
+  async isAvailable(): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+      const baseUrl = this.serviceUrl.replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        headers: {
+          'X-Internal-Service-Key': this.serviceSecret
+        },
+        signal: controller.signal
+      }).catch(async () => {
+        // Fallback check on base API path if /health returns 404
+        return await fetch(`${baseUrl}/api/v1/health`, {
+          method: 'GET',
+          headers: {
+            'X-Internal-Service-Key': this.serviceSecret
+          },
+          signal: controller.signal
+        });
+      });
+
+      clearTimeout(timeoutId);
+      return response ? response.ok : false;
+    } catch (error) {
+      logger.warn({ error, serviceUrl: this.serviceUrl }, 'LLM Microservice is unavailable or unreachable');
+      return false;
+    }
+  }
 }

@@ -436,6 +436,31 @@ router.post('/reject-batch', async (req, res) => {
 
 
 /**
+ * [FUNC-GMAIL-17] GET /api/pipeline/llm-status
+ * Probes health of the LLM extraction microservice.
+ */
+router.get('/llm-status', async (req, res) => {
+  try {
+    const extractor = TransactionExtractorFactory.createExtractor();
+    const available = await extractor.isAvailable();
+    if (!available) {
+      return res.status(503).json({
+        available: false,
+        error: 'Extraction cannot be performed right now because the LLM extraction service is unavailable.',
+        code: 'LLM_SERVICE_UNAVAILABLE'
+      });
+    }
+    return res.status(200).json({ available: true });
+  } catch (err: any) {
+    return res.status(503).json({
+      available: false,
+      error: err.message || 'LLM extraction service status probe failed',
+      code: 'LLM_SERVICE_UNAVAILABLE'
+    });
+  }
+});
+
+/**
  * [FUNC-GMAIL-17] POST /api/pipeline/extract
  * Stage 2: Synchronously extracts transaction details for single or batch raw inputs via Ollama LLM.
  */
@@ -448,10 +473,17 @@ router.post('/extract', async (req, res) => {
   }
 
   try {
+    const extractor = TransactionExtractorFactory.createExtractor();
+    const isAvailable = await extractor.isAvailable();
+    if (!isAvailable) {
+      return res.status(503).json({
+        error: 'Extraction cannot be performed right now because the LLM extraction service is unavailable. Please check your LLM microservice status.',
+        code: 'LLM_SERVICE_UNAVAILABLE'
+      });
+    }
+
     const repository = getRepository();
     await repository.initializeSchema();
-
-    const extractor = TransactionExtractorFactory.createExtractor();
     const results: any[] = [];
 
     // Pre-fetch payment mapping rules and methods once outside the extraction loop

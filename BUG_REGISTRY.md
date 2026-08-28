@@ -351,3 +351,23 @@ When editing a transaction inside `EmailDetailModal`:
 * **Test Case**: `frontend/src/App.test.tsx`
   - *automatically closes modal on successful transaction update and presents error banner on failure [BUG-019]*
 
+---
+
+## [BUG-020] Missing Raw Email Message Body in Detail Popup Modal
+
+### Description
+When opening the email detail modal (popup) for a raw Bronze email or when tracing data lineage in the Silver/Gold detail modals, the raw email message body ("Message Body (Bronze Raw Data)") is missing/not displayed.
+
+### Root Cause
+In both `sqlite-transaction-repository.ts` and `azure-sql-transaction-repository.ts`, the SQL query in `getRawInputs()` explicitly enumerated columns to select (`SELECT id, user_id, source_type, sender, title, snippet, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs...`), omitting `raw_body` and `raw_payload`. As a result, `row.raw_body` returned `undefined`, causing mapped `RawInput` records to have `rawBody` set to `''`. When the frontend requested raw inputs, `email.body` evaluated to empty string `''`, failing the modal conditional check `!isGoldMode && selectedEmail?.body` and hiding the message body container.
+
+### Resolution
+Updated `getRawInputs()` in `sqlite-transaction-repository.ts` and `azure-sql-transaction-repository.ts` to include `raw_body` and `raw_payload` in the SQL `SELECT` column list (`SELECT id, user_id, source_type, sender, title, snippet, raw_body, raw_payload, received_at, has_transaction, status, ingested_at, deleted_at FROM bronze_raw_inputs...`).
+
+### Verification Test
+* **Test Case**: `backend/tests/gmail.test.ts`
+  - *should return raw inputs with complete rawBody and rawPayload in getRawInputs [BUG-020]*
+* **Test Case**: `frontend/src/App.test.tsx`
+  - *opens a modal displaying full content when clicking an email, and allows overrides*
+
+
