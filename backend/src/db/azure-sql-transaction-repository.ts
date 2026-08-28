@@ -59,6 +59,8 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
       user: process.env.AZURE_SQL_USER || '',
       password: process.env.AZURE_SQL_PASSWORD || '',
       port: parseInt(process.env.AZURE_SQL_PORT || '1433', 10),
+      connectionTimeout: parseInt(process.env.AZURE_SQL_CONNECTION_TIMEOUT || '60000', 10),
+      requestTimeout: parseInt(process.env.AZURE_SQL_REQUEST_TIMEOUT || '60000', 10),
       options: {
         encrypt: process.env.AZURE_SQL_ENCRYPT !== 'false',
         trustServerCertificate: process.env.AZURE_SQL_TRUST_SERVER_CERTIFICATE === 'true',
