@@ -1,0 +1,88 @@
+# ==============================================================================
+# GitHub Actions Workflow: Build & Deploy Extraction Service to Azure Container Apps
+# ==============================================================================
+#
+# PURPOSE:
+#   Builds the Extraction Service Docker image, pushes to GitHub Container Registry (ghcr.io),
+#   and updates the private ca-daily-expense-extraction Container App revision.
+#
+# GITHUB SECRETS & VARIABLES REQUIRED:
+# ------------------------------------------------------------------------------
+# 1. Secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+# 2. Variables (Optional): AZURE_RESOURCE_GROUP (Default: rg-daily-expense-dev)
+# ==============================================================================
+
+name: Deploy Extraction Service to Azure Container Apps
+
+on:
+  workflow_dispatch: # Manual execution only from GitHub Actions UI
+
+permissions:
+  id-token: write # Required for Azure OIDC login
+  contents: read
+  packages: write # Required for pushing Docker images to ghcr.io
+
+env:
+  AZURE_RESOURCE_GROUP: rg-daily-expense-dev
+  CONTAINER_APP_NAME: ca-daily-expense-extraction
+  IMAGE_NAME: daily-expense-extraction
+  TARGET_PORT: 3002
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Extraction Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to GitHub Container Registry (ghcr.io)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Lowercase Repository Owner Name
+        id: repo-owner
+        run: |
+          echo "owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Extraction Image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/extraction-service
+          file: ./services/extraction-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy Revision to Azure Container App
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          containerAppName: ${{ env.CONTAINER_APP_NAME }}
+          imageToDeploy: ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          targetPort: ${{ env.TARGET_PORT }}
+          environmentVariables: |
+            PORT=3002
+            SERVICE_SECRET=${{ secrets.LLM_EXTRACTION_SERVICE_SECRET }}
+            LLM_PROVIDER=${{ secrets.LLM_PROVIDER }}
+            AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }}
+            AZURE_OPENAI_KEY=${{ secrets.AZURE_OPENAI_KEY }}
+            AZURE_OPENAI_DEPLOYMENT=${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+            LOG_LEVEL=info
+
+
