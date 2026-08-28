@@ -86,13 +86,13 @@ jobs:
           environmentVariables: |
             NODE_ENV=production
             PORT=3001
-            COGNITO_USER_POOL_ID=${{ secrets.COGNITO_USER_POOL_ID }}
-            COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
-            COGNITO_REGION=${{ secrets.COGNITO_REGION }}
-            DB_PROVIDER=${{ secrets.DB_PROVIDER }}
+            COGNITO_USER_POOL_ID=${{ vars.COGNITO_USER_POOL_ID }}
+            COGNITO_CLIENT_ID=${{ vars.COGNITO_CLIENT_ID }}
+            COGNITO_REGION=${{ vars.COGNITO_REGION }}
+            DB_PROVIDER=${{ vars.DB_PROVIDER }}
             DATABASE_URL=${{ secrets.DATABASE_URL }}
-            AZURE_SQL_SERVER=${{ secrets.AZURE_SQL_SERVER }}
-            AZURE_SQL_DATABASE=${{ secrets.AZURE_SQL_DATABASE }}
+            AZURE_SQL_SERVER=${{ vars.AZURE_SQL_SERVER }}
+            AZURE_SQL_DATABASE=${{ vars.AZURE_SQL_DATABASE }}
             AZURE_SQL_USER=${{ secrets.AZURE_SQL_USER }}
             AZURE_SQL_PASSWORD=${{ secrets.AZURE_SQL_PASSWORD }}
             AZURE_SQL_PORT=1433
@@ -100,6 +100,7 @@ jobs:
             AZURE_SQL_TRUST_SERVER_CERTIFICATE=false
             LLM_EXTRACTION_SERVICE_SECRET=${{ secrets.LLM_EXTRACTION_SERVICE_SECRET }}
             LOG_LEVEL=info
+
 
 
 
