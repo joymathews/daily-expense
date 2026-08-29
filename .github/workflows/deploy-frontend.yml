@@ -23,26 +23,34 @@ jobs:
 
       - name: Generate staticwebapp.config.json dynamically
         working-directory: ./frontend
+        env:
+          BACKEND_API_URL: ${{ vars.BACKEND_API_URL }}
         run: |
-          cat << 'EOF' > staticwebapp.config.json
-          {
-            "navigationFallback": {
-              "rewrite": "/index.html",
-              "exclude": ["/api/*", "/assets/*", "/*.{png,jpg,jpeg,gif,ico,json,svg}"]
-            },
-            "routes": [
-              {
-                "route": "/api/*",
-                "rewrite": "${{ vars.BACKEND_API_URL }}/api/*"
+          { set +x; } 2>/dev/null
+          echo "==> Generating staticwebapp.config.json routing configuration silently..."
+          node -e '
+            const fs = require("fs");
+            const backendUrl = process.env.BACKEND_API_URL || "";
+            const config = {
+              navigationFallback: {
+                rewrite: "/index.html",
+                exclude: ["/api/*", "/assets/*", "/*.{png,jpg,jpeg,gif,ico,json,svg}"]
+              },
+              routes: [
+                {
+                  route: "/api/*",
+                  rewrite: `${backendUrl}/api/*`
+                }
+              ],
+              responseOverrides: {
+                "404": {
+                  rewrite: "/index.html"
+                }
               }
-            ],
-            "responseOverrides": {
-              "404": {
-                "rewrite": "/index.html"
-              }
-            }
-          }
-          EOF
+            };
+            fs.writeFileSync("public/staticwebapp.config.json", JSON.stringify(config, null, 2));
+            fs.writeFileSync("staticwebapp.config.json", JSON.stringify(config, null, 2));
+          '
 
       - name: Install dependencies and build
         working-directory: ./frontend
