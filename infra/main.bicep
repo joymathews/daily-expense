@@ -160,6 +160,21 @@ resource backendApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
 }
 
+// 6. Azure Static Web App (Free Tier | Global CDN for React Vite SPA | $0/month)
+param frontendAppName string = 'swa-daily-expense-frontend'
+
+resource frontendApp 'Microsoft.Web/staticSites@2022-09-01' = {
+  name: frontendAppName
+  location: location
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {}
+}
+
 output backendFQDN string = backendApp.properties.configuration.ingress.fqdn
 output extractionInternalFQDN string = extractionApp.properties.configuration.ingress.fqdn
 output acaStaticIp string = containerAppEnv.properties.staticIp
+output frontendDefaultHostname string = frontendApp.properties.defaultHostname
+

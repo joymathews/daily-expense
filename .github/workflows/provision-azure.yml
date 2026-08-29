@@ -70,3 +70,4 @@ jobs:
           parameters: >
             location=${{ env.AZURE_LOCATION }}
             environment=dev
+

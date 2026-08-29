@@ -1,0 +1,72 @@
+name: Deploy Frontend to Azure Static Web Apps
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build_and_deploy_job:
+    runs-on: ubuntu-latest
+    name: Build and Deploy Frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Generate staticwebapp.config.json dynamically
+        working-directory: ./frontend
+        run: |
+          cat << 'EOF' > staticwebapp.config.json
+          {
+            "navigationFallback": {
+              "rewrite": "/index.html",
+              "exclude": ["/api/*", "/assets/*", "/*.{png,jpg,jpeg,gif,ico,json,svg}"]
+            },
+            "routes": [
+              {
+                "route": "/api/*",
+                "rewrite": "${{ vars.BACKEND_API_URL }}/api/*"
+              }
+            ],
+            "responseOverrides": {
+              "404": {
+                "rewrite": "/index.html"
+              }
+            }
+          }
+          EOF
+
+      - name: Install dependencies and build
+        working-directory: ./frontend
+        env:
+          VITE_COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
+          VITE_COGNITO_REGION: ${{ vars.COGNITO_REGION }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          VITE_LOG_LEVEL: ${{ vars.VITE_LOG_LEVEL || 'info' }}
+          VITE_ENABLE_LOG_FORWARDING: ${{ vars.VITE_ENABLE_LOG_FORWARDING || 'true' }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to Azure Static Web Apps
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "/frontend"
+          output_location: "dist"
+          skip_app_build: true
