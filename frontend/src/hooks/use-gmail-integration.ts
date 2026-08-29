@@ -254,7 +254,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const checkLlmStatus = async (): Promise<boolean> => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/llm-status', { headers: { ...authHeaders } });
+      const res = await fetch(getApiUrl('/api/pipeline/llm-status'), { headers: { ...authHeaders } });
       if (!res.ok) {
         setIsLlmAvailable(false);
         setError("Extraction cannot be performed right now because the LLM extraction service is unavailable. Please check your LLM microservice status.");
@@ -400,7 +400,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const loadDeletedLayers = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/deleted', {
+      const res = await fetch(getApiUrl('/api/pipeline/deleted'), {
         headers: {
           ...authHeaders,
         },
@@ -444,7 +444,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const loadPaymentMethods = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/ingestion/payment-methods', {
+      const res = await fetch(getApiUrl('/api/ingestion/payment-methods'), {
         headers: { ...authHeaders }
       });
       if (res.ok) {
@@ -459,7 +459,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const loadPaymentRules = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/ingestion/payment-rules', {
+      const res = await fetch(getApiUrl('/api/ingestion/payment-rules'), {
         headers: { ...authHeaders }
       });
       if (res.ok) {
@@ -474,7 +474,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const loadLlmAccuracyStats = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/llm-accuracy-stats', {
+      const res = await fetch(getApiUrl('/api/pipeline/llm-accuracy-stats'), {
         headers: { ...authHeaders }
       });
       if (res.ok) {
@@ -489,7 +489,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const fetchLlmLog = async (bronzeId: string): Promise<LlmExtractionLog | null> => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`/api/pipeline/llm-logs/${bronzeId}`, {
+      const res = await fetch(getApiUrl(`/api/pipeline/llm-logs/${bronzeId}`), {
         headers: { ...authHeaders }
       });
       if (res.ok) {
@@ -505,7 +505,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const loadFetcherEmails = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/ingestion/fetcher-emails', {
+      const res = await fetch(getApiUrl('/api/ingestion/fetcher-emails'), {
         headers: { ...authHeaders }
       });
       if (res.ok) {
@@ -520,7 +520,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const loadUserPreferences = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/user-preferences', {
+      const res = await fetch(getApiUrl('/api/pipeline/user-preferences'), {
         headers: { ...authHeaders }
       });
       if (res.ok) {
@@ -534,13 +534,13 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     } catch (err) {
       console.warn('Failed to load user preferences:', err);
     }
-    return { billingCycleStartDay: 17, expectedSalary: 100000 };
+  return { billingCycleStartDay: 17, expectedSalary: 100000 };
   };
 
   const updateUserPreferences = async (cycleStartDay: number, salary: number) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/user-preferences', {
+      const res = await fetch(getApiUrl('/api/pipeline/user-preferences'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -564,7 +564,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const loadFixedCharges = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/fixed-charges', {
+      const res = await fetch(getApiUrl('/api/pipeline/fixed-charges'), {
         headers: { ...authHeaders }
       });
       if (res.ok) {
@@ -579,7 +579,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const saveFixedCharge = async (charge: Omit<FixedChargeTemplate, 'userId'>) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/fixed-charges', {
+      const res = await fetch(getApiUrl('/api/pipeline/fixed-charges'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -603,7 +603,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const deleteFixedCharge = async (id: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`/api/pipeline/fixed-charges/${id}`, {
+      const res = await fetch(getApiUrl(`/api/pipeline/fixed-charges/${id}`), {
         method: 'DELETE',
         headers: { ...authHeaders }
       });
@@ -671,7 +671,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const addPaymentMethod = async (name: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/ingestion/payment-methods', {
+      const res = await fetch(getApiUrl('/api/ingestion/payment-methods'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -695,7 +695,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const updatePaymentMethod = async (id: string, name: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`/api/ingestion/payment-methods/${id}`, {
+      const res = await fetch(getApiUrl(`/api/ingestion/payment-methods/${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -719,7 +719,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const deletePaymentMethod = async (id: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`/api/ingestion/payment-methods/${id}`, {
+      const res = await fetch(getApiUrl(`/api/ingestion/payment-methods/${id}`), {
         method: 'DELETE',
         headers: { ...authHeaders }
       });
@@ -739,7 +739,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const addPaymentRule = async (aliasPattern: string, paymentMethodId: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/ingestion/payment-rules', {
+      const res = await fetch(getApiUrl('/api/ingestion/payment-rules'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -762,7 +762,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const updatePaymentRule = async (id: string, aliasPattern: string, paymentMethodId: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`/api/ingestion/payment-rules/${id}`, {
+      const res = await fetch(getApiUrl(`/api/ingestion/payment-rules/${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -785,7 +785,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const deletePaymentRule = async (id: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`/api/ingestion/payment-rules/${id}`, {
+      const res = await fetch(getApiUrl(`/api/ingestion/payment-rules/${id}`), {
         method: 'DELETE',
         headers: { ...authHeaders }
       });
@@ -806,7 +806,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/ingestion/standardize-retroactive', {
+      const res = await fetch(getApiUrl('/api/ingestion/standardize-retroactive'), {
         method: 'POST',
         headers: { ...authHeaders }
       });
@@ -831,7 +831,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       setCurrentSender('');
       try {
         const authHeaders = await getAuthHeaders();
-        await fetch('/api/ingestion/fetcher-emails', {
+        await fetch(getApiUrl('/api/ingestion/fetcher-emails'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -849,7 +849,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const deleteFetcherEmail = async (email: string) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`/api/ingestion/fetcher-emails/${encodeURIComponent(email)}`, {
+      const res = await fetch(getApiUrl(`/api/ingestion/fetcher-emails/${encodeURIComponent(email)}`), {
         method: 'DELETE',
         headers: { ...authHeaders },
       });
@@ -886,7 +886,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
     try {
       const authHeaders = await getAuthHeaders();
-      await fetch(`/api/pipeline/raw-inputs/${id}`, {
+      await fetch(getApiUrl(`/api/pipeline/raw-inputs/${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -913,7 +913,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
     try {
       const authHeaders = await getAuthHeaders();
-      await fetch(`/api/pipeline/raw-inputs/${id}`, {
+      await fetch(getApiUrl(`/api/pipeline/raw-inputs/${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -942,7 +942,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
     try {
       const authHeaders = await getAuthHeaders();
-      await fetch(`/api/pipeline/raw-inputs/${id}`, {
+      await fetch(getApiUrl(`/api/pipeline/raw-inputs/${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -972,7 +972,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
     try {
       const authHeaders = await getAuthHeaders();
-      await fetch('/api/pipeline/reject-batch', {
+      await fetch(getApiUrl('/api/pipeline/reject-batch'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -999,7 +999,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
 
     try {
       const authHeaders = await getAuthHeaders();
-      await fetch(`/api/pipeline/raw-inputs/${id}`, {
+      await fetch(getApiUrl(`/api/pipeline/raw-inputs/${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1040,7 +1040,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
         }));
 
         try {
-          const response = await fetch('/api/pipeline/extract', {
+          const response = await fetch(getApiUrl('/api/pipeline/extract'), {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -1119,7 +1119,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       setFetchProgress({ status: 'started', current: 0, total: 0 });
       try {
         const authHeaders = await getAuthHeaders();
-        const response = await fetch('/api/ingestion/gmail/fetch-list', {
+        const response = await fetch(getApiUrl('/api/ingestion/gmail/fetch-list'), {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -1149,7 +1149,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
         for (let i = 0; i < messageIds.length; i++) {
           const msgId = messageIds[i];
           try {
-            const detailRes = await fetch('/api/ingestion/gmail/fetch-detail', {
+            const detailRes = await fetch(getApiUrl('/api/ingestion/gmail/fetch-detail'), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -1210,7 +1210,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const updateSilverTransaction = async (id: string, updates: Partial<SilverTransaction>) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/pipeline/silver-transactions/${id}`, {
+      const response = await fetch(getApiUrl(`/api/pipeline/silver-transactions/${id}`), {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -1233,7 +1233,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const updateGoldTransaction = async (id: string, updates: Partial<GoldTransaction>) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/pipeline/gold-transactions/${id}`, {
+      const response = await fetch(getApiUrl(`/api/pipeline/gold-transactions/${id}`), {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -1256,7 +1256,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const updateSilverTransactionsBatch = async (ids: string[], updates: Partial<SilverTransaction>) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/pipeline/silver-transactions/batch-update', {
+      const response = await fetch(getApiUrl('/api/pipeline/silver-transactions/batch-update'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1275,7 +1275,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
   const updateGoldTransactionsBatch = async (ids: string[], updates: Partial<GoldTransaction>) => {
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/pipeline/gold-transactions/batch-update', {
+      const response = await fetch(getApiUrl('/api/pipeline/gold-transactions/batch-update'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1308,7 +1308,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/pipeline/approve', {
+      const response = await fetch(getApiUrl('/api/pipeline/approve'), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -1391,7 +1391,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/pipeline/approve-batch', {
+      const response = await fetch(getApiUrl('/api/pipeline/approve-batch'), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -1452,7 +1452,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
         body = { bronzeId: ids.bronzeId };
       }
 
-      const res = await fetch(url, {
+      const res = await fetch(getApiUrl(url), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1478,7 +1478,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/restore', {
+      const res = await fetch(getApiUrl('/api/pipeline/restore'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1503,7 +1503,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pipeline/restore', {
+      const res = await fetch(getApiUrl('/api/pipeline/restore'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1538,7 +1538,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
     setError(null);
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch('/api/pipeline/add-transaction', {
+      const response = await fetch(getApiUrl('/api/pipeline/add-transaction'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
