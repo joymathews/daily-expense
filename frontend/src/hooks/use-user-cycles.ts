@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserCycleFrontend } from '../utils/cycle-helper';
+import { getApiUrl } from '../utils/api-config';
 
 const generateClientDefaultCycles = (startDay = 17): UserCycleFrontend[] => {
   const result: UserCycleFrontend[] = [];
@@ -96,7 +97,7 @@ export function useUserCycles() {
     }
 
     try {
-      const res = await fetch('/api/pipeline/user-cycles', { headers });
+      const res = await fetch(getApiUrl('/api/pipeline/user-cycles'), { headers });
       if (res.status && res.status >= 400) throw new Error('Failed to fetch user cycles');
       const data = await res.json();
       setCycles(data.cycles || []);
@@ -115,12 +116,12 @@ export function useUserCycles() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCycle]);
 
 
   useEffect(() => {
     loadCycles();
-  }, []);
+  }, [loadCycles]);
 
   const setCycleOverride = async (payload: {
     startType: 'default' | 'transaction' | 'date';
@@ -131,7 +132,7 @@ export function useUserCycles() {
   }) => {
     try {
       const headers = await fetchAuthSession();
-      const res = await fetch('/api/pipeline/user-cycles/override', {
+      const res = await fetch(getApiUrl('/api/pipeline/user-cycles/override'), {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

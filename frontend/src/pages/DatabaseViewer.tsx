@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { getApiUrl } from '../utils/api-config';
 
 interface TableMeta {
   name: string;
@@ -56,7 +57,7 @@ const DatabaseViewer: React.FC = () => {
           console.warn('Failed to fetch auth session:', err);
         }
 
-        const res = await fetch('/api/pipeline/db/tables', { headers: authHeaders });
+        const res = await fetch(getApiUrl('/api/pipeline/db/tables'), { headers: authHeaders });
         if (!res.ok) throw new Error(`Failed to load tables: ${res.statusText}`);
         const data = await res.json();
         const loadedTables: TableMeta[] = data.tables || [];
@@ -100,7 +101,7 @@ const DatabaseViewer: React.FC = () => {
         ...(debouncedSearch ? { search: debouncedSearch } : {})
       });
 
-      const res = await fetch(`/api/pipeline/db/tables/${selectedTable}?${params.toString()}`, {
+      const res = await fetch(getApiUrl(`/api/pipeline/db/tables/${selectedTable}?${params.toString()}`), {
         headers: authHeaders
       });
 

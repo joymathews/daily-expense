@@ -60,7 +60,8 @@ jobs:
           VITE_COGNITO_REGION: ${{ vars.COGNITO_REGION }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_LOG_LEVEL: ${{ vars.VITE_LOG_LEVEL || 'info' }}
-          VITE_ENABLE_LOG_FORWARDING: ${{ vars.VITE_ENABLE_LOG_FORWARDING || 'true' }}
+          VITE_ENABLE_LOG_FORWARDING: ${{ vars.VITE_ENABLE_LOG_FORWARDING || 'false' }}
+          VITE_BACKEND_API_URL: ${{ vars.BACKEND_API_URL }}
         run: |
           npm ci
           npm run build

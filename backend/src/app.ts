@@ -1,5 +1,6 @@
 import express from 'express';
 import compression from 'compression';
+import cors from 'cors';
 import pinoHttp from 'pino-http';
 import { checkJwt } from './middleware/auth-middleware';
 import ingestionRoutes from './routes/ingestion-routes';
@@ -9,6 +10,7 @@ import { logger } from './utils/logger';
 
 const app = express();
 
+app.use(cors());
 app.use(compression());
 app.use(pinoHttp({
   logger,
