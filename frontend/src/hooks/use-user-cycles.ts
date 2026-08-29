@@ -151,7 +151,7 @@ export function useUserCycles() {
   const removeCycleOverride = async (cycleId: string) => {
     try {
       const headers = await fetchAuthSession();
-      const res = await fetch(`/api/pipeline/user-cycles/override/${cycleId}`, {
+      const res = await fetch(getApiUrl(`/api/pipeline/user-cycles/override/${cycleId}`), {
         method: 'DELETE',
         headers,
       });
