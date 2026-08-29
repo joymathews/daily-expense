@@ -4,6 +4,7 @@ import { getActiveCycleRange } from '../utils/transaction-helper';
 import { useUserCycles } from '../hooks/use-user-cycles';
 import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
 import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-helper';
+import { getApiUrl } from '../utils/api-config';
 import {
   calculateDiscretionarySpend,
   calculateRunRateForecast,
@@ -87,9 +88,9 @@ const FinancialAnalytics: React.FC = () => {
       }
 
       Promise.all([
-        fetch('/api/pipeline/gold-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
-        fetch('/api/pipeline/user-preferences', { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
-        fetch('/api/pipeline/fixed-charges', { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
+        fetch(getApiUrl('/api/pipeline/gold-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch(getApiUrl('/api/pipeline/user-preferences'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
+        fetch(getApiUrl('/api/pipeline/fixed-charges'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
       ])
         .then(([gold, prefs, fc]) => {
           const goldTxs = gold.transactions || [];

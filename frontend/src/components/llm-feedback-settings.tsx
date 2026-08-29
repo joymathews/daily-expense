@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { getApiUrl } from '../utils/api-config';
 
 interface FeedbackSettings {
   isEnabled: boolean;
@@ -95,7 +96,7 @@ const LlmFeedbackSettings: React.FC = () => {
     setIsLoadingSettings(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/feedback/settings', { headers });
+      const response = await fetch(getApiUrl('/api/feedback/settings'), { headers });
       if (!response.ok) throw new Error('Failed to load settings');
       const data = await response.json();
       setSettings(data.settings);
@@ -110,7 +111,7 @@ const LlmFeedbackSettings: React.FC = () => {
     setIsLoadingExamples(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/feedback/examples', { headers });
+      const response = await fetch(getApiUrl('/api/feedback/examples'), { headers });
       if (!response.ok) throw new Error('Failed to load examples');
       const data = await response.json();
       setExamples(data.examples || []);
@@ -125,7 +126,7 @@ const LlmFeedbackSettings: React.FC = () => {
     setIsLoadingEffectiveness(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/feedback/effectiveness', { headers });
+      const response = await fetch(getApiUrl('/api/feedback/effectiveness'), { headers });
       if (!response.ok) throw new Error('Failed to load effectiveness report');
       const data = await response.json();
       setEffectiveness(data.effectiveness);
@@ -146,7 +147,7 @@ const LlmFeedbackSettings: React.FC = () => {
     setIsSaving(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/feedback/settings', {
+      const response = await fetch(getApiUrl('/api/feedback/settings'), {
         method: 'PUT',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedSettings),
@@ -203,7 +204,7 @@ const LlmFeedbackSettings: React.FC = () => {
     setIsClearing(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/feedback/examples', { method: 'DELETE', headers });
+      const response = await fetch(getApiUrl('/api/feedback/examples'), { method: 'DELETE', headers });
       if (!response.ok) throw new Error('Failed to clear examples');
       setExamples([]);
       showSuccess('All correction examples cleared.');

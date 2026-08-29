@@ -21,27 +21,18 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'frontend/package-lock.json'
 
-      - name: Generate staticwebapp.config.json dynamically
+      - name: Generate staticwebapp.config.json routing configuration
         working-directory: ./frontend
-        env:
-          BACKEND_API_URL: ${{ vars.BACKEND_API_URL }}
         run: |
           { set +x; } 2>/dev/null
-          echo "==> Generating staticwebapp.config.json routing configuration silently..."
+          echo "==> Generating staticwebapp.config.json routing configuration..."
           node -e '
             const fs = require("fs");
-            const backendUrl = process.env.BACKEND_API_URL || "";
             const config = {
               navigationFallback: {
                 rewrite: "/index.html",
-                exclude: ["/api/*", "/assets/*", "/*.{png,jpg,jpeg,gif,ico,json,svg}"]
+                exclude: ["/assets/*", "/*.{png,jpg,jpeg,gif,ico,json,svg}"]
               },
-              routes: [
-                {
-                  route: "/api/*",
-                  rewrite: `${backendUrl}/api/*`
-                }
-              ],
               responseOverrides: {
                 "404": {
                   rewrite: "/index.html"
@@ -60,7 +51,8 @@ jobs:
           VITE_COGNITO_REGION: ${{ vars.COGNITO_REGION }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_LOG_LEVEL: ${{ vars.VITE_LOG_LEVEL || 'info' }}
-          VITE_ENABLE_LOG_FORWARDING: ${{ vars.VITE_ENABLE_LOG_FORWARDING || 'true' }}
+          VITE_ENABLE_LOG_FORWARDING: ${{ vars.VITE_ENABLE_LOG_FORWARDING || 'false' }}
+          VITE_BACKEND_API_URL: ${{ vars.BACKEND_API_URL }}
         run: |
           npm ci
           npm run build

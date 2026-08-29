@@ -8,6 +8,7 @@ import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
 import { CycleOverrideModal } from '../components/CycleOverrideModal';
 import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-helper';
 import SpendCalendar from '../components/spend-calendar';
+import { getApiUrl } from '../utils/api-config';
 
 interface DashboardProps {
   userEmail: string;
@@ -126,11 +127,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
       }
 
       Promise.all([
-        fetch('/api/pipeline/raw-inputs', { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
-        fetch('/api/pipeline/silver-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
-        fetch('/api/pipeline/gold-transactions', { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
-        fetch('/api/pipeline/user-preferences', { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
-        fetch('/api/pipeline/fixed-charges', { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
+        fetch(getApiUrl('/api/pipeline/raw-inputs'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
+        fetch(getApiUrl('/api/pipeline/silver-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch(getApiUrl('/api/pipeline/gold-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch(getApiUrl('/api/pipeline/user-preferences'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
+        fetch(getApiUrl('/api/pipeline/fixed-charges'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
       ])
         .then(([raw, silver, gold, prefs, fcData]) => {
           const goldTxs = gold.transactions || [];

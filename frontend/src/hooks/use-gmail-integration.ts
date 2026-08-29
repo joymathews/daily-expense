@@ -3,6 +3,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { getActiveCycleRange } from '../utils/transaction-helper';
 import type { FixedChargeTemplate } from '../utils/transaction-helper';
+import { getApiUrl } from '../utils/api-config';
 
 export interface FetchProgress {
   status: 'idle' | 'started' | 'fetching' | 'completed' | 'error';
@@ -295,8 +296,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       const session = await fetchAuthSession();
       const token = session.tokens?.idToken?.toString();
       return token ? { 'Authorization': `Bearer ${token}` } : {};
-    } catch (err) {
-      console.warn('Failed to fetch auth session (normal in tests):', err);
+    } catch {
       return {};
     }
   };
@@ -310,7 +310,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       const queryString = query.toString();
       const url = queryString ? `/api/pipeline/raw-inputs?${queryString}` : '/api/pipeline/raw-inputs';
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(url, {
+      const res = await fetch(getApiUrl(url), {
         headers: {
           ...authHeaders,
         },
@@ -346,7 +346,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       const queryString = query.toString();
       const url = queryString ? `/api/pipeline/silver-transactions?${queryString}` : '/api/pipeline/silver-transactions';
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(url, {
+      const res = await fetch(getApiUrl(url), {
         headers: {
           ...authHeaders,
         },
@@ -375,7 +375,7 @@ export const useGmailIntegration = (options?: GmailIntegrationOptions) => {
       const queryString = query.toString();
       const url = queryString ? `/api/pipeline/gold-transactions?${queryString}` : '/api/pipeline/gold-transactions';
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(url, {
+      const res = await fetch(getApiUrl(url), {
         headers: {
           ...authHeaders,
         },
