@@ -87,6 +87,12 @@ export interface GoldTransaction {
   bronzeInputId?: string;
   deletedAt?: string;
   parentTransactionId?: string;
+  emailSubject?: string;
+  emailSender?: string;
+  emailReceivedAt?: string;
+  sourceReceivedAt?: string;
+  sourceTitle?: string;
+  sourceSender?: string;
 }
 
 export interface PaymentMethod {
@@ -101,6 +107,8 @@ export interface PaymentMappingRule {
   id: string;
   keyword: string;
   paymentMethodId: string;
+  aliasPattern?: string;
+  paymentMethodName?: string;
 }
 
 export interface LlmAccuracyStats {
@@ -108,7 +116,15 @@ export interface LlmAccuracyStats {
   totalCorrected: number;
   accuracyRatePercentage: number;
   totalApprovedUnchanged: number;
+  totalTested?: number;
+  overallAccuracy?: number;
+  merchantAccuracy?: number;
+  amountAccuracy?: number;
+  categoryAccuracy?: number;
+  paymentMethodAccuracy?: number;
 }
+
+export type LlmExtractionLog = LlmLogEntry;
 
 export interface LlmLogEntry {
   rawInputId: string;

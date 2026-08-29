@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import type { GoldTransaction, SilverTransaction } from '../../hooks/use-gmail-integration';
 import { MultiSelect } from '../MultiSelect';
 import { getSignedAmount, formatLocalTransactionTime } from '../../utils/transaction-helper';
