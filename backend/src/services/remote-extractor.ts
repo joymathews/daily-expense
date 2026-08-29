@@ -44,8 +44,9 @@ export class RemoteHttpExtractor implements ITransactionExtractor {
 
   async isAvailable(): Promise<boolean> {
     try {
+      const timeoutMs = parseInt(process.env.LLM_HEALTH_CHECK_TIMEOUT || '10000', 10);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const baseUrl = this.serviceUrl.replace(/\/$/, '');
       const response = await fetch(`${baseUrl}/health`, {
