@@ -173,8 +173,5 @@ resource frontendApp 'Microsoft.Web/staticSites@2022-09-01' = {
   properties: {}
 }
 
-output backendFQDN string = backendApp.properties.configuration.ingress.fqdn
-output extractionInternalFQDN string = extractionApp.properties.configuration.ingress.fqdn
-output acaStaticIp string = containerAppEnv.properties.staticIp
-output frontendDefaultHostname string = frontendApp.properties.defaultHostname
+
 
