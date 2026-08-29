@@ -105,7 +105,7 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       ...STANDARD_CATEGORIES,
       ...customGoldCategories,
       ...customSilverCategories
-    ].filter(Boolean).map(c => c.trim());
+    ].filter((c): c is string => typeof c === 'string' && Boolean(c.trim())).map(c => c.trim());
     
     // De-duplicate case-insensitively but preserve original casing
     const seen = new Set<string>();
@@ -353,9 +353,9 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
     }
   };
 
-  const emailSubject = isGoldMode ? (selectedGoldTransaction?.emailSubject || 'Ledger Record') : selectedEmail?.subject;
-  const emailSender = isGoldMode ? (selectedGoldTransaction?.emailSender || 'N/A') : selectedEmail?.sender;
-  const emailDate = formatToUserTimezone(isGoldMode ? (selectedGoldTransaction?.emailReceivedAt || 'N/A') : selectedEmail?.date, true);
+  const emailSubject = isGoldMode ? (selectedGoldTransaction?.emailSubject || selectedGoldTransaction?.sourceTitle || 'Ledger Record') : selectedEmail?.subject;
+  const emailSender = isGoldMode ? (selectedGoldTransaction?.emailSender || selectedGoldTransaction?.sourceSender || 'N/A') : selectedEmail?.sender;
+  const emailDate = formatToUserTimezone(isGoldMode ? (selectedGoldTransaction?.emailReceivedAt || selectedGoldTransaction?.sourceReceivedAt || 'N/A') : selectedEmail?.date, true);
 
 
 

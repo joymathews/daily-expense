@@ -59,7 +59,7 @@ const DataIngestion: React.FC = () => {
       ...STANDARD_CATEGORIES,
       ...customGoldCategories,
       ...customSilverCategories
-    ].filter(Boolean).map(c => c.trim());
+    ].filter((c): c is string => typeof c === 'string' && Boolean(c.trim())).map(c => c.trim());
     
     // De-duplicate case-insensitively but preserve original casing
     const seen = new Set<string>();
@@ -901,17 +901,17 @@ const DataIngestion: React.FC = () => {
                         <div className="flex items-center justify-between w-full">
                           <div className="flex flex-col text-left">
                             <span className="text-xs font-extrabold text-gray-800">
-                              Pattern: <code className="bg-indigo-50/60 px-1 py-0.5 rounded text-indigo-750 font-mono">"{r.aliasPattern}"</code>
+                              Pattern: <code className="bg-indigo-50/60 px-1 py-0.5 rounded text-indigo-750 font-mono">"{r.aliasPattern || r.keyword}"</code>
                             </span>
                             <span className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
-                              Maps to: <span className="text-indigo-650">{r.paymentMethodName || 'Unknown'}</span>
+                              Maps to: <span className="text-indigo-650">{r.paymentMethodName || r.paymentMethodId || 'Unknown'}</span>
                             </span>
                           </div>
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => {
                                 setEditingRuleId(r.id);
-                                setEditingRulePattern(r.aliasPattern);
+                                setEditingRulePattern(r.aliasPattern || r.keyword);
                                 setEditingRuleMethodId(r.paymentMethodId);
                               }}
                               className="text-[10px] font-bold uppercase text-indigo-600 hover:text-indigo-700 cursor-pointer"

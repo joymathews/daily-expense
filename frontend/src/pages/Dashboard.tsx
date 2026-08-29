@@ -204,30 +204,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             ? { start: currCycleForTrend.startDate, end: currCycleForTrend.endDate || expectedTrendEnd }
             : getActiveCycleRange(cycleStartDay);
 
-          const trendEndLimit = todayStr < range.start ? range.start : (todayStr > range.end ? range.end : todayStr);
-          const cycleDates = getDatesInRange(range.start, trendEndLimit);
-          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const trendData = cycleDates.map((dateStr: string) => {
-            const dateParts = dateStr.split('-').map(Number);
-            const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            const dayName = dayNames[d.getDay()];
-            const formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-
-            const amount = goldTxs
-              .filter((tx: any) => tx.transactionDate === dateStr)
-              .reduce((sum: number, tx: any) => {
-                if (tx.transactionType === 'transfer') return sum;
-                if (tx.transactionType === 'fixed') return sum;
-                const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
-                return sum + signedAmt;
-              }, 0);
-
-            return {
-              day: dayName,
-              date: formattedDate,
-              amount: Math.max(0, amount),
-            };
-          });
           // Build daily spend map for the spending calendar (all recorded dates, not limited to cycle)
           const spendMap: Record<string, number> = {};
           goldTxs.forEach((tx: any) => {
@@ -308,16 +284,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }, []);
-
-  const minDate = React.useMemo(() => {
-    if (goldTransactions.length === 0) return '';
-    return goldTransactions.reduce((min, tx) => {
-      if (tx.transactionDate && tx.transactionDate < min) {
-        return tx.transactionDate;
-      }
-      return min;
-    }, todayStr);
-  }, [goldTransactions, todayStr]);
 
   const availableCycles = React.useMemo(() => {
     return cycles
@@ -412,10 +378,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
 
       const allAmounts: number[] = [];
       if (activeSeries.current) {
-        currentData.spends.forEach(d => { if (d.amount !== null) allAmounts.push(d.amount); });
+        currentData.spends.forEach((d: { date: string; amount: number | null }) => { if (d.amount !== null) allAmounts.push(d.amount); });
       }
       historicalData.forEach(h => {
-        h.spends.forEach(d => { if (d.amount !== null) allAmounts.push(d.amount); });
+        h.spends.forEach((d: { date: string; amount: number | null }) => { if (d.amount !== null) allAmounts.push(d.amount); });
       });
       const maxVal = Math.max(...allAmounts, 100);
 
@@ -444,11 +410,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
 
   const validCurrentPoints = activeSeries.current
     ? comparisonChartData.currentSpends
-        .map((pt, idx) => ({ x: 60 + idx * compStepX, y: pt.amount !== null ? 200 - (pt.amount / comparisonChartData.maxVal) * 180 : null }))
-        .filter((pt): pt is { x: number; y: number } => pt.y !== null)
+        .map((pt: { date: string; amount: number | null }, idx: number) => ({ x: 60 + idx * compStepX, y: pt.amount !== null ? 200 - (pt.amount / comparisonChartData.maxVal) * 180 : null }))
+        .filter((pt: { x: number; y: number | null }): pt is { x: number; y: number } => pt.y !== null)
     : [];
 
-  const currentLinePath = validCurrentPoints.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+  const currentLinePath = validCurrentPoints.map((c: { x: number; y: number }, i: number) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
   const currentAreaPath = validCurrentPoints.length > 0
     ? `${currentLinePath} L ${validCurrentPoints[validCurrentPoints.length - 1].x} 200 L ${validCurrentPoints[0].x} 200 Z`
     : '';
@@ -465,13 +431,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const historicalSeries = React.useMemo(() => {
     return (comparisonChartData.historicalData || []).map((series, index) => {
       const colorInfo = HISTORICAL_COLORS[index % HISTORICAL_COLORS.length];
-      const points = series.spends.map((pt, idx) => ({
+      const points = series.spends.map((pt: { date: string; amount: number | null }, idx: number) => ({
         x: 60 + idx * compStepX,
         y: pt.amount !== null ? 200 - (pt.amount / comparisonChartData.maxVal) * 180 : null
       }));
-      const validPoints = points.filter((pt): pt is { x: number; y: number } => pt.y !== null);
+      const validPoints = points.filter((pt: { x: number; y: number | null }): pt is { x: number; y: number } => pt.y !== null);
       
-      const linePath = validPoints.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+      const linePath = validPoints.map((c: { x: number; y: number }, i: number) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
       
       let areaPath = '';
       if (validPoints.length > 0) {

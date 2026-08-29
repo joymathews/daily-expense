@@ -16,7 +16,7 @@ import { CycleOverrideModal } from '../components/CycleOverrideModal';
 import { filterTransactionsByCycle } from '../utils/cycle-helper';
 
 const GoldTransactions: React.FC = () => {
-  const { cycles, activeCycle, selectedCycle, setSelectedCycle, setCycleOverride, removeCycleOverride } = useUserCycles();
+  const { cycles, selectedCycle, setSelectedCycle, setCycleOverride, removeCycleOverride } = useUserCycles();
   const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
 
   const {

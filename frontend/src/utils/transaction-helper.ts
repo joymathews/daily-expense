@@ -4,6 +4,7 @@ export interface HasAmountAndTransactionType {
 }
 
 export interface HelperTransaction {
+  merchant?: string;
   amount: number;
   transactionDate: string;
   category: string;

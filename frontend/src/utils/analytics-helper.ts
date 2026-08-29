@@ -8,6 +8,7 @@ export interface RunRateForecastResult {
   remainingDays: number;
   dailyVelocity: number;
   projectedSpend: number;
+  projectedTotal?: number;
   isExceeding: boolean;
   exhaustionDate: string | null;
   recommendedDailyRate: number;
@@ -274,7 +275,7 @@ export const detectRecurringBills = (
     })
     .forEach(tx => {
       const cat = tx.category || 'Other';
-      const normMerchant = normalizeMerchantName(tx.merchant);
+      const normMerchant = normalizeMerchantName(tx.merchant || 'Unknown');
       const key = `${cat}_${normMerchant}`;
       if (!groups[key]) {
         groups[key] = {
@@ -338,7 +339,7 @@ export const detectRecurringBills = (
 
       // Use the raw merchant name from the most recent transaction as display label
       recurringList.push({
-        merchant: lastTx.merchant,
+        merchant: lastTx.merchant || 'Unknown',
         averageAmount: avgAmount,
         frequencyDays: avgGap,
         lastDate: lastDateStr,
@@ -405,7 +406,7 @@ export const generateSavingsRecommendations = (
   discretionarySpend: number,
   projectedCardOutlay: number,
   cycleRange: { start: string; end: string },
-  todayStr: string,
+  _todayStr: string,
   config: InsightsConfig = DEFAULT_INSIGHTS_CONFIG
 ): SavingsRecommendation[] => {
   const recommendations: SavingsRecommendation[] = [];

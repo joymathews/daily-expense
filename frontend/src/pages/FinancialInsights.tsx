@@ -29,7 +29,7 @@ const FinancialInsights: React.FC = () => {
   const [fixedCharges, setFixedCharges] = useState<any[]>([]);
   const [billingCycleStartDay, setBillingCycleStartDay] = useState(17);
   const [expectedSalary, setExpectedSalary] = useState(100000);
-  const [primaryCurrency, setPrimaryCurrency] = useState('INR');
+  const [_primaryCurrency] = useState('INR');
   const [isLoading, setIsLoading] = useState(true);
   
   // Filter state for insights list
@@ -95,7 +95,7 @@ const FinancialInsights: React.FC = () => {
             });
             const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
             if (sorted.length > 0) {
-              setPrimaryCurrency(sorted[0][0]);
+              // setPrimaryCurrency(sorted[0][0]);
             }
           }
           setIsLoading(false);
@@ -180,7 +180,7 @@ const FinancialInsights: React.FC = () => {
     totalFixedCharges,
     targetBudget,
     discretionarySpend,
-    forecast.projectedTotal,
+    forecast.projectedTotal || forecast.projectedSpend,
     cycleRange,
     todayStr,
     config
