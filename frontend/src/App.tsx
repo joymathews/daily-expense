@@ -5,6 +5,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import '@aws-amplify/ui-react/styles.css';
 
 import { authConfig } from './auth-config';
+import { ServerWarmupGate } from '@daily-expense/financial-core';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import DataIngestion from './pages/DataIngestion';
@@ -46,9 +47,11 @@ function App() {
     <BrowserRouter>
       <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
         <Authenticator>
-          {({ signOut, user }) => 
-            renderLayout(signOut!, user?.signInDetails?.loginId || 'User')
-          }
+          {({ signOut, user }) => (
+            <ServerWarmupGate>
+              {renderLayout(signOut!, user?.signInDetails?.loginId || 'User')}
+            </ServerWarmupGate>
+          )}
         </Authenticator>
       </GoogleOAuthProvider>
     </BrowserRouter>

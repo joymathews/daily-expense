@@ -160,11 +160,24 @@ resource backendApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
 }
 
-// 6. Azure Static Web App (Free Tier | Global CDN for React Vite SPA | $0/month)
+// 6. Azure Static Web App for Desktop (Free Tier | Global CDN for React Vite SPA | $0/month)
 param frontendAppName string = 'swa-daily-expense-frontend'
 
 resource frontendApp 'Microsoft.Web/staticSites@2022-09-01' = {
   name: frontendAppName
+  location: location
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {}
+}
+
+// 7. Azure Static Web App for Mobile PWA (Free Tier | Global CDN for Mobile PWA | $0/month)
+param mobileAppName string = 'swa-daily-expense-mobile'
+
+resource mobileApp 'Microsoft.Web/staticSites@2022-09-01' = {
+  name: mobileAppName
   location: location
   sku: {
     name: 'Free'

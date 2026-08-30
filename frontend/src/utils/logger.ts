@@ -1,5 +1,6 @@
 import log from 'loglevel';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { getApiUrl } from './api-config';
 
 const originalWarn = console.warn;
 const originalError = console.error;
@@ -32,7 +33,7 @@ const sendLogToBackend = async (level: string, message: string, details?: any) =
   try {
     const headers = await getAuthHeaders();
     // Use non-blocking fetch
-    fetch('/api/logs', {
+    fetch(getApiUrl('/api/logs'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

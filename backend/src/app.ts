@@ -6,6 +6,7 @@ import { checkJwt } from './middleware/auth-middleware';
 import ingestionRoutes from './routes/ingestion-routes';
 import pipelineRoutes from './routes/pipeline-routes';
 import feedbackRoutes from './routes/feedback-routes';
+import { getRepository } from './db/transaction-repository-factory';
 import { logger } from './utils/logger';
 
 const app = express();
@@ -39,9 +40,17 @@ app.use('/api/feedback', checkJwt, feedbackRoutes);
 app.use('/api/gmail', checkJwt, ingestionRoutes);
 app.use('/api/gmail', checkJwt, pipelineRoutes);
 
-// [FUNC-SKEL-SYS-1] Health-check endpoint (Public)
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+// [FUNC-SKEL-SYS-1], [FUNC-MOB-6] Health-check endpoint with Database Readiness probing
+app.get('/api/health', async (req, res) => {
+  try {
+    const repository = getRepository();
+    await repository.initializeSchema();
+    await repository.close();
+    res.status(200).json({ status: 'ok', server: 'ready', database: 'connected' });
+  } catch (error: any) {
+    logger.warn({ error: error.message }, 'Database is resuming or unavailable during health check');
+    res.status(503).json({ status: 'waking_up', server: 'ready', database: 'resuming', error: error.message });
+  }
 });
 
 /**

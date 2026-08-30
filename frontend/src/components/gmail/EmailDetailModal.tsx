@@ -3,6 +3,7 @@ import type { GmailMessage, GoldTransaction, SilverTransaction, PaymentMethod } 
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { formatToUserTimezone } from '../../utils/date-formatter';
 import { STANDARD_CATEGORIES } from '../../utils/transaction-helper';
+import { getApiUrl } from '../../utils/api-config';
 
 interface EmailDetailModalProps {
   selectedEmail: GmailMessage | null;
@@ -231,8 +232,9 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 
     if (selectedGoldTransaction) {
       goldRecord = selectedGoldTransaction;
-      if (selectedGoldTransaction.bronzeInputId) {
-        bronzeRecord = rawEmails.find(e => e.id === selectedGoldTransaction.bronzeInputId) || null;
+      const bronzeId = selectedGoldTransaction.bronzeInputId || (selectedGoldTransaction as any).bronzeEmailId || (selectedGoldTransaction as any).rawEmailId;
+      if (bronzeId) {
+        bronzeRecord = rawEmails.find(e => e.id === bronzeId) || null;
       }
       if (selectedGoldTransaction.pendingTxId) {
         silverRecord = silverTransactions.find(tx => tx.id === selectedGoldTransaction.pendingTxId) || null;
@@ -264,18 +266,19 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
       setRawBodyForGoldLineage('');
       
       // Load raw body for lineage if we have a bronze ID
-      if (selectedGoldTransaction.bronzeInputId) {
+      const bronzeId = selectedGoldTransaction.bronzeInputId || (selectedGoldTransaction as any).bronzeEmailId || (selectedGoldTransaction as any).rawEmailId;
+      if (bronzeId) {
         fetchAuthSession()
           .then(session => {
             const token = session.tokens?.idToken?.toString();
             const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-            return fetch(`/api/gmail/raw-emails`, { headers });
+            return fetch(getApiUrl('/api/pipeline/raw-emails'), { headers });
           })
           .then(res => res.json())
           .then(data => {
-            const match = (data.emails || []).find((e: any) => e.id === selectedGoldTransaction.bronzeInputId);
+            const match = (data.emails || []).find((e: any) => e.id === bronzeId);
             if (match) {
-              setRawBodyForGoldLineage(match.rawBody || '');
+              setRawBodyForGoldLineage(match.rawBody || match.snippet || '');
             }
           })
           .catch(err => console.warn('Failed to load raw email body for lineage', err));
@@ -448,8 +451,17 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                         Sender: {resolvedLineage.bronzeRecord.sender} | Date: {formatToUserTimezone(resolvedLineage.bronzeRecord.date, true)}
                       </div>
                     </div>
+                  ) : (selectedGoldTransaction?.sourceSender || selectedGoldTransaction?.sourceTitle || (selectedGoldTransaction as any)?.emailSender || (selectedGoldTransaction as any)?.emailSubject) ? (
+                    <div>
+                      <div className="font-bold text-gray-800 truncate" title={selectedGoldTransaction?.sourceTitle || (selectedGoldTransaction as any)?.emailSubject}>
+                        {selectedGoldTransaction?.sourceTitle || (selectedGoldTransaction as any)?.emailSubject || 'Source Ingestion Email'}
+                      </div>
+                      <div className="text-[10px] text-gray-450 truncate">
+                        Sender: {selectedGoldTransaction?.sourceSender || (selectedGoldTransaction as any)?.emailSender || 'Unknown'} | Date: {formatToUserTimezone(selectedGoldTransaction?.sourceReceivedAt || (selectedGoldTransaction as any)?.emailReceivedAt || selectedGoldTransaction?.transactionDate, true)}
+                      </div>
+                    </div>
                   ) : (
-                    <span className="text-gray-450 italic">No Bronze raw email found</span>
+                    <span className="text-gray-450 italic">Manual Entry (No Bronze email attached)</span>
                   )}
                 </div>
               </div>
@@ -799,15 +811,19 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                         </tr>
                         <tr>
                           <td className="py-1.5 font-bold text-gray-400 uppercase text-[9px] tracking-wide">Amount</td>
-                          <td className="py-1.5 font-semibold text-gray-800">{(llmLog.extractedAmount).toFixed(2)} {llmLog.extractedCurrency}</td>
-                          <td className="py-1.5 font-semibold text-gray-800">{amount.toFixed(2)} {llmLog.extractedCurrency}</td>
+                          <td className="py-1.5 font-semibold text-gray-800">
+                            {llmLog.extractedAmount !== undefined && llmLog.extractedAmount !== null ? `${Number(llmLog.extractedAmount).toFixed(2)} ${llmLog.extractedCurrency || currency || ''}` : 'N/A'}
+                          </td>
+                          <td className="py-1.5 font-semibold text-gray-800">
+                            {typeof amount === 'number' ? amount.toFixed(2) : Number(amount || 0).toFixed(2)} {currency || llmLog.extractedCurrency || ''}
+                          </td>
                           <td className="py-1.5 text-right">
                             <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
-                              amount === llmLog.extractedAmount
+                              llmLog.extractedAmount !== undefined && llmLog.extractedAmount !== null && Number(amount) === Number(llmLog.extractedAmount)
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/30'
                                 : 'bg-amber-50 text-amber-700 border border-amber-100/30'
                             }`}>
-                              {amount === llmLog.extractedAmount ? '✅ Match' : '📝 Corrected'}
+                              {llmLog.extractedAmount !== undefined && llmLog.extractedAmount !== null && Number(amount) === Number(llmLog.extractedAmount) ? '✅ Match' : '📝 Corrected'}
                             </span>
                           </td>
                         </tr>
@@ -845,14 +861,12 @@ export const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                 </div>
               )}
 
-              {(rawBodyForGoldLineage || resolvedLineage.bronzeRecord?.body) && (
-                <div>
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Message Body (Bronze Raw Data)</div>
-                  <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-[30rem] overflow-y-auto leading-relaxed">
-                    {rawBodyForGoldLineage || resolvedLineage.bronzeRecord?.body}
-                  </pre>
-                </div>
-              )}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Message Body (Bronze Raw Data)</div>
+                <pre className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gray-50/50 p-4 rounded-2xl border border-gray-150/70 max-h-[30rem] overflow-y-auto leading-relaxed">
+                  {rawBodyForGoldLineage || resolvedLineage.bronzeRecord?.body || resolvedLineage.bronzeRecord?.snippet || (selectedGoldTransaction?.sourceTitle ? `Source Email: ${selectedGoldTransaction.sourceTitle}\nFrom: ${selectedGoldTransaction.sourceSender || 'Unknown'}\nDate: ${selectedGoldTransaction.sourceReceivedAt || selectedGoldTransaction.transactionDate || ''}` : 'No raw message body payload attached to this record.')}
+                </pre>
+              </div>
             </div>
           )}
 

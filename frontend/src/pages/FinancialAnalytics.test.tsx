@@ -378,6 +378,7 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.setSystemTime(new Date('2026-08-22T00:00:00.000Z'));
     global.fetch = globalFetchMock;
     
     // Default fetch mocks
@@ -449,6 +450,10 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
       }
       return Promise.reject(new Error('Unknown url: ' + url));
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   /**
