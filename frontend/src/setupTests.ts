@@ -1,11 +1,11 @@
 import '@testing-library/jest-dom';
 
 // Default global fetch handler for test environment
-const originalFetch = global.fetch;
+const originalFetch = globalThis.fetch;
 
 (globalThis as any).__SERVER_HEALTHY__ = true;
 
-global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
 
   if (urlStr.includes('/api/health')) {

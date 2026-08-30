@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/api-config.ts","./src/auth-config.ts","./src/main.tsx","./src/setuptests.ts","./src/vite-env.d.ts","./src/components/bottomnav.tsx","./src/components/serverwarmupgate.tsx","./src/pages/goldledger.tsx","./src/pages/ingestiontriage.tsx","./src/pages/summarycompass.tsx"],"version":"6.0.3"}
