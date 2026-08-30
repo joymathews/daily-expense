@@ -89,7 +89,7 @@ export const GoldLedger: React.FC = () => {
           prefRes.status === 'fulfilled' && prefRes.value?.billingCycleStartDay
             ? prefRes.value.billingCycleStartDay
             : 17;
-        const activeRange = getActiveCycleRange(now, billingCycleStartDay);
+        const activeRange = getActiveCycleRange(billingCycleStartDay, now);
         cycleStart = activeRange.start;
         cycleEnd = activeRange.end;
       }
