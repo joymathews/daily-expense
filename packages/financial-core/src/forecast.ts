@@ -116,3 +116,23 @@ export const calculateDailyAllowance = (
     overspentTodayAmount: Math.round(overspentTodayAmount * 100) / 100,
   };
 };
+
+/**
+ * Calculates projected salary savings based on current velocity and target goal cap.
+ * 
+ * @param expectedSalary User's expected monthly salary.
+ * @param totalFixedCharges Sum of recurring fixed commitments (Rent, EMIs, etc.).
+ * @param targetBudget User's target discretionary goal cap.
+ * @param projectedSpend Forecasted total discretionary spend at end of cycle.
+ */
+export const calculateNetSavings = (
+  expectedSalary: number,
+  totalFixedCharges: number,
+  targetBudget: number,
+  projectedSpend: number
+): { netSavingsTarget: number; netSavingsProjected: number } => {
+  const netSavingsTarget = (expectedSalary || 0) - (totalFixedCharges || 0) - (targetBudget || 0);
+  const netSavingsProjected = (expectedSalary || 0) - (totalFixedCharges || 0) - (projectedSpend || 0);
+  return { netSavingsTarget, netSavingsProjected };
+};
+

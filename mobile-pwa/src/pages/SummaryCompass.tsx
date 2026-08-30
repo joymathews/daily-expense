@@ -4,6 +4,7 @@ import {
   calculateDaySpend,
   calculateRunRateForecast,
   calculateDailyAllowance,
+  calculateNetSavings,
   getActiveCycleRange,
   getExpectedCycleEnd,
   filterTransactionsByCycle,
@@ -103,6 +104,14 @@ export const SummaryCompass: React.FC = () => {
   );
 
   const effectiveLimit = Math.min(forecast.targetBudget, forecast.sustainableCap || forecast.targetBudget);
+
+  // Real-Time Net Salary Surplus (Savings)
+  const { netSavingsTarget, netSavingsProjected } = calculateNetSavings(
+    preferences.expectedSalary,
+    totalFixedCharges,
+    effectiveLimit,
+    forecast.projectedSpend
+  );
 
   // Real-Time Daily Allowance (Safe to spend today)
   const dailyAllowance = calculateDailyAllowance(
@@ -270,13 +279,20 @@ export const SummaryCompass: React.FC = () => {
             <span className="text-3xs text-slate-400 block font-medium">Of {formatCurrency(effectiveLimit)} cap</span>
           </div>
 
-          {/* Cell 4: Goal Cap Amount */}
-          <div className="bg-slate-50/70 rounded-xl p-2.5 border border-slate-150">
-            <span className="text-3xs font-bold uppercase tracking-wider text-slate-400 block">Goal Cap ({targetBudgetPercent}%)</span>
-            <span className="font-extrabold text-slate-900 Outfit text-sm block" data-testid="goal-cap-amount">
-              {formatCurrency(effectiveLimit)}
+          {/* Cell 4: Estimated Salary Surplus */}
+          <div className="bg-slate-50/70 rounded-xl p-2.5 border border-slate-150" data-testid="salary-surplus-cell">
+            <span className="text-3xs font-bold uppercase tracking-wider text-slate-400 block">Est. Savings</span>
+            <span
+              className={`font-extrabold Outfit text-sm block ${
+                netSavingsProjected >= 0 ? 'text-emerald-600' : 'text-rose-600'
+              }`}
+              data-testid="projected-savings-amount"
+            >
+              {formatCurrency(netSavingsProjected)}
             </span>
-            <span className="text-3xs text-slate-400 block font-medium">Monthly budget limit</span>
+            <span className="text-3xs text-slate-400 block font-medium" data-testid="target-savings-amount">
+              Goal: {formatCurrency(netSavingsTarget)}
+            </span>
           </div>
 
         </div>

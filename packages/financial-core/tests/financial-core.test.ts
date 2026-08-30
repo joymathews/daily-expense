@@ -8,6 +8,7 @@ import {
   calculateDaySpend,
   calculateRunRateForecast,
   calculateDailyAllowance,
+  calculateNetSavings,
   calculateDayOfMonthPeaks,
   calculateDayOfWeekPeaks,
   detectRecurringBills,
@@ -163,6 +164,12 @@ describe('Financial Core Engine Unit Tests', () => {
       expect(formatCurrency(1500, 'INR')).toBe('₹1,500.00');
       expect(formatCurrency(25.5, 'USD')).toBe('USD 25.50');
       expect(formatCycleDisplayDate('2026-08-17')).toBe("17 Aug '26");
+    });
+
+    it('calculates target and projected net savings surplus correctly', () => {
+      const { netSavingsTarget, netSavingsProjected } = calculateNetSavings(100000, 20000, 50000, 45000);
+      expect(netSavingsTarget).toBe(30000); // 100000 - 20000 - 50000
+      expect(netSavingsProjected).toBe(35000); // 100000 - 20000 - 45000
     });
   });
 });

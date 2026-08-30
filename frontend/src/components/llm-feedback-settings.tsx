@@ -189,7 +189,7 @@ const LlmFeedbackSettings: React.FC = () => {
   const deleteExample = async (id: string) => {
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch(`/api/feedback/examples/${id}`, { method: 'DELETE', headers });
+      const response = await fetch(getApiUrl(`/api/feedback/examples/${id}`), { method: 'DELETE', headers });
       if (!response.ok) throw new Error('Failed to delete example');
       setExamples(prev => prev.filter(ex => ex.id !== id));
       showSuccess('Correction example deleted.');

@@ -8,6 +8,7 @@ import { getApiUrl } from '../utils/api-config';
 import {
   calculateDiscretionarySpend,
   calculateRunRateForecast,
+  calculateNetSavings,
   calculateDayOfMonthPeaks,
   calculateDayOfWeekPeaks,
   detectRecurringBills,
@@ -229,8 +230,12 @@ const FinancialAnalytics: React.FC = () => {
     ? Math.max(0, getDaysDiff(forecast.exhaustionDate, cycleRange.end) - 1)
     : 0;
 
-  const netSavingsTarget = expectedSalary - totalFixedCharges - forecast.targetBudget;
-  const netSavingsProjected = expectedSalary - totalFixedCharges - forecast.projectedSpend;
+  const { netSavingsTarget, netSavingsProjected } = calculateNetSavings(
+    expectedSalary,
+    totalFixedCharges,
+    forecast.targetBudget,
+    forecast.projectedSpend
+  );
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 w-full px-2 sm:px-0">

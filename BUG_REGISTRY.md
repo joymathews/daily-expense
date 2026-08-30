@@ -370,4 +370,59 @@ Updated `getRawInputs()` in `sqlite-transaction-repository.ts` and `azure-sql-tr
 * **Test Case**: `frontend/src/App.test.tsx`
   - *opens a modal displaying full content when clicking an email, and allows overrides*
 
+---
+
+## [BUG-021] Mobile Batch Extraction Silent Fallback on Failure
+
+### Description
+When AI extraction fails (such as LLM engine unavailable, 503 response, or empty extracted output), the mobile PWA automatically transitions to the Silver review screen with blank, zeroed fallback records (`amount: 0`, `merchant: 'Merchant'`), hiding the failure from the user and corrupting the Silver staging layer with empty drafts.
+
+### Root Cause
+In `mobile-pwa/src/pages/IngestionTriage.tsx`, the `else` block of `handleBatchExtract` mapped target IDs into placeholder Silver drafts (`fallbackList`) whenever `res.ok` was false or `data.extracted` was empty, bypassing error handling.
+
+### Resolution
+Removed the artificial fallback draft generation. When extraction fails or errors, `IngestionTriage.tsx` preserves the user's screening state, stays on the Triage deck completion view, sets `extractErrorMessage`, and displays a clear red alert banner with retry controls.
+
+### Verification Test
+* **Test Case**: `mobile-pwa/src/App.test.tsx`
+  - *displays prominent error banner and allows retry when AI extraction fails instead of showing empty drafts [BUG-021]*
+
+---
+
+## [BUG-022] Mobile Pending Silver Review State Lost on Navigation & Static Category Suggestions
+
+### Description
+1. When a user extracts emails into Silver staging and navigates to another page (e.g. Compass or Ledger) before approving all Silver cards, returning to the Triage page resets the view back to Bronze rather than resuming the pending Silver review phase.
+2. In addition, the category datalist suggestions only display hardcoded default categories, omitting custom categories existing in the user's database.
+
+### Root Cause
+1. `loadInitialData()` in `mobile-pwa/src/pages/IngestionTriage.tsx` only queried `/api/pipeline/raw-inputs` on mount and did not check `/api/pipeline/silver-transactions` for unapproved pending transactions. Furthermore, upon extraction completion, `rawEmails` was retained in local React state.
+2. Category options were statically hardcoded in `useState` without querying existing categories from the database.
+
+### Resolution
+1. Updated `loadInitialData()` to fetch `/api/pipeline/silver-transactions` on mount. If pending Silver transactions exist, the page automatically initializes `silverQueue` and opens the Silver Review Phase.
+2. Cleared `rawEmails`, `rejectedIds`, and `isDeckComplete` in local state upon extraction completion.
+3. Queried `/api/pipeline/gold-transactions` and `/api/pipeline/silver-transactions` on mount to dynamically merge all custom categories from the database into `categorySuggestions`.
+
+### Verification Test
+* **Test Case**: `mobile-pwa/src/App.test.tsx`
+  - *automatically resumes at pending Silver review cards when returning to triage page and dynamically loads database categories [BUG-022]*
+
+---
+
+## [BUG-023] Mobile Silver Save & Accept Payload Mismatch on Promotion
+
+### Description
+When a user clicks "Save & Accept" on a Silver extraction review card in the Mobile PWA, the operation fails with "Failed to approve transaction to Gold ledger."
+
+### Root Cause
+In `mobile-pwa/src/pages/IngestionTriage.tsx`, `handleSaveAndAcceptSilver` sent `{ silverIds: [activeSilver.id] }` to `POST /api/pipeline/approve`. However, `POST /api/pipeline/approve` expects individual promotion fields (`silverId`, `merchant`, `amount`, `currency`, `date`, `category`, `paymentMethod`, `transactionType`). The batch payload format caused a 400 Bad Request error.
+
+### Resolution
+Updated `handleSaveAndAcceptSilver` to supply the complete transaction payload (`silverId`, `merchant`, `amount`, `currency`, `date`, `category`, `paymentMethod`, `transactionType`) matching the `POST /api/pipeline/approve` contract, ensuring seamless promotion to Gold.
+
+### Verification Test
+* **Test Case**: `mobile-pwa/src/App.test.tsx`
+  - *accepts Bronze email, immediately displays editable Silver card, and promotes to Gold [BUG-023]*
+
 
