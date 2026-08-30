@@ -1,4 +1,4 @@
-name: Deploy Frontend to Azure Static Web Apps
+name: Deploy Mobile PWA to Azure Static Web Apps
 
 on:
   workflow_dispatch:
@@ -8,9 +8,9 @@ permissions:
   contents: read
 
 jobs:
-  build_and_deploy_job:
+  build_and_deploy_mobile:
     runs-on: ubuntu-latest
-    name: Build and Deploy Frontend
+    name: Build and Deploy Mobile PWA
     steps:
       - uses: actions/checkout@v4
 
@@ -22,16 +22,16 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Generate staticwebapp.config.json routing configuration
-        working-directory: ./frontend
+        working-directory: ./mobile-pwa
         run: |
           { set +x; } 2>/dev/null
-          echo "==> Generating staticwebapp.config.json routing configuration..."
+          echo "==> Generating staticwebapp.config.json routing configuration for Mobile PWA..."
           node -e '
             const fs = require("fs");
             const config = {
               navigationFallback: {
                 rewrite: "/index.html",
-                exclude: ["/assets/*", "/*.{png,jpg,jpeg,gif,ico,json,svg}"]
+                exclude: ["/assets/*", "/*.{png,jpg,jpeg,gif,ico,json,svg,webmanifest}"]
               },
               responseOverrides: {
                 "404": {
@@ -39,31 +39,30 @@ jobs:
                 }
               }
             };
+            if (!fs.existsSync("public")) fs.mkdirSync("public", { recursive: true });
             fs.writeFileSync("public/staticwebapp.config.json", JSON.stringify(config, null, 2));
             fs.writeFileSync("staticwebapp.config.json", JSON.stringify(config, null, 2));
           '
 
-      - name: Install workspace dependencies and build
+      - name: Install workspace dependencies and build Mobile PWA
         env:
           VITE_COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
           VITE_COGNITO_REGION: ${{ vars.COGNITO_REGION }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
-          VITE_LOG_LEVEL: ${{ vars.VITE_LOG_LEVEL || 'info' }}
-          VITE_ENABLE_LOG_FORWARDING: ${{ vars.VITE_ENABLE_LOG_FORWARDING || 'false' }}
-          VITE_BACKEND_API_URL: ${{ vars.BACKEND_API_URL }}
+          VITE_API_URL: ${{ vars.BACKEND_API_URL }}
         run: |
           npm ci
           npm --prefix packages/financial-core run build
-          npm --prefix frontend run build
+          npm --prefix mobile-pwa run build
 
       - name: Deploy to Azure Static Web Apps
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_MOBILE || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "frontend/dist"
+          app_location: "mobile-pwa/dist"
           output_location: ""
           skip_app_build: true

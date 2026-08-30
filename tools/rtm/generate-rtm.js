@@ -8,7 +8,9 @@ const nfrDocPath = path.join(rootDir, 'NON_FUNCTIONAL_REQUIREMENTS.md');
 const bugDocPath = path.join(rootDir, 'BUG_REGISTRY.md');
 const testDirs = [
   path.join(rootDir, 'backend/tests'),
-  path.join(rootDir, 'frontend/src')
+  path.join(rootDir, 'frontend/src'),
+  path.join(rootDir, 'packages/financial-core/tests'),
+  path.join(rootDir, 'mobile-pwa/src')
 ];
 
 function getRequirements(filePath) {

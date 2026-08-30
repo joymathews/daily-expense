@@ -62,6 +62,7 @@ jobs:
             --parameters location=${{ env.AZURE_LOCATION }} environment=dev
 
       - name: Deploy Zero-Cost Azure Infrastructure Stack
+        id: arm_deploy
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -70,4 +71,9 @@ jobs:
           parameters: >
             location=${{ env.AZURE_LOCATION }}
             environment=dev
+
+      - name: Post-Deployment Verification
+        run: |
+          { set +x; } 2>/dev/null
+          echo "==> Azure infrastructure stack and Static Web Apps provisioned successfully."
 

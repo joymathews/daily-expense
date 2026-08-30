@@ -1,0 +1,17 @@
+{
+  "name": "Daily Expense",
+  "short_name": "Daily Expense",
+  "description": "Smart daily spending tracker & financial compass",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

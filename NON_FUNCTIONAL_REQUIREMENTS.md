@@ -103,4 +103,7 @@
 ## Database Raw Table Viewer [NFR-DB-VIEWER]
 - [NFR-DB-VIEWER-1] Raw Table Query Latency & Data Isolation: The paginated database viewer API must execute raw table queries and return formatted cell payloads in under 200ms for page sizes up to 100 rows. All table queries must strictly enforce authentication (`checkJwt`) and user isolation by `user_id` context.
 
-
+## Mobile PWA Architecture & Usability [NFR-MOB]
+- [NFR-MOB-1] Mobile Form Factor & Touch Optimization: The mobile web application must be strictly designed for mobile viewports, prioritizing portrait orientation with fluid landscape adaptation, enforcing minimum 44px x 44px tap targets, thumb-accessible bottom controls, and iOS/Android safe area padding (`env(safe-area-inset-*)`).
+- [NFR-MOB-2] Zero-Congestion Cloud Health Probe Gatekeeper: During cloud auto-pause cold starts (ACA scale-to-zero and Azure SQL pause), the mobile app must hold all secondary API traffic behind a single `GET /api/health` polling loop with exponential backoff (up to 45s), displaying a step-by-step connection status card without throwing premature network error screens.
+- [NFR-MOB-3] Centralized Calculation Core Consistency: All financial calculations, cycle range determinations, daily safe spend allowances, and transaction spend aggregations across both desktop and mobile platforms must be executed exclusively through the shared `@daily-expense/financial-core` library, enforcing a strict DRY single source of truth with zero math duplication.

@@ -5,6 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:mobile": "npm --prefix mobile-pwa run dev",
+    "build": "npm --prefix packages/financial-core run build && npm --prefix frontend run build && npm --prefix mobile-pwa run build",
+    "build:core": "npm --prefix packages/financial-core run build",
+    "build:frontend": "npm --prefix packages/financial-core run build && npm --prefix frontend run build",
+    "build:mobile": "npm --prefix packages/financial-core run build && npm --prefix mobile-pwa run build",
     "rtm": "node tools/rtm/generate-rtm.js",
     "clear-db": "node tools/clear-db.js",
     "migrate-transfer": "node tools/migrate-transfer-constraint.js",
@@ -16,5 +23,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "workspaces": [
+    "packages/*",
+    "frontend",
+    "mobile-pwa"
+  ]
 }

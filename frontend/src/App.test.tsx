@@ -5437,6 +5437,54 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-GMAIL-57] Desktop Cloud Wake-Up Gatekeeper & Single-Probe Feedback:
+   * Displays connecting progress during server cold start and unlocks when healthy.
+   */
+  it('displays connecting progress during server cold start and unlocks when healthy [FUNC-GMAIL-57]', async () => {
+    (globalThis as any).__SERVER_HEALTHY__ = false;
+    let healthCallCount = 0;
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/health')) {
+        healthCallCount++;
+        if (healthCallCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            json: () => Promise.resolve({ status: 'waking_up' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ status: 'ok', server: 'ready', database: 'connected' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ transactions: [], emails: [] }),
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Initially shows warmup gate
+    expect(screen.getByTestId('server-warmup-gate')).toBeInTheDocument();
+    expect(screen.getByTestId('warmup-title')).toHaveTextContent('Resuming Cloud Services');
+
+    // Upon unlocking, mounts dashboard
+    await waitFor(() => {
+      expect(screen.queryByTestId('server-warmup-gate')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Sign Out/i })).toBeInTheDocument();
+    });
+
+    vi.unstubAllGlobals();
+    (globalThis as any).__SERVER_HEALTHY__ = true;
+  });
 });
+
 
 
