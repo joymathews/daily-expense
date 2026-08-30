@@ -214,7 +214,7 @@ describe('Mobile PWA Application Test Suite', () => {
   });
 
   describe('[FUNC-MOB-6] / [NFR-MOB-2] Server Warmup Gatekeeper', () => {
-    it('displays connecting progress during server cold start and unlocks when healthy', async () => {
+    it('displays connecting progress during server cold start and unlocks when healthy [FUNC-MOB-6] [NFR-MOB-2]', async () => {
       globalFetchMock.mockImplementation((url: any) => {
         if (url.includes('/api/health')) {
           return Promise.resolve({
@@ -240,7 +240,7 @@ describe('Mobile PWA Application Test Suite', () => {
   });
 
   describe('[FUNC-MOB-1] / [NFR-MOB-3] Mobile Financial Compass & Daily Burn Rate', () => {
-    it('renders persistent top budget cap controller, real-time safe to spend today allowance and cycle run-rate', async () => {
+    it('renders persistent top budget cap controller, real-time safe to spend today allowance and cycle run-rate [FUNC-MOB-1] [NFR-MOB-1] [NFR-MOB-3]', async () => {
       render(
         <BrowserRouter>
           <SummaryCompass />
@@ -594,7 +594,7 @@ describe('Mobile PWA Application Test Suite', () => {
       expect(screen.getByTestId('batch-extract-btn')).toHaveTextContent(/Retry Extraction/i);
     });
 
-    it('proactively pings LLM health probe in background and auto-retries on cold start [FUNC-MOB-11]', async () => {
+    it('proactively pings LLM health probe in background and auto-retries on cold start [FUNC-MOB-11] [NFR-MOB-5]', async () => {
       let extractCallCount = 0;
       globalFetchMock.mockImplementation(async (url: string) => {
         if (url.includes('/api/pipeline/raw-inputs')) {
@@ -1002,7 +1002,7 @@ describe('Mobile PWA Application Test Suite', () => {
   });
 
   describe('[FUNC-MOB-9] Top-Header Hamburger Navigation Drawer', () => {
-    it('opens navigation drawer from header hamburger menu, supports navigation, close, and logout', async () => {
+    it('opens navigation drawer from header hamburger menu, supports navigation, close, and logout [FUNC-MOB-9] [NFR-MOB-1]', async () => {
       render(<App />);
 
       await waitFor(() => {
