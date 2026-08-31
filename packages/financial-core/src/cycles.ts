@@ -24,7 +24,7 @@ export const getActiveCycleRange = (billingCycleStartDay: number = 17, reference
   let startYear = currentYear;
   let startMonth = currentMonth;
 
-  if (currentDay < billingCycleStartDay) {
+  if (currentDay <= billingCycleStartDay) {
     startMonth = currentMonth - 1;
     if (startMonth < 0) {
       startMonth = 11;
@@ -40,7 +40,7 @@ export const getActiveCycleRange = (billingCycleStartDay: number = 17, reference
     endMonth = 0;
     endYear += 1;
   }
-  const endDay = Math.min(31, billingCycleStartDay + 1);
+  const endDay = Math.min(31, billingCycleStartDay);
   const endDate = new Date(endYear, endMonth, endDay);
 
   const format = (d: Date) => {
@@ -132,7 +132,7 @@ export const getExpectedCycleEnd = (startDateStr: string, billingCycleStartDay: 
     endYear += 1;
   }
 
-  const endDay = Math.min(31, billingCycleStartDay + 1);
+  const endDay = Math.min(31, billingCycleStartDay);
   const endDate = new Date(endYear, endMonthIndex, endDay);
   const y = endDate.getFullYear();
   const m = String(endDate.getMonth() + 1).padStart(2, '0');

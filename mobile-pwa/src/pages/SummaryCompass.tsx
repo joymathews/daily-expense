@@ -101,7 +101,8 @@ export const SummaryCompass: React.FC = () => {
     targetBudgetPercent,
     cycleRange,
     todayStr,
-    totalFixedCharges
+    totalFixedCharges,
+    spentToday
   );
 
   const effectiveLimit = calculateEffectiveBudgetLimit(forecast.targetBudget, forecast.sustainableCap);

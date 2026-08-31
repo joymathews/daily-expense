@@ -7,6 +7,7 @@ import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-h
 import { getApiUrl } from '../utils/api-config';
 import {
   calculateDiscretionarySpend,
+  calculateDaySpend,
   calculateRunRateForecast,
   calculateNetSavings,
   calculateDayOfMonthPeaks,
@@ -161,13 +162,15 @@ const FinancialAnalytics: React.FC = () => {
 
   // Computations
   const discretionarySpent = calculateDiscretionarySpend(cycleFilteredTxs, cycleRange.start, cycleRange.end);
+  const spentToday = calculateDaySpend(cycleFilteredTxs, todayStr);
   const forecast: RunRateForecastResult = calculateRunRateForecast(
     discretionarySpent,
     expectedSalary,
     targetBudgetPercent,
     cycleRange,
     todayStr,
-    totalFixedCharges
+    totalFixedCharges,
+    spentToday
   );
 
   const dayOfMonthPeaks: DayPeakPoint[] = calculateDayOfMonthPeaks(transactions);

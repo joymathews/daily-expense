@@ -46,16 +46,28 @@ describe('Financial Core Engine Unit Tests', () => {
       expect(getDaysDiff('2026-08-10', '2026-08-01')).toBe(0);
     });
 
-    it('generates accurate active cycle range for start day', () => {
+    it('generates accurate active cycle range for start day ending on next month start day', () => {
       const ref = new Date(2026, 7, 20); // Aug 20, 2026
       const range = getActiveCycleRange(17, ref);
       expect(range.start).toBe('2026-08-17');
-      expect(range.end).toBe('2026-09-18');
+      expect(range.end).toBe('2026-09-17');
+
+      // On the 17th of September (the final day), it must remain in the active cycle
+      const lastDayRef = new Date(2026, 8, 17); // Sep 17, 2026
+      const lastDayRange = getActiveCycleRange(17, lastDayRef);
+      expect(lastDayRange.start).toBe('2026-08-17');
+      expect(lastDayRange.end).toBe('2026-09-17');
+
+      // On the 18th of September, the new cycle begins
+      const newCycleRef = new Date(2026, 8, 18); // Sep 18, 2026
+      const newCycleRange = getActiveCycleRange(17, newCycleRef);
+      expect(newCycleRange.start).toBe('2026-09-17');
+      expect(newCycleRange.end).toBe('2026-10-17');
     });
 
     it('calculates expected cycle end date for cycle start', () => {
-      expect(getExpectedCycleEnd('2026-08-17', 17)).toBe('2026-09-18');
-      expect(getExpectedCycleEnd('2026-12-17', 17)).toBe('2027-01-18');
+      expect(getExpectedCycleEnd('2026-08-17', 17)).toBe('2026-09-17');
+      expect(getExpectedCycleEnd('2026-12-17', 17)).toBe('2027-01-17');
     });
   });
 
@@ -93,23 +105,53 @@ describe('Financial Core Engine Unit Tests', () => {
   });
 
   describe('[FUNC-MOB-1] Forecast & Real-Time Daily Allowance Engine', () => {
-    it('computes run-rate forecast, velocity, and projected end spend', () => {
+    it('computes run-rate forecast, velocity, and projected end spend with strictly completed elapsed days', () => {
       const forecast = calculateRunRateForecast(
         30000,
         100000,
         50, // 50k target cap
         { start: '2026-08-01', end: '2026-08-30' }, // 30 days total
-        '2026-08-15', // 15 days elapsed, 15 days remaining
+        '2026-08-16', // Aug 1 to Aug 15 = 15 completed days before today, 14 days remaining after today
         10000 // 10k fixed charges -> sustainable cap 90k
       );
 
       expect(forecast.targetBudget).toBe(50000);
       expect(forecast.elapsedDays).toBe(15);
-      expect(forecast.remainingDays).toBe(15);
-      expect(forecast.dailyVelocity).toBe(2000); // 30k / 15d
-      expect(forecast.projectedSpend).toBe(60000); // 2k * 30d
+      expect(forecast.remainingDays).toBe(14);
+      expect(forecast.dailyVelocity).toBe(2000); // 30k / 15d completed
+      expect(forecast.projectedSpend).toBe(58000); // 30k + (2k * 14d)
       expect(forecast.isExceeding).toBe(true);
-      expect(forecast.recommendedDailyRate).toBeCloseTo(1333.33, 1); // 20k left / 15d
+      expect(forecast.recommendedDailyRate).toBeCloseTo(1428.57, 1); // 20k left / 14d
+
+      // User cycle scenario: Aug 16 to Sep 17 (33 total days), today is Aug 31
+      const userCycleForecast = calculateRunRateForecast(
+        20000,
+        100000,
+        50,
+        { start: '2026-08-16', end: '2026-09-17' },
+        '2026-08-31',
+        0,
+        2000 // 2000 spent today
+      );
+      expect(userCycleForecast.elapsedDays).toBe(15); // Aug 16 to Aug 30 = 15 completed days
+      expect(userCycleForecast.remainingDays).toBe(17); // Sep 1 to Sep 17 = 17 remaining days
+      expect(userCycleForecast.dailyVelocity).toBe(1200); // (20000 - 2000) / 15 = 1200/day
+      expect(userCycleForecast.projectedSpend).toBe(40400); // 20000 + (1200 * 17)
+      expect(userCycleForecast.recommendedDailyRate).toBeCloseTo(1764.71, 1); // 30000 / 17
+
+      // Final day of cycle scenario: Sep 17
+      const finalDayForecast = calculateRunRateForecast(
+        40000,
+        100000,
+        50,
+        { start: '2026-08-16', end: '2026-09-17' },
+        '2026-09-17',
+        0,
+        1000
+      );
+      expect(finalDayForecast.elapsedDays).toBe(32); // Aug 16 to Sep 16 = 32 completed days
+      expect(finalDayForecast.remainingDays).toBe(0); // 0 remaining days on final day
+      expect(finalDayForecast.recommendedDailyRate).toBe(0);
     });
 
     it('calculates real-time daily safe allowance for today and future days', () => {

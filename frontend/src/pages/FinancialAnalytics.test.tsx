@@ -156,7 +156,7 @@ describe('Financial Analytics Utility Computations', () => {
    */
   it('correctly forecasts cycle run rate and exhaustion date when exceeding', () => {
     const cycleRange = { start: '2026-06-17', end: '2026-07-16' }; // 30 days
-    const todayStr = '2026-06-26'; // Day 10 of cycle (elapsedDays = 10, remainingDays = 20)
+    const todayStr = '2026-06-27'; // June 17 to June 26 = 10 completed days before today, 19 remaining days after today
     const discretionarySpend = 20000; // spent in 10 days ($2000/day velocity)
     const expectedSalary = 100000;
     const targetBudgetPercent = 30; // budget = $30,000
@@ -171,19 +171,19 @@ describe('Financial Analytics Utility Computations', () => {
 
     expect(result.targetBudget).toBe(30000);
     expect(result.elapsedDays).toBe(10);
-    expect(result.remainingDays).toBe(20);
+    expect(result.remainingDays).toBe(19);
     expect(result.dailyVelocity).toBe(2000);
-    expect(result.projectedSpend).toBe(60000); // 2000 * 30 days
+    expect(result.projectedSpend).toBe(58000); // 20000 + (2000 * 19)
     expect(result.isExceeding).toBe(true);
     // targetBudget 30000 / velocity 2000 = 15 days from start (June 17 + 15 days = July 2)
     expect(result.exhaustionDate).toBe('2026-07-02');
-    expect(result.recommendedDailyRate).toBe(500); // remaining budget 10000 / remaining days 20
+    expect(result.recommendedDailyRate).toBeCloseTo(526.32, 1); // remaining budget 10000 / remaining days 19
   });
 
   it('correctly adjusts recommended daily rate when target budget is unsustainable', () => {
     const cycleRange = { start: '2026-06-17', end: '2026-07-16' }; // 30 days
-    const todayStr = '2026-06-27'; // Day 11 of cycle (elapsedDays = 11, remainingDays = 19)
-    const discretionarySpend = 20000;
+    const todayStr = '2026-06-28'; // 11 completed days before today, 18 remaining days after today
+    const discretionarySpend = 22000;
     const expectedSalary = 100000;
     const targetBudgetPercent = 100; // Cap set to 100% = $100,000 (unsustainable!)
     const totalFixedCharges = 60000; // Sustainable cap = 100000 - 60000 = 40000
@@ -199,9 +199,11 @@ describe('Financial Analytics Utility Computations', () => {
 
     expect(result.targetBudget).toBe(100000);
     expect(result.sustainableCap).toBe(40000);
-    // Remaining budget should be based on sustainableCap (40000) minus discretionarySpend (20000) = 20000
-    // Recommended daily rate = 20000 / 19 days = ~1052.63
-    expect(result.recommendedDailyRate).toBeCloseTo(1052.63, 1);
+    expect(result.elapsedDays).toBe(11);
+    expect(result.remainingDays).toBe(18);
+    // Remaining budget should be based on sustainableCap (40000) minus discretionarySpend (22000) = 18000
+    // Recommended daily rate = 18000 / 18 days = 1000
+    expect(result.recommendedDailyRate).toBe(1000);
   });
 
   /**
