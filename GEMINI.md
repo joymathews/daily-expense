@@ -35,6 +35,8 @@ For ALL future changes, feature implementations, and code modifications, you mus
 
 * **User Isolation Standard**: Every endpoint under `/api/ingestion` and `/api/pipeline` must use `checkJwt` to authenticate users. The database tables (Bronze, Silver, and Gold layers) must strictly isolate records by `user_id` parsed from `req.auth.sub`. In the frontend, the Cognito JWT token retrieved via `fetchAuthSession` must be attached to the `Authorization` header of all API calls.
 
+* **Financial Core Domain Isolation Standard**: ALL financial calculations, metric aggregations, spend reductions, currency summaries, budget forecasts, run-rate velocity metrics, daily allowance formulas, billing cycle boundaries, recurring bill patterns, and savings logic MUST strictly reside in the shared `@daily-expense/financial-core` (`packages/financial-core`) workspace library. UI layers (`frontend` desktop and `mobile-pwa`) are strictly presentation layers and MUST NEVER write inline financial math or duplicate domain calculations. Any change affecting financial calculations must be implemented and unit-tested in `packages/financial-core` first.
+
 * **Dependency Security Standard**: Zero Critical and High vulnerabilities permitted across backend and frontend dependencies. Routine `npm audit` checks must be performed to maintain package health.
 
 
