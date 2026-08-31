@@ -12,13 +12,6 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     host: true,
-    proxy: {
-      '/api': {
-        target: 'https://ca-daily-expense-backend.ambitioushill-f9e7c529.westus2.azurecontainerapps.io',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
   },
   test: {
     globals: true,
