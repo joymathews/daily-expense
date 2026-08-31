@@ -7,7 +7,7 @@
 // 1. Container Registry : Uses GitHub Container Registry (ghcr.io) -> $0/month
 // 2. Compute Free Tier : Scales within Azure ACA Free Grant (180k vCPU-sec/mo free) -> $0/month
 // 3. Log Analytics     : Uses Azure Free Grant (First 5 GB/mo free) -> $0/month
-// 4. Network Firewall  : VNet + IP Firewall Rules (No Private Endpoint fee) -> $0/month
+// 4. Shared Ingress    : Standard ACA Multi-tenant Ingress (No dedicated Load Balancer fee) -> $0/month
 // ==============================================================================
 
 @description('Azure region for all resources')
@@ -19,7 +19,6 @@ param appName string = 'daily-expense'
 @description('Environment name (e.g. dev, prod)')
 param environment string = 'dev'
 
-var vnetName = 'vnet-${appName}-${environment}'
 var containerAppEnvName = 'cae-${appName}-${environment}'
 var backendAppName = 'ca-${appName}-backend'
 var extractionAppName = 'ca-${appName}-extraction'
@@ -40,44 +39,11 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   }
 }
 
-// 2. Virtual Network for ACA Infrastructure ($0/month)
-resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
-  name: vnetName
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        '10.0.0.0/16'
-      ]
-    }
-    subnets: [
-      {
-        name: 'aca-subnet'
-        properties: {
-          addressPrefix: '10.0.0.0/21'
-          delegations: [
-            {
-              name: 'aca-delegation'
-              properties: {
-                serviceName: 'Microsoft.App/environments'
-              }
-            }
-          ]
-        }
-      }
-    ]
-  }
-}
-
-// 3. VNet-Injected Container Apps Environment (Uses Azure Free Grant)
+// 2. Azure Container Apps Managed Environment ($0/month - uses Azure shared ingress)
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: containerAppEnvName
   location: location
   properties: {
-    vnetConfiguration: {
-      infrastructureSubnetId: vnet.properties.subnets[0].id
-      internal: false
-    }
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
