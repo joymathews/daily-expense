@@ -2,7 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { useGmailIntegration } from '../hooks/use-gmail-integration';
-import { computeSalaryAllocation, getDatesInRange, getActiveCycleRange } from '../utils/transaction-helper';
+import {
+  computeSalaryAllocation,
+  getDatesInRange,
+  getActiveCycleRange,
+  filterActiveFixedCharges,
+  calculateCategorySpend,
+  getTopSpendingCategories,
+  calculateCycleSpendTotal,
+  buildDailySpendMap,
+  buildDailyTransactionsMap,
+  calculateDailySpendSeries,
+  calculateAverageDailySpend,
+} from '../utils/transaction-helper';
 import { useUserCycles } from '../hooks/use-user-cycles';
 import { CycleSelectorDropdown } from '../components/CycleSelectorDropdown';
 import { CycleOverrideModal } from '../components/CycleOverrideModal';
@@ -80,9 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     const allocation = computeSalaryAllocation(cycleFilteredTxs, range, expectedSalary, fixedChargesList);
     setSalaryAllocation(allocation);
 
-    const activeFCs = (fixedChargesList || []).filter((fc: any) => {
-      return fc.startDate <= range.end && fc.endDate >= range.start;
-    });
+    const activeFCs = filterActiveFixedCharges(fixedChargesList, range);
     setActiveFixedCharges(activeFCs);
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -94,15 +104,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
       const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
       const dayName = dayNames[d.getDay()];
       const formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-
-      const amount = goldTxs
-        .filter((tx: any) => tx.transactionDate === dateStr)
-        .reduce((sum: number, tx: any) => {
-          if (tx.transactionType === 'transfer') return sum;
-          if (tx.transactionType === 'fixed') return sum;
-          const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
-          return sum + signedAmt;
-        }, 0);
+      const amount = calculateCycleSpendTotal(goldTxs.filter((tx: any) => tx.transactionDate === dateStr));
 
       return {
         day: dayName,
@@ -180,13 +182,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
           setTodayDateString(todayStr);
           
-          const total = goldTxs
-            .filter((tx: any) => tx.transactionDate <= todayStr)
-            .reduce((sum: number, tx: any) => {
-              if (tx.transactionType === 'transfer') return sum; // transfers are neutral
-              const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
-              return sum + signedAmt;
-            }, 0);
+          const total = calculateCycleSpendTotal(goldTxs.filter((tx: any) => tx.transactionDate <= todayStr));
           setMetrics({
             bronzeCount: rawEmails.length,
             bronzeProcessedCount: bronzeProcessed,
@@ -206,65 +202,20 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
             : getActiveCycleRange(cycleStartDay);
 
           // Build daily spend map for the spending calendar (all recorded dates, not limited to cycle)
-          const spendMap: Record<string, number> = {};
-          goldTxs.forEach((tx: any) => {
-            if (tx.transactionType === 'transfer') return;
-            if (tx.transactionType === 'fixed') return;
-            const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
-            const existing = spendMap[tx.transactionDate] ?? 0;
-            spendMap[tx.transactionDate] = Math.max(0, existing + signedAmt);
-          });
+          const spendMap = buildDailySpendMap(goldTxs);
           setDailySpendMap(spendMap);
 
           // Build daily transactions map for the per-day popup
-          const txMap: Record<string, any[]> = {};
-          goldTxs.forEach((tx: any) => {
-            if (tx.transactionType === 'transfer') return;
-            if (tx.transactionType === 'fixed') return;
-            const date = tx.transactionDate;
-            if (!txMap[date]) txMap[date] = [];
-            txMap[date].push(tx);
-          });
+          const txMap = buildDailyTransactionsMap(goldTxs);
           setDailyTransactionsMap(txMap);
 
           // Calculate top 3 categories overall and top 3 categories in cycle
-          const overallCategoryMap: { [key: string]: { [curr: string]: number } } = {};
-          const cycleCategoryMap: { [key: string]: { [curr: string]: number } } = {};
+          const overallCategoryMap = calculateCategorySpend(goldTxs);
+          const cycleTxs = goldTxs.filter((tx: any) => tx.transactionDate >= range.start && tx.transactionDate <= range.end);
+          const cycleCategoryMap = calculateCategorySpend(cycleTxs);
 
-          goldTxs.forEach((tx: any) => {
-            if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return;
-            const amt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
-            const cat = tx.category || 'Other';
-            const curr = tx.currency || 'INR';
-
-            // Overall aggregation
-            if (!overallCategoryMap[cat]) overallCategoryMap[cat] = {};
-            overallCategoryMap[cat][curr] = (overallCategoryMap[cat][curr] || 0) + amt;
-
-            // Cycle aggregation
-            if (tx.transactionDate >= range.start && tx.transactionDate <= range.end) {
-              if (!cycleCategoryMap[cat]) cycleCategoryMap[cat] = {};
-              cycleCategoryMap[cat][curr] = (cycleCategoryMap[cat][curr] || 0) + amt;
-            }
-          });
-
-          const getTopCategories = (catMap: typeof overallCategoryMap) => {
-            const list = Object.entries(catMap).map(([category, currMap]) => {
-              const sortedCurrs = Object.entries(currMap)
-                .map(([currency, amount]) => ({ currency, amount }))
-                .sort((a, b) => b.amount - a.amount);
-              const primary = sortedCurrs[0] || { currency: 'INR', amount: 0 };
-              return {
-                category,
-                currency: primary.currency,
-                amount: Math.max(0, primary.amount),
-              };
-            });
-            return list.sort((a, b) => b.amount - a.amount).slice(0, 3);
-          };
-
-          setTopOverallCategories(getTopCategories(overallCategoryMap));
-          setTopCycleCategories(getTopCategories(cycleCategoryMap));
+          setTopOverallCategories(getTopSpendingCategories(overallCategoryMap, 3));
+          setTopCycleCategories(getTopSpendingCategories(cycleCategoryMap, 3));
 
           setIsLoading(false);
         })
@@ -279,7 +230,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
 
   const maxWeeklyAmount = Math.max(...weeklyTrendData.map(d => d.amount), 100);
   const totalTrendSpend = weeklyTrendData.reduce((sum, d) => sum + d.amount, 0);
-  const averageDailySpend = weeklyTrendData.length > 0 ? totalTrendSpend / weeklyTrendData.length : 0;
+  const averageDailySpend = calculateAverageDailySpend(totalTrendSpend, weeklyTrendData.length);
 
   const todayStr = React.useMemo(() => {
     const d = new Date();
@@ -317,40 +268,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
       const currentDates = getDatesInRange(currentStart, currentEnd);
 
       const getDailySpends = (datesList: string[], isCurrent: boolean, cycleObj?: any) => {
-        let cumulativeSum = 0;
-        let totalSum = 0;
         const cycleTxs = cycleObj ? filterTransactionsByCycle(goldTransactions, cycleObj) : goldTransactions;
-
-        const data = datesList.map((dateStr) => {
-          if (isCurrent && dateStr > todayStr) {
-            return { date: dateStr, amount: null };
-          }
-
-          const amount = cycleTxs
-            .filter((tx: any) => {
-              if (tx.transactionDate !== dateStr) return false;
-              if (tx.transactionType === 'transfer') return false;
-              if (tx.transactionType === 'fixed') return false;
-              
-              const pm = tx.paymentMethod || 'Unknown';
-              return selectedPaymentMethods.includes(pm);
-            })
-            .reduce((sum: number, tx: any) => {
-              const signedAmt = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
-              return sum + signedAmt;
-            }, 0);
-
-          const dailyVal = Math.max(0, amount);
-          totalSum += dailyVal;
-          
-          if (chartViewMode === 'cumulative') {
-            cumulativeSum += dailyVal;
-            return { date: dateStr, amount: cumulativeSum };
-          }
-          return { date: dateStr, amount: dailyVal };
+        const series = calculateDailySpendSeries(cycleTxs, datesList, {
+          selectedPaymentMethods,
+          isCumulative: chartViewMode === 'cumulative',
+          todayLimit: isCurrent ? todayStr : undefined,
         });
 
-        return { spends: data, total: totalSum };
+        return { spends: series.spends, total: series.total };
       };
 
       const currentData = getDailySpends(currentDates, true, currCycle);
@@ -720,10 +645,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           const dayTxs = dailyTransactionsMap[selectedCalendarDate] ?? [];
           const [year, mon, day] = selectedCalendarDate.split('-');
           const dayLabel = `${day}/${mon}/${year}`;
-          const dayTotal = dayTxs.reduce((sum: number, tx: any) => {
-            const signed = tx.transactionType === 'refund' ? -tx.amount : tx.amount;
-            return sum + signed;
-          }, 0);
+          const dayTotal = calculateCycleSpendTotal(dayTxs);
 
           return (
             <div

@@ -7,12 +7,19 @@ import { filterTransactionsByCycle, getExpectedCycleEnd } from '../utils/cycle-h
 import { getApiUrl } from '../utils/api-config';
 import {
   calculateDiscretionarySpend,
+  calculateDaySpend,
   calculateRunRateForecast,
   calculateNetSavings,
   calculateDayOfMonthPeaks,
   calculateDayOfWeekPeaks,
   detectRecurringBills,
-  getDaysDiff
+  getDaysDiff,
+  calculateTotalFixedCharges,
+  calculateRecurringMonthlyBurden,
+  calculateBurdenSalaryPercentage,
+  calculatePeakAverages,
+  getPeakPercentDeviationText,
+  orderDOMPeaksByBillingCycle,
 } from '../utils/analytics-helper';
 
 import type {
@@ -20,7 +27,7 @@ import type {
   DayPeakPoint,
   DayOfWeekPeakPoint,
   RecurringBillPrediction,
-  DetectionFrequency
+  DetectionFrequency,
 } from '../utils/analytics-helper';
 
 // Helpers for recurring bills formatting
@@ -151,20 +158,19 @@ const FinancialAnalytics: React.FC = () => {
   const cycleFilteredTxs = currentCycle ? filterTransactionsByCycle(transactions, currentCycle) : transactions;
 
   // Compute active fixed charges and net savings forecast
-  const activeFixedCharges = (fixedCharges || []).filter((fc: any) => {
-    return fc.startDate <= cycleRange.end && fc.endDate >= cycleRange.start;
-  });
-  const totalFixedCharges = activeFixedCharges.reduce((sum: number, fc: any) => sum + fc.amount, 0);
+  const totalFixedCharges = calculateTotalFixedCharges(fixedCharges, cycleRange);
 
   // Computations
   const discretionarySpent = calculateDiscretionarySpend(cycleFilteredTxs, cycleRange.start, cycleRange.end);
+  const spentToday = calculateDaySpend(cycleFilteredTxs, todayStr);
   const forecast: RunRateForecastResult = calculateRunRateForecast(
     discretionarySpent,
     expectedSalary,
     targetBudgetPercent,
     cycleRange,
     todayStr,
-    totalFixedCharges
+    totalFixedCharges,
+    spentToday
   );
 
   const dayOfMonthPeaks: DayPeakPoint[] = calculateDayOfMonthPeaks(transactions);
@@ -174,8 +180,8 @@ const FinancialAnalytics: React.FC = () => {
   const recurringBills: RecurringBillPrediction[] = detectRecurringBills(transactions, todayStr, detectionFrequency);
 
   // Calculate monthly burden total (normalizing weekly/quarterly charges to a monthly rate)
-  const monthlyBurdenTotal = recurringBills.reduce((sum, bill) => sum + (bill.averageAmount * (30 / bill.frequencyDays)), 0);
-  const monthlyBurdenPercent = expectedSalary > 0 ? (monthlyBurdenTotal / expectedSalary) * 100 : 0;
+  const monthlyBurdenTotal = calculateRecurringMonthlyBurden(recurringBills);
+  const monthlyBurdenPercent = calculateBurdenSalaryPercentage(monthlyBurdenTotal, expectedSalary);
 
   // Currency formatting helper
   const formatCurrency = (val: number) => {
@@ -197,25 +203,13 @@ const FinancialAnalytics: React.FC = () => {
   const maxDOWAmount = Math.max(...dayOfWeekPeaks.map(p => p.amount), 1);
 
   // Order Day of Month peaks chronologically by billing cycle
-  const cycleOrderedDOMPeaks = [
-    ...dayOfMonthPeaks.filter(p => p.day >= billingCycleStartDay),
-    ...dayOfMonthPeaks.filter(p => p.day < billingCycleStartDay)
-  ];
+  const cycleOrderedDOMPeaks = orderDOMPeaksByBillingCycle(dayOfMonthPeaks, billingCycleStartDay);
 
   // Calculate average daily outflows
-  const totalDOMAmount = dayOfMonthPeaks.reduce((sum, p) => sum + p.amount, 0);
-  const avgDOMAmount = totalDOMAmount / 31;
-
-  const totalDOWAmount = dayOfWeekPeaks.reduce((sum, p) => sum + p.amount, 0);
-  const avgDOWAmount = totalDOWAmount / 7;
+  const { avgDOMAmount, avgDOWAmount } = calculatePeakAverages(dayOfMonthPeaks, dayOfWeekPeaks);
 
   // Percentage variance calculation helper
-  const getPercentDiffText = (amount: number, avg: number) => {
-    if (avg <= 0) return '';
-    const diffPct = Math.round(((amount - avg) / avg) * 100);
-    if (diffPct === 0) return ' (Avg)';
-    return ` (${diffPct > 0 ? '+' : ''}${diffPct}% vs Avg)`;
-  };
+  const getPercentDiffText = (amount: number, avg: number) => getPeakPercentDeviationText(amount, avg);
 
   // Weekend bias format helper
   const getWeekendBiasText = (amount: number, weekendAmount: number) => {

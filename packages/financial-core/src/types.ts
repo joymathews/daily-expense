@@ -153,3 +153,23 @@ export interface SalaryAllocationResult {
   allocationTransactions: FinancialTransaction[];
   bankDebitTotal: number;
 }
+
+export type CategorySpendMap = Record<string, Record<string, number>>;
+
+export interface CategorySpendItem {
+  category: string;
+  currency: string;
+  amount: number;
+}
+
+export interface DailySpendSeriesResult {
+  spends: Array<{ date: string; amount: number | null }>;
+  total: number;
+}
+
+export interface PeakAveragesResult {
+  totalDOMAmount: number;
+  avgDOMAmount: number;
+  totalDOWAmount: number;
+  avgDOWAmount: number;
+}

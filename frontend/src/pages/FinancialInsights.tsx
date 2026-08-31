@@ -12,7 +12,10 @@ import {
   calculateDayOfWeekPeaks,
   detectRecurringBills,
   generateSavingsRecommendations,
-  DEFAULT_INSIGHTS_CONFIG
+  DEFAULT_INSIGHTS_CONFIG,
+  calculateTotalFixedCharges,
+  calculateTargetBudget,
+  calculateTotalPotentialSavings,
 } from '../utils/analytics-helper';
 import type {
   RunRateForecastResult,
@@ -20,7 +23,7 @@ import type {
   DayOfWeekPeakPoint,
   RecurringBillPrediction,
   SavingsRecommendation,
-  InsightsConfig
+  InsightsConfig,
 } from '../utils/analytics-helper';
 
 const FinancialInsights: React.FC = () => {
@@ -132,10 +135,7 @@ const FinancialInsights: React.FC = () => {
 
   const cycleFilteredTxs = filterTransactionsByCycle(transactions, currentCycle);
 
-  const activeFixedCharges = (fixedCharges || []).filter((fc: any) => {
-    return fc.startDate <= cycleRange.end && fc.endDate >= cycleRange.start;
-  });
-  const totalFixedCharges = activeFixedCharges.reduce((sum: number, fc: any) => sum + fc.amount, 0);
+  const totalFixedCharges = calculateTotalFixedCharges(fixedCharges, cycleRange);
 
   const discretionarySpend = calculateDiscretionarySpend(cycleFilteredTxs, cycleRange.start, cycleRange.end);
 
@@ -143,7 +143,7 @@ const FinancialInsights: React.FC = () => {
   // Read target budget percent slider value (default 50)
   const savedPercent = localStorage.getItem('analytics_target_budget_percent');
   const targetBudgetPercent = savedPercent ? parseInt(savedPercent, 10) : 50;
-  const targetBudget = (expectedSalary * targetBudgetPercent) / 100;
+  const targetBudget = calculateTargetBudget(expectedSalary, targetBudgetPercent);
 
   const forecast: RunRateForecastResult = calculateRunRateForecast(
     discretionarySpend,
@@ -188,7 +188,7 @@ const FinancialInsights: React.FC = () => {
   );
 
   // Sum potential savings of active recommendations
-  const totalPotentialSavings = recommendations.reduce((sum, r) => sum + r.potentialSavings, 0);
+  const totalPotentialSavings = calculateTotalPotentialSavings(recommendations);
 
   // Filter recommendations based on active filter
   const filteredRecs = recommendations.filter(r => {

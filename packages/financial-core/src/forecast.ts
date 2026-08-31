@@ -10,7 +10,8 @@ export const calculateRunRateForecast = (
   targetBudgetPercent: number,
   cycleRange: CycleRange,
   todayStr: string,
-  totalFixedCharges?: number
+  totalFixedCharges?: number,
+  spentToday?: number
 ): RunRateForecastResult => {
   const targetBudget = Math.round(expectedSalary * (targetBudgetPercent / 100));
   const sustainableCap = Math.max(0, expectedSalary - (totalFixedCharges || 0));
@@ -21,11 +22,19 @@ export const calculateRunRateForecast = (
   if (todayStr < cycleRange.start) adjustedToday = cycleRange.start;
   if (todayStr > cycleRange.end) adjustedToday = cycleRange.end;
   
-  const elapsedDays = getDaysDiff(cycleRange.start, adjustedToday) || 1;
-  const remainingDays = Math.max(0, totalDays - elapsedDays);
+  // Elapsed completed days strictly before today (0 on Day 1)
+  const elapsedDays = Math.max(0, getDaysDiff(cycleRange.start, adjustedToday) - 1);
+  // Remaining future days after today (0 on the final day)
+  const remainingDays = Math.max(0, totalDays - elapsedDays - 1);
   
-  const dailyVelocity = Math.max(0, discretionarySpend / elapsedDays);
-  const projectedSpend = Math.round(dailyVelocity * totalDays);
+  // Daily velocity: past spend / completed days (or today's initial spend on Day 1)
+  const pastSpend = Math.max(0, discretionarySpend - (spentToday || 0));
+  const dailyVelocity = elapsedDays > 0
+    ? pastSpend / elapsedDays
+    : (spentToday !== undefined ? spentToday : discretionarySpend);
+
+  // Projected end-of-cycle spend: total spend to date + (daily velocity * future remaining days)
+  const projectedSpend = Math.round(discretionarySpend + (dailyVelocity * remainingDays));
   
   // Exceeding if actual projected spend exceeds self-imposed cap OR sustainable cap (to prevent deficit)
   const isExceeding = projectedSpend > targetBudget || projectedSpend > sustainableCap;
@@ -134,5 +143,36 @@ export const calculateNetSavings = (
   const netSavingsTarget = (expectedSalary || 0) - (totalFixedCharges || 0) - (targetBudget || 0);
   const netSavingsProjected = (expectedSalary || 0) - (totalFixedCharges || 0) - (projectedSpend || 0);
   return { netSavingsTarget, netSavingsProjected };
+};
+
+/**
+ * Calculates target budget based on monthly expected salary and target percent.
+ */
+export const calculateTargetBudget = (expectedSalary: number, targetBudgetPercent: number): number => {
+  return Math.round((Number(expectedSalary) || 0) * ((Number(targetBudgetPercent) || 0) / 100));
+};
+
+/**
+ * Derives the effective spending budget limit given target budget and sustainable cap.
+ */
+export const calculateEffectiveBudgetLimit = (targetBudget: number, sustainableCap?: number): number => {
+  if (sustainableCap === undefined || isNaN(sustainableCap)) return targetBudget;
+  return Math.min(targetBudget, sustainableCap);
+};
+
+/**
+ * Computes percentage of budget limit consumed (0 to 100%).
+ */
+export const calculateBudgetPercentConsumed = (discretionarySpent: number, effectiveLimit: number): number => {
+  if (effectiveLimit <= 0) return 0;
+  return Math.min(100, Math.round((Math.max(0, discretionarySpent) / effectiveLimit) * 100));
+};
+
+/**
+ * Calculates the average daily spend over a period.
+ */
+export const calculateAverageDailySpend = (totalSpend: number, dayCount: number): number => {
+  if (!dayCount || dayCount <= 0) return 0;
+  return totalSpend / dayCount;
 };
 

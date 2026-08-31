@@ -10,6 +10,9 @@ import {
   filterTransactionsByCycle,
   formatCurrency,
   formatDate,
+  calculateTotalFixedCharges,
+  calculateEffectiveBudgetLimit,
+  calculateBudgetPercentConsumed,
   FinancialTransaction,
   UserCycle,
   FixedCharge,
@@ -85,9 +88,7 @@ export const SummaryCompass: React.FC = () => {
   const cycleTxs = activeCycle ? filterTransactionsByCycle(transactions, activeCycle) : transactions;
 
   // Active Fixed Charges
-  const totalFixedCharges = fixedCharges
-    .filter((fc) => fc.startDate <= cycleRange.end && fc.endDate >= cycleRange.start)
-    .reduce((sum, fc) => sum + (Number(fc.amount) || 0), 0);
+  const totalFixedCharges = calculateTotalFixedCharges(fixedCharges, cycleRange);
 
   // Spend Calculations
   const discretionarySpent = calculateDiscretionarySpend(cycleTxs, cycleRange.start, cycleRange.end);
@@ -100,10 +101,11 @@ export const SummaryCompass: React.FC = () => {
     targetBudgetPercent,
     cycleRange,
     todayStr,
-    totalFixedCharges
+    totalFixedCharges,
+    spentToday
   );
 
-  const effectiveLimit = Math.min(forecast.targetBudget, forecast.sustainableCap || forecast.targetBudget);
+  const effectiveLimit = calculateEffectiveBudgetLimit(forecast.targetBudget, forecast.sustainableCap);
 
   // Real-Time Net Salary Surplus (Savings)
   const { netSavingsTarget, netSavingsProjected } = calculateNetSavings(
@@ -122,7 +124,7 @@ export const SummaryCompass: React.FC = () => {
     todayStr
   );
 
-  const percentConsumed = effectiveLimit > 0 ? Math.min(100, Math.round((discretionarySpent / effectiveLimit) * 100)) : 0;
+  const percentConsumed = calculateBudgetPercentConsumed(discretionarySpent, effectiveLimit);
 
   return (
     <div className="max-w-md mx-auto px-4 pt-3 pb-20 space-y-3" data-testid="mobile-summary-compass">
