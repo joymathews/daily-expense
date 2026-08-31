@@ -39,6 +39,7 @@
 - [NFR-LLM-1] Swap-Ready LLM Ingress: The application must support running a local model on the user's machine during development and switching to cloud-hosted intelligence APIs via configurations without code modifications.
 - [NFR-LLM-4] Extraction Service Availability Probing & Resiliency: The LLM extraction client must support fast availability probing (`isAvailable()`) with a 1500ms timeout threshold. When the remote microservice is offline or unreachable, API routes must respond with HTTP status `503 Service Unavailable` and standard error code `LLM_SERVICE_UNAVAILABLE`, preventing internal server crashes.
 - [NFR-ARCH-2] Medallion Separation: The database architecture must strictly isolate Bronze, Silver, and Gold structures, ensuring clean transition actions on user verification.
+- [NFR-ARCH-3] Financial Core Domain Isolation & Calculation Consistency: All financial calculations, metric aggregations, run-rate projections, burn rates, and pattern analytics must be encapsulated in the platform-agnostic `@daily-expense/financial-core` shared library with zero React or DOM coupling, guaranteeing zero calculation drift and sub-millisecond execution times across web and mobile runtimes.
 
 ## Usability [NFR-USAB]
 - [NFR-USAB-1] Ingestion Status Feedback: The UI must clearly indicate the processing status of each raw email within 100ms of loading the Raw Emails list to prevent cognitive load and redundant user attempts.

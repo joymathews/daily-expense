@@ -144,6 +144,7 @@
   * **Reset to Defaults:** The user must be able to instantly restore all calibration thresholds back to factory baselines.
   * **Multi-Splurge Category & Frequency Traps:** The system must loop through all matching transaction categories and the top 3 high-frequency merchants to display multiple cards warning the user of repeat spending patterns, rather than truncating at the top single item.
   * **Savings Banner:** The user must see an aggregate banner totaling the potential cycle savings from all active recommendations.
+- [FUNC-ANALYSIS-21] Unified Cross-Platform Financial Core Engine: The user must experience consistent, drift-free financial metrics, forecasts, cycle spends, daily burn rates, category rankings, fixed charges summaries, and pattern analytics across both desktop and mobile platforms, powered strictly by a shared calculations engine without inline calculation discrepancies.
 
 ## Database Raw Table Viewer [FUNC-DB-VIEWER]
 - [FUNC-DB-VIEWER-1] Database Viewer Navigation & Interface: The user must be able to navigate to a dedicated Database Raw Table Viewer page via a link labeled "Database" in the primary navigation header bar (`/database`).

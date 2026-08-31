@@ -7,7 +7,10 @@ import { MultiSelect } from '../components/MultiSelect';
 import {
   getSignedAmount,
   computeDailySpendTimeline,
-  formatLocalTransactionTime
+  formatLocalTransactionTime,
+  calculateCategorySpend,
+  calculateCurrencyTotals,
+  calculateAverageDailySpend,
 } from '../utils/transaction-helper';
 import { BatchEditModal } from '../components/gmail/BatchEditModal';
 import { useUserCycles } from '../hooks/use-user-cycles';
@@ -234,19 +237,7 @@ const GoldTransactions: React.FC = () => {
 
   // Calculate dynamic spend aggregates for filtered transactions
   // Group by category, then currency (excluding transfers, refund acts as negative offset)
-  const categorySpendTotals = sortedTransactions.reduce((acc, tx) => {
-    if (tx.transactionType === 'transfer') return acc;
-    
-    const cat = tx.category || 'Other';
-    const cur = tx.currency.toUpperCase();
-    const amount = getSignedAmount(tx);
-    
-    if (!acc[cat]) {
-      acc[cat] = {};
-    }
-    acc[cat][cur] = (acc[cat][cur] || 0) + amount;
-    return acc;
-  }, {} as Record<string, Record<string, number>>);
+  const categorySpendTotals = calculateCategorySpend(sortedTransactions);
 
   const visibleCategories = Object.keys(categorySpendTotals).filter(
     cat => !hiddenCategories.includes(cat)
@@ -257,11 +248,7 @@ const GoldTransactions: React.FC = () => {
   });
 
   // 3. Compute currency totals
-  const currencyTotals = sortedTransactions.reduce((acc, tx) => {
-    const cur = tx.currency.toUpperCase();
-    acc[cur] = (acc[cur] || 0) + getSignedAmount(tx);
-    return acc;
-  }, {} as Record<string, number>);
+  const currencyTotals = calculateCurrencyTotals(sortedTransactions);
 
 
   const getTimelineDateRange = () => {
@@ -769,7 +756,7 @@ const GoldTransactions: React.FC = () => {
 
                     // Calculate Average daily spend
                     const totalSpend = chartPoints.reduce((sum, p) => sum + p.amount, 0);
-                    const averageDailySpend = chartPoints.length > 0 ? totalSpend / chartPoints.length : 0;
+                    const averageDailySpend = calculateAverageDailySpend(totalSpend, chartPoints.length);
                     const averageY = maxDailyAmount > 0 ? chartMaxY - (averageDailySpend / maxDailyAmount) * chartHeight : chartMaxY;
 
                     // Calculate Linear Regression Trend (y = mx + c)

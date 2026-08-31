@@ -6,8 +6,9 @@ import {
   DetectionFrequency,
   SavingsRecommendation,
   InsightsConfig,
+  PeakAveragesResult,
 } from './types';
-import { isCreditCardPayment } from './transactions';
+import { isCreditCardPayment, getSignedAmount } from './transactions';
 
 export const DEFAULT_INSIGHTS_CONFIG: InsightsConfig = {
   weekendPctThreshold: 50,
@@ -497,4 +498,91 @@ export const generateSavingsRecommendations = (
   }
 
   return recommendations;
+};
+
+/**
+ * Normalizes recurring bills (weekly, biweekly, monthly) to a 30-day monthly burden sum.
+ */
+export const calculateRecurringMonthlyBurden = (
+  recurringBills: RecurringBillPrediction[]
+): number => {
+  if (!Array.isArray(recurringBills)) return 0;
+  return recurringBills.reduce((sum, bill) => {
+    const freqDays = bill.frequencyDays > 0 ? bill.frequencyDays : 30;
+    return sum + (bill.averageAmount * (30 / freqDays));
+  }, 0);
+};
+
+/**
+ * Computes the percentage of expected monthly salary consumed by recurring bills burden.
+ */
+export const calculateBurdenSalaryPercentage = (
+  monthlyBurdenTotal: number,
+  expectedSalary: number
+): number => {
+  if (!expectedSalary || expectedSalary <= 0) return 0;
+  return (monthlyBurdenTotal / expectedSalary) * 100;
+};
+
+/**
+ * Calculates baseline averages for day of month (31 days) and day of week (7 days) peaks.
+ */
+export const calculatePeakAverages = (
+  dayOfMonthPeaks: DayPeakPoint[] = [],
+  dayOfWeekPeaks: DayOfWeekPeakPoint[] = []
+): PeakAveragesResult => {
+  const totalDOMAmount = (dayOfMonthPeaks || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+  const avgDOMAmount = totalDOMAmount / 31;
+
+  const totalDOWAmount = (dayOfWeekPeaks || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+  const avgDOWAmount = totalDOWAmount / 7;
+
+  return {
+    totalDOMAmount,
+    avgDOMAmount,
+    totalDOWAmount,
+    avgDOWAmount,
+  };
+};
+
+/**
+ * Calculates percentage deviation of an amount from a baseline average.
+ */
+export const calculatePeakPercentDeviation = (amount: number, average: number): number => {
+  if (average <= 0) return 0;
+  return Math.round(((amount - average) / average) * 100);
+};
+
+/**
+ * Formats text for percentage variance relative to average (e.g. " (+45% vs Avg)", " (-20% vs Avg)", or " (Avg)").
+ */
+export const getPeakPercentDeviationText = (amount: number, average: number): string => {
+  if (average <= 0) return '';
+  const diffPct = calculatePeakPercentDeviation(amount, average);
+  if (diffPct === 0) return ' (Avg)';
+  return ` (${diffPct > 0 ? '+' : ''}${diffPct}% vs Avg)`;
+};
+
+/**
+ * Re-indexes day of month peaks chronologically starting from billing cycle start day.
+ */
+export const orderDOMPeaksByBillingCycle = (
+  dayOfMonthPeaks: DayPeakPoint[] = [],
+  billingCycleStartDay: number = 17
+): DayPeakPoint[] => {
+  if (!Array.isArray(dayOfMonthPeaks)) return [];
+  return [
+    ...dayOfMonthPeaks.filter((p) => p.day >= billingCycleStartDay),
+    ...dayOfMonthPeaks.filter((p) => p.day < billingCycleStartDay),
+  ];
+};
+
+/**
+ * Computes sum total of potential savings across recommendations.
+ */
+export const calculateTotalPotentialSavings = (
+  recommendations: SavingsRecommendation[] = []
+): number => {
+  if (!Array.isArray(recommendations)) return 0;
+  return recommendations.reduce((sum, r) => sum + (Number(r.potentialSavings) || 0), 0);
 };

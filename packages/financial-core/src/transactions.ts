@@ -1,4 +1,4 @@
-import { FinancialTransaction, FixedCharge, DailyTrendPoint, SalaryAllocationResult } from './types';
+import { FinancialTransaction, FixedCharge, DailyTrendPoint, SalaryAllocationResult, CategorySpendItem } from './types';
 import { getDatesInRange } from './cycles';
 
 export const STANDARD_CATEGORIES = [
@@ -263,4 +263,181 @@ export const computeSalaryAllocation = (
     allocationTransactions,
     bankDebitTotal,
   };
+};
+
+/**
+ * Filters fixed charges that are active within a given cycle range.
+ */
+export const filterActiveFixedCharges = (
+  fixedCharges?: FixedCharge[] | null,
+  cycleRange?: { start: string; end: string }
+): FixedCharge[] => {
+  if (!fixedCharges || !Array.isArray(fixedCharges)) return [];
+  if (!cycleRange || !cycleRange.start || !cycleRange.end) return fixedCharges;
+  return fixedCharges.filter((fc) => fc.startDate <= cycleRange.end && fc.endDate >= cycleRange.start);
+};
+
+/**
+ * Computes the total sum of fixed charges active within a given cycle range.
+ */
+export const calculateTotalFixedCharges = (
+  fixedCharges?: FixedCharge[] | null,
+  cycleRange?: { start: string; end: string }
+): number => {
+  const active = filterActiveFixedCharges(fixedCharges, cycleRange);
+  return active.reduce((sum, fc) => sum + (Number(fc.amount) || 0), 0);
+};
+
+/**
+ * Aggregates transactions by category and sub-aggregates by currency.
+ * Excludes transfers and fixed charges, and accounts for refund offsets.
+ */
+export const calculateCategorySpend = (
+  transactions: FinancialTransaction[]
+): Record<string, Record<string, number>> => {
+  if (!Array.isArray(transactions)) return {};
+  return transactions.reduce((acc, tx) => {
+    if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return acc;
+    const cat = tx.category || 'Other';
+    const cur = (tx.currency || 'INR').toUpperCase();
+    const amt = getSignedAmount(tx);
+    if (!acc[cat]) {
+      acc[cat] = {};
+    }
+    acc[cat][cur] = (acc[cat][cur] || 0) + amt;
+    return acc;
+  }, {} as Record<string, Record<string, number>>);
+};
+
+/**
+ * Extracts and sorts the top N spending categories from a category spend map.
+ */
+export const getTopSpendingCategories = (
+  categoryMap: Record<string, Record<string, number>>,
+  limit: number = 3
+): CategorySpendItem[] => {
+  if (!categoryMap || typeof categoryMap !== 'object') return [];
+  const list: CategorySpendItem[] = Object.entries(categoryMap).map(([category, currMap]) => {
+    const sortedCurrs = Object.entries(currMap || {})
+      .map(([currency, amount]) => ({ currency, amount }))
+      .sort((a, b) => b.amount - a.amount);
+    const primary = sortedCurrs[0] || { currency: 'INR', amount: 0 };
+    return {
+      category,
+      currency: primary.currency,
+      amount: Math.max(0, primary.amount),
+    };
+  });
+  return list.sort((a, b) => b.amount - a.amount).slice(0, limit);
+};
+
+/**
+ * Calculates sum totals grouped by currency for a list of transactions.
+ * Excludes transfers and fixed charges, treating refunds as negative offsets.
+ */
+export const calculateCurrencyTotals = (
+  transactions: FinancialTransaction[]
+): Record<string, number> => {
+  if (!Array.isArray(transactions)) return {};
+  return transactions.reduce((acc, tx) => {
+    if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return acc;
+    const cur = (tx.currency || 'INR').toUpperCase();
+    acc[cur] = (acc[cur] || 0) + getSignedAmount(tx);
+    return acc;
+  }, {} as Record<string, number>);
+};
+
+/**
+ * Computes net total spend across transactions excluding transfers and fixed charges.
+ */
+export const calculateCycleSpendTotal = (
+  transactions: FinancialTransaction[]
+): number => {
+  if (!Array.isArray(transactions)) return 0;
+  return transactions.reduce((acc, tx) => {
+    if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return acc;
+    return acc + getSignedAmount(tx);
+  }, 0);
+};
+
+/**
+ * Builds a map of date string -> total spend amount for all recorded dates.
+ */
+export const buildDailySpendMap = (
+  transactions: FinancialTransaction[]
+): Record<string, number> => {
+  if (!Array.isArray(transactions)) return {};
+  const map: Record<string, number> = {};
+  transactions.forEach((tx) => {
+    if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return;
+    const signedAmt = getSignedAmount(tx);
+    const existing = map[tx.transactionDate] ?? 0;
+    map[tx.transactionDate] = Math.max(0, existing + signedAmt);
+  });
+  return map;
+};
+
+/**
+ * Builds a map of date string -> array of transactions for daily popup inspection.
+ */
+export const buildDailyTransactionsMap = (
+  transactions: FinancialTransaction[]
+): Record<string, FinancialTransaction[]> => {
+  if (!Array.isArray(transactions)) return {};
+  const map: Record<string, FinancialTransaction[]> = {};
+  transactions.forEach((tx) => {
+    if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return;
+    const date = tx.transactionDate;
+    if (!map[date]) map[date] = [];
+    map[date].push(tx);
+  });
+  return map;
+};
+
+/**
+ * Computes discrete or cumulative daily spend data points across a list of dates.
+ */
+export const calculateDailySpendSeries = (
+  transactions: FinancialTransaction[],
+  datesList: string[],
+  options?: {
+    selectedPaymentMethods?: string[];
+    isCumulative?: boolean;
+    todayLimit?: string;
+  }
+): { spends: Array<{ date: string; amount: number | null }>; total: number } => {
+  let cumulativeSum = 0;
+  let totalSum = 0;
+  const selectedPMs = options?.selectedPaymentMethods;
+  const isCumulative = options?.isCumulative ?? false;
+  const todayLimit = options?.todayLimit;
+
+  const spends = datesList.map((dateStr) => {
+    if (todayLimit && dateStr > todayLimit) {
+      return { date: dateStr, amount: null };
+    }
+
+    const amount = transactions
+      .filter((tx) => {
+        if (tx.transactionDate !== dateStr) return false;
+        if (tx.transactionType === 'transfer' || tx.transactionType === 'fixed') return false;
+        if (selectedPMs !== undefined) {
+          const pm = tx.paymentMethod || 'Unknown';
+          if (!selectedPMs.includes(pm)) return false;
+        }
+        return true;
+      })
+      .reduce((sum, tx) => sum + getSignedAmount(tx), 0);
+
+    const dailyVal = Math.max(0, amount);
+    totalSum += dailyVal;
+
+    if (isCumulative) {
+      cumulativeSum += dailyVal;
+      return { date: dateStr, amount: cumulativeSum };
+    }
+    return { date: dateStr, amount: dailyVal };
+  });
+
+  return { spends, total: totalSum };
 };

@@ -136,3 +136,34 @@ export const calculateNetSavings = (
   return { netSavingsTarget, netSavingsProjected };
 };
 
+/**
+ * Calculates target budget based on monthly expected salary and target percent.
+ */
+export const calculateTargetBudget = (expectedSalary: number, targetBudgetPercent: number): number => {
+  return Math.round((Number(expectedSalary) || 0) * ((Number(targetBudgetPercent) || 0) / 100));
+};
+
+/**
+ * Derives the effective spending budget limit given target budget and sustainable cap.
+ */
+export const calculateEffectiveBudgetLimit = (targetBudget: number, sustainableCap?: number): number => {
+  if (sustainableCap === undefined || isNaN(sustainableCap)) return targetBudget;
+  return Math.min(targetBudget, sustainableCap);
+};
+
+/**
+ * Computes percentage of budget limit consumed (0 to 100%).
+ */
+export const calculateBudgetPercentConsumed = (discretionarySpent: number, effectiveLimit: number): number => {
+  if (effectiveLimit <= 0) return 0;
+  return Math.min(100, Math.round((Math.max(0, discretionarySpent) / effectiveLimit) * 100));
+};
+
+/**
+ * Calculates the average daily spend over a period.
+ */
+export const calculateAverageDailySpend = (totalSpend: number, dayCount: number): number => {
+  if (!dayCount || dayCount <= 0) return 0;
+  return totalSpend / dayCount;
+};
+

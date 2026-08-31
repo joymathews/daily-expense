@@ -4,7 +4,7 @@ import {
   formatCurrency,
   formatDate,
   getActiveCycleRange,
-  getSignedAmount,
+  calculateCycleSpendTotal,
   FinancialTransaction,
 } from '@daily-expense/financial-core';
 
@@ -460,10 +460,7 @@ export const GoldLedger: React.FC = () => {
             <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Cycle Spend</span>
             <span className="text-sm font-black text-slate-900 Outfit" data-testid="cycle-spend-total">
               {formatCurrency(
-                filteredTxs.reduce((acc, tx) => {
-                  if (tx.transactionType === 'transfer') return acc;
-                  return acc + getSignedAmount(tx);
-                }, 0),
+                calculateCycleSpendTotal(filteredTxs),
                 filteredTxs[0]?.currency || 'INR'
               )}
             </span>
