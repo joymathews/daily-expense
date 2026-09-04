@@ -129,6 +129,18 @@ export interface ITransactionRepository {
   approvePendingTransactionsBatch(silverIds: string[], userId: string): Promise<string[]>;
   updatePendingTransactionsBatch(ids: string[], userId: string, updates: Partial<PendingTransaction>): Promise<void>;
   updateGoldTransactionsBatch(ids: string[], userId: string, updates: Partial<Transaction>): Promise<void>;
+  getPipelineSummaryStats(userId: string): Promise<PipelineSummaryStats>;
+}
+
+export interface PipelineSummaryStats {
+  bronzeCount: number;
+  bronzeProcessedCount: number;
+  bronzeUnprocessedCount: number;
+  bronzeRejectedCount: number;
+  silverCount: number;
+  silverRejectedCount: number;
+  goldCount: number;
+  goldTotalAmount: number;
 }
 
 export interface CycleOverrideData {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
-import { useGmailIntegration } from '../hooks/use-gmail-integration';
 import {
   computeSalaryAllocation,
   getDatesInRange,
@@ -27,7 +26,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
-  const { llmAccuracyStats } = useGmailIntegration();
+  const [llmAccuracyStats, setLlmAccuracyStats] = useState<any>(null);
   const { cycles, activeCycle, selectedCycle, setSelectedCycle, setCycleOverride, removeCycleOverride } = useUserCycles();
   const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
 
@@ -50,6 +49,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     current: true,
   });
   const [selectedOffsets, setSelectedOffsets] = useState<number[]>([1]);
+  const [historicalCyclesMap, setHistoricalCyclesMap] = useState<Record<string, any[]>>({});
   const [isCycleDropdownOpen, setIsCycleDropdownOpen] = useState(false);
   const [chartViewMode, setChartViewMode] = useState<'daily' | 'cumulative'>('cumulative');
   const [hoveredCompPoint, setHoveredCompPoint] = useState<any | null>(null);
@@ -128,88 +128,98 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         console.warn('Failed to fetch auth session (normal in tests):', err);
       }
 
+      // [FUNC-DASH-PERF-1], [FUNC-PIPE-STATS-1], [NFR-PERF-11], [NFR-PERF-12]
+      // Fetch user preferences, fixed charges, summary stats, LLM accuracy stats, and gold transactions in parallel
       Promise.all([
-        fetch(getApiUrl('/api/pipeline/raw-inputs'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
-        fetch(getApiUrl('/api/pipeline/silver-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
-        fetch(getApiUrl('/api/pipeline/gold-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
         fetch(getApiUrl('/api/pipeline/user-preferences'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
         fetch(getApiUrl('/api/pipeline/fixed-charges'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
+        fetch(getApiUrl('/api/pipeline/summary-stats'), { headers: authHeaders }).then(res => res.json()).catch(() => null),
+        fetch(getApiUrl('/api/pipeline/llm-accuracy-stats'), { headers: authHeaders }).then(res => res.json()).catch(() => null),
+        fetch(getApiUrl('/api/pipeline/gold-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
       ])
-        .then(([raw, silver, gold, prefs, fcData]) => {
+        .then(([prefs, fcData, statsData, llmData, gold]) => {
           const goldTxs = gold.transactions || [];
-          const silverTxs = silver.transactions || [];
-          const rawEmails = raw.emails || [];
           const cycleStartDay = prefs.billingCycleStartDay ?? 17;
           const fixedChargesList = fcData.fixedCharges || [];
           setRawLedgerData({ goldTxs, prefs, fixedChargesList });
           setGoldTransactions(goldTxs);
           setPrefsStartDay(cycleStartDay);
 
+          if (llmData && (llmData.stats || llmData.overallAccuracy !== undefined)) {
+            setLlmAccuracyStats(llmData.stats || llmData);
+          }
+
           const pms = Array.from(new Set(goldTxs.map((tx: any) => tx.paymentMethod || 'Unknown').filter(Boolean))) as string[];
           pms.sort((a, b) => a.localeCompare(b));
           setUniquePaymentMethods(pms);
           setSelectedPaymentMethods(pms);
 
-          
-          let bronzeProcessed = 0;
-          let bronzeRejected = 0;
-          let bronzeUnprocessed = 0;
-
-          rawEmails.forEach((email: any) => {
-            if (email.status === 'processed') {
-              bronzeProcessed++;
-            } else if (email.status === 'rejected') {
-              bronzeRejected++;
-            } else if (email.status === 'unprocessed') {
-              bronzeUnprocessed++;
-            } else {
-              // Fallback check for legacy/mock data
-              const inSilver = silverTxs.some((tx: any) => tx.rawEmailId === email.id || tx.bronzeInputId === email.id);
-              const inGold = goldTxs.some((tx: any) => tx.rawEmailId === email.id || tx.bronzeInputId === email.id);
-              if (inSilver || inGold) {
-                bronzeProcessed++;
-              } else {
-                bronzeUnprocessed++;
-              }
-            }
-          });
-
-          const pendingStaging = silverTxs.filter((tx: any) => tx.status === 'pending' || tx.status === 'error');
-          const rejectedStaging = silverTxs.filter((tx: any) => tx.status === 'rejected');
-          
-          // Filter to transactions up to current date (local timezone)
           const todayObj = new Date();
           const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
           setTodayDateString(todayStr);
-          
-          const total = calculateCycleSpendTotal(goldTxs.filter((tx: any) => tx.transactionDate <= todayStr));
-          setMetrics({
-            bronzeCount: rawEmails.length,
-            bronzeProcessedCount: bronzeProcessed,
-            bronzeUnprocessedCount: bronzeUnprocessed,
-            bronzeRejectedCount: bronzeRejected,
-            silverCount: pendingStaging.length,
-            silverRejectedCount: rejectedStaging.length,
-            goldCount: goldTxs.length,
-            goldTotalAmount: total,
-          });
 
-          // Calculate billing cycle trend data based on cycle range (up to current date)
+          const total = calculateCycleSpendTotal(goldTxs.filter((tx: any) => tx.transactionDate <= todayStr));
+
+          if (statsData?.stats) {
+            setMetrics(statsData.stats);
+          } else {
+            // Graceful fallback for test environments or older backends where summary-stats is not available
+            Promise.all([
+              fetch(getApiUrl('/api/pipeline/raw-inputs'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ emails: [] })),
+              fetch(getApiUrl('/api/pipeline/silver-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+            ]).then(([raw, silver]) => {
+              const rawEmails = raw.emails || [];
+              const silverTxs = silver.transactions || [];
+              let bronzeProcessed = 0;
+              let bronzeRejected = 0;
+              let bronzeUnprocessed = 0;
+
+              rawEmails.forEach((email: any) => {
+                if (email.status === 'processed') {
+                  bronzeProcessed++;
+                } else if (email.status === 'rejected') {
+                  bronzeRejected++;
+                } else if (email.status === 'unprocessed') {
+                  bronzeUnprocessed++;
+                } else {
+                  const inSilver = silverTxs.some((tx: any) => tx.rawEmailId === email.id || tx.bronzeInputId === email.id);
+                  const inGold = goldTxs.some((tx: any) => tx.rawEmailId === email.id || tx.bronzeInputId === email.id);
+                  if (inSilver || inGold) {
+                    bronzeProcessed++;
+                  } else {
+                    bronzeUnprocessed++;
+                  }
+                }
+              });
+
+              const pendingStaging = silverTxs.filter((tx: any) => tx.status === 'pending' || tx.status === 'error');
+              const rejectedStaging = silverTxs.filter((tx: any) => tx.status === 'rejected');
+
+              setMetrics({
+                bronzeCount: rawEmails.length,
+                bronzeProcessedCount: bronzeProcessed,
+                bronzeUnprocessedCount: bronzeUnprocessed,
+                bronzeRejectedCount: bronzeRejected,
+                silverCount: pendingStaging.length,
+                silverRejectedCount: rejectedStaging.length,
+                goldCount: goldTxs.length,
+                goldTotalAmount: total,
+              });
+            });
+          }
+
           const currCycleForTrend = selectedCycle || activeCycle;
           const expectedTrendEnd = currCycleForTrend ? getExpectedCycleEnd(currCycleForTrend.startDate, cycleStartDay) : todayStr;
           const range = currCycleForTrend 
             ? { start: currCycleForTrend.startDate, end: currCycleForTrend.endDate || expectedTrendEnd }
             : getActiveCycleRange(cycleStartDay);
 
-          // Build daily spend map for the spending calendar (all recorded dates, not limited to cycle)
           const spendMap = buildDailySpendMap(goldTxs);
           setDailySpendMap(spendMap);
 
-          // Build daily transactions map for the per-day popup
           const txMap = buildDailyTransactionsMap(goldTxs);
           setDailyTransactionsMap(txMap);
 
-          // Calculate top 3 categories overall and top 3 categories in cycle
           const overallCategoryMap = calculateCategorySpend(goldTxs);
           const cycleTxs = goldTxs.filter((tx: any) => tx.transactionDate >= range.start && tx.transactionDate <= range.end);
           const cycleCategoryMap = calculateCategorySpend(cycleTxs);
@@ -249,6 +259,41 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
       }));
   }, [cycles, todayStr]);
 
+  // [FUNC-COMP-PERF-1] On-demand lazy fetching and local caching for historical comparison cycles
+  useEffect(() => {
+    const fetchHistoricalCycles = async () => {
+      let authHeaders = {};
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        if (token) authHeaders = { 'Authorization': `Bearer ${token}` };
+      } catch (err) {
+        console.warn('Failed to fetch auth session:', err);
+      }
+
+      for (const offset of selectedOffsets) {
+        const matchingItem = availableCycles.find(a => a.offset === offset);
+        if (matchingItem && !historicalCyclesMap[matchingItem.cycleId]) {
+          const url = `/api/pipeline/gold-transactions?startDate=${encodeURIComponent(matchingItem.range.start)}&endDate=${encodeURIComponent(matchingItem.range.end)}`;
+          try {
+            const res = await fetch(getApiUrl(url), { headers: authHeaders });
+            if (res.ok) {
+              const data = await res.json();
+              setHistoricalCyclesMap(prev => ({
+                ...prev,
+                [matchingItem.cycleId]: data.transactions || []
+              }));
+            }
+          } catch (e) {
+            console.warn('Failed to fetch historical cycle data:', e);
+          }
+        }
+      }
+    };
+
+    fetchHistoricalCycles();
+  }, [selectedOffsets, availableCycles]);
+
   const comparisonChartData = React.useMemo(() => {
     try {
       if (goldTransactions.length === 0) {
@@ -267,8 +312,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
       const currentEnd = currCycle?.endDate || todayStr;
       const currentDates = getDatesInRange(currentStart, currentEnd);
 
-      const getDailySpends = (datesList: string[], isCurrent: boolean, cycleObj?: any) => {
-        const cycleTxs = cycleObj ? filterTransactionsByCycle(goldTransactions, cycleObj) : goldTransactions;
+      const getDailySpends = (datesList: string[], isCurrent: boolean, cycleObj?: any, customTxs?: any[]) => {
+        const sourceTxs = customTxs || goldTransactions;
+        const cycleTxs = cycleObj ? filterTransactionsByCycle(sourceTxs, cycleObj) : sourceTxs;
         const series = calculateDailySpendSeries(cycleTxs, datesList, {
           selectedPaymentMethods,
           isCumulative: chartViewMode === 'cumulative',
@@ -284,7 +330,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         const matchingItem = availableCycles.find(a => a.offset === offset);
         if (!matchingItem) return null;
         const dates = getDatesInRange(matchingItem.range.start, matchingItem.range.end);
-        const daily = getDailySpends(dates, false, matchingItem.cycle);
+        const cachedTxs = historicalCyclesMap[matchingItem.cycleId];
+        const daily = getDailySpends(dates, false, matchingItem.cycle, cachedTxs || goldTransactions);
 
         return {
           offset,
@@ -294,7 +341,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
           label: matchingItem.label
         };
       }).filter(Boolean) as any[];
-
 
       const maxDays = Math.max(
         currentDates.length,

@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge } from './transaction-repository';
+import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge, PipelineSummaryStats } from './transaction-repository';
 import { IFeedbackRepository, FeedbackSettings, CorrectionExample, CorrectionFieldName, FeedbackEffectiveness } from './feedback-repository';
 import { normalizeCategory } from '../utils/category-helper';
 import { PaymentStandardizationService } from '../services/payment-standardization-service';
@@ -2172,6 +2172,65 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
       emailSnippet: row.email_snippet ?? null,
       embedding: row.embedding ?? null,
       createdAt: row.created_at,
+    };
+  }
+
+  async getPipelineSummaryStats(userId: string): Promise<PipelineSummaryStats> {
+    const bronzeRow = await this.get<{
+      total: number;
+      processed: number;
+      unprocessed: number;
+      rejected: number;
+    }>(
+      `SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'processed' THEN 1 ELSE 0 END) AS processed,
+        SUM(CASE WHEN status = 'unprocessed' THEN 1 ELSE 0 END) AS unprocessed,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+      FROM bronze_raw_inputs
+      WHERE user_id = ? AND deleted_at IS NULL`,
+      [userId]
+    );
+
+    const silverRow = await this.get<{
+      pending: number;
+      rejected: number;
+    }>(
+      `SELECT
+        SUM(CASE WHEN status = 'pending' OR status = 'error' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+      FROM silver_extracted_transactions
+      WHERE user_id = ? AND deleted_at IS NULL`,
+      [userId]
+    );
+
+    const goldRow = await this.get<{
+      totalCount: number;
+      totalAmount: number;
+    }>(
+      `SELECT
+        COUNT(*) AS totalCount,
+        COALESCE(SUM(
+          CASE
+            WHEN transaction_type = 'transfer' OR transaction_type = 'fixed' THEN 0
+            WHEN transaction_type = 'refund' THEN -ABS(amount_cents)
+            ELSE amount_cents
+          END
+        ), 0) / 100.0 AS totalAmount
+      FROM gold_transactions
+      WHERE user_id = ? AND deleted_at IS NULL`,
+      [userId]
+    );
+
+    return {
+      bronzeCount: bronzeRow?.total || 0,
+      bronzeProcessedCount: bronzeRow?.processed || 0,
+      bronzeUnprocessedCount: bronzeRow?.unprocessed || 0,
+      bronzeRejectedCount: bronzeRow?.rejected || 0,
+      silverCount: silverRow?.pending || 0,
+      silverRejectedCount: silverRow?.rejected || 0,
+      goldCount: goldRow?.totalCount || 0,
+      goldTotalAmount: Number(goldRow?.totalAmount || 0),
     };
   }
 

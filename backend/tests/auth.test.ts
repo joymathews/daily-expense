@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { app } from '../src/app';
 
-describe('Authentication Middleware', () => {
+describe('Authentication Middleware and Dependency Security [NFR-SEC-6]', () => {
   /**
    * [FUNC-AUTH-2] The system must remain inaccessible to unauthenticated users.
    * [NFR-SEC-2] API Protection: All non-public API endpoints must require a verified security token.

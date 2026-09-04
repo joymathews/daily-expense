@@ -5,7 +5,7 @@ import { generateDefaultCycles, buildUserCycleList } from '../src/services/cycle
 import path from 'path';
 import fs from 'fs';
 
-describe('Dynamic Cycle Management & Cycle Engine [FUNC-CYCLE-1, FUNC-CYCLE-2, FUNC-CYCLE-3, FUNC-CYCLE-4, NFR-CYCLE-1, NFR-CYCLE-2, NFR-CYCLE-3]', () => {
+describe('Dynamic Cycle Management & Cycle Engine [FUNC-CYCLE-1] [FUNC-CYCLE-2] [FUNC-CYCLE-3] [FUNC-CYCLE-4] [NFR-CYCLE-1] [NFR-CYCLE-2] [NFR-CYCLE-3]', () => {
   const testDbPath = path.resolve(__dirname, '../data/test_cycle_mgmt.db');
   let originalDatabaseUrl: string | undefined;
 

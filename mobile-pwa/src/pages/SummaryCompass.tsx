@@ -46,24 +46,39 @@ export const SummaryCompass: React.FC = () => {
     try {
       const headers = await getAuthHeaders();
 
-      const [txRes, prefRes, cycleRes, fcRes] = await Promise.allSettled([
-        fetch(getApiUrl('/api/pipeline/gold-transactions'), { headers }).then((r) => r.json()),
+      const [prefRes, cycleRes, fcRes] = await Promise.allSettled([
         fetch(getApiUrl('/api/pipeline/user-preferences'), { headers }).then((r) => r.json()),
         fetch(getApiUrl('/api/pipeline/user-cycles'), { headers }).then((r) => r.json()),
         fetch(getApiUrl('/api/pipeline/fixed-charges'), { headers }).then((r) => r.json()),
       ]);
 
-      if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.transactions)) {
-        setTransactions(txRes.value.transactions);
-      }
+      let activeC: any = null;
+      let userPref = { billingCycleStartDay: 17, expectedSalary: 100000 };
+
       if (prefRes.status === 'fulfilled' && prefRes.value?.billingCycleStartDay) {
         setPreferences(prefRes.value);
+        userPref = prefRes.value;
       }
       if (cycleRes.status === 'fulfilled' && cycleRes.value?.activeCycle) {
         setActiveCycle(cycleRes.value.activeCycle);
+        activeC = cycleRes.value.activeCycle;
       }
       if (fcRes.status === 'fulfilled' && Array.isArray(fcRes.value?.fixedCharges)) {
         setFixedCharges(fcRes.value.fixedCharges);
+      }
+
+      const activeRange = activeC
+        ? {
+            start: activeC.startDate,
+            end: activeC.endDate || getExpectedCycleEnd(activeC.startDate, userPref.billingCycleStartDay),
+          }
+        : getActiveCycleRange(userPref.billingCycleStartDay, today);
+
+      const txUrl = `/api/pipeline/gold-transactions?startDate=${encodeURIComponent(activeRange.start)}&endDate=${encodeURIComponent(activeRange.end)}`;
+      const txRes = await fetch(getApiUrl(txUrl), { headers }).then((r) => r.json()).catch(() => ({ transactions: [] }));
+
+      if (Array.isArray(txRes?.transactions)) {
+        setTransactions(txRes.transactions);
       }
     } catch (_err) {
       // Error handled gracefully

@@ -8,7 +8,8 @@ import {
   PaymentMethod,
   PaymentMappingRule,
   CycleOverrideData,
-  FixedCharge
+  FixedCharge,
+  PipelineSummaryStats
 } from './transaction-repository';
 import {
   IFeedbackRepository,
@@ -1841,6 +1842,63 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
       emailSnippet: row.email_snippet ?? null,
       embedding: row.embedding ?? null,
       createdAt: row.created_at,
+    };
+  }
+
+  async getPipelineSummaryStats(userId: string): Promise<PipelineSummaryStats> {
+    const pool = await this.getPool();
+
+    const bronzeRes = await pool.request()
+      .input('user_id', sql.NVarChar(255), userId)
+      .query(`
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN status = 'processed' THEN 1 ELSE 0 END) AS processed,
+          SUM(CASE WHEN status = 'unprocessed' THEN 1 ELSE 0 END) AS unprocessed,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+        FROM bronze_raw_inputs
+        WHERE user_id = @user_id AND deleted_at IS NULL
+      `);
+
+    const silverRes = await pool.request()
+      .input('user_id', sql.NVarChar(255), userId)
+      .query(`
+        SELECT
+          SUM(CASE WHEN status = 'pending' OR status = 'error' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+        FROM silver_extracted_transactions
+        WHERE user_id = @user_id AND deleted_at IS NULL
+      `);
+
+    const goldRes = await pool.request()
+      .input('user_id', sql.NVarChar(255), userId)
+      .query(`
+        SELECT
+          COUNT(*) AS totalCount,
+          SUM(
+            CASE
+              WHEN transaction_type = 'transfer' OR transaction_type = 'fixed' THEN 0
+              WHEN transaction_type = 'refund' THEN -ABS(amount)
+              ELSE amount
+            END
+          ) AS totalAmount
+        FROM gold_transactions
+        WHERE user_id = @user_id AND deleted_at IS NULL
+      `);
+
+    const bronzeRow = bronzeRes.recordset[0];
+    const silverRow = silverRes.recordset[0];
+    const goldRow = goldRes.recordset[0];
+
+    return {
+      bronzeCount: bronzeRow?.total || 0,
+      bronzeProcessedCount: bronzeRow?.processed || 0,
+      bronzeUnprocessedCount: bronzeRow?.unprocessed || 0,
+      bronzeRejectedCount: bronzeRow?.rejected || 0,
+      silverCount: silverRow?.pending || 0,
+      silverRejectedCount: silverRow?.rejected || 0,
+      goldCount: goldRow?.totalCount || 0,
+      goldTotalAmount: Number(goldRow?.totalAmount || 0),
     };
   }
 }

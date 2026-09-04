@@ -34,6 +34,25 @@ router.get(['/raw-inputs', '/raw-emails'], async (req, res) => {
 });
 
 /**
+ * [FUNC-PIPE-STATS-1], [NFR-PERF-12] GET /api/pipeline/summary-stats
+ * Retrieves aggregated pipeline status counts without transmitting large message payloads.
+ */
+router.get('/summary-stats', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = getRepository();
+    await repository.initializeSchema();
+
+    const stats = await repository.getPipelineSummaryStats(userId);
+
+    await repository.close();
+    res.status(200).json({ stats });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch pipeline summary stats' });
+  }
+});
+
+/**
  * [FUNC-GMAIL-8], [FUNC-GMAIL-10] PUT /api/pipeline/raw-inputs/:id
  * Updates raw input (Bronze) transactional classification status.
  */

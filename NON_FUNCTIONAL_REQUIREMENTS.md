@@ -20,6 +20,8 @@
 - [NFR-PERF-8] Single WAN Round-Trip Batching & Query Projection: Database repository layers must execute batch approvals/rejections in 1 single network round-trip and project raw input fields (`raw_body`, `raw_payload`) to support full email detail modal presentation and data lineage tracing.
 - [NFR-PERF-9] HTTP Payload Compression: The Express API server must compress JSON response payloads using Gzip/Brotli to reduce network transfer sizes by at least 70%.
 - [NFR-PERF-10] Glitch-Free Client SWR Caching: The frontend architecture must use a React 18 synchronized external store (`useSyncExternalStore`) to provide instant (0ms) tab navigation while revalidating data in the background and invalidating cache on mutations.
+- [NFR-PERF-11] Active-Cycle Query Scoping & Lazy Comparison Caching: The frontend initial render across Dashboard, Analytics, and Mobile PWA must query only active cycle date ranges by default, reducing initial JSON transfer size by at least 80% and initial render latency to under 300ms.
+- [NFR-PERF-12] Lightweight Pipeline Summary Aggregation: Pipeline count statistics on the Dashboard must be retrieved via a dedicated aggregation query returning scalar counts in under 50ms without loading or transmitting raw message bodies or unindexed JSON blobs.
 
 ## Availability [NFR-AVAIL]
 - [NFR-AVAIL-1] The system should target 99.9% availability for the core platform and third-party integration pipelines.

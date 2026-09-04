@@ -1,7 +1,7 @@
 import { RemoteHttpExtractor } from '../src/services/remote-extractor';
 import { TransactionExtractorFactory } from '../src/services/transaction-extractor';
 
-describe('RemoteHttpExtractor Unit Tests', () => {
+describe('RemoteHttpExtractor Unit Tests [FUNC-EXTRACT-1]', () => {
   const serviceUrl = 'http://localhost:3002';
   const serviceSecret = 'dev-internal-secret-key-123';
   const originalEnv = process.env;

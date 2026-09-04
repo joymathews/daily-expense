@@ -104,7 +104,7 @@ describe('Requirement Traceability Matrix Verification', () => {
   /**
    * [FUNC-GMAIL-1] Navigation: Navigate to Gmail Fetcher service.
    */
-  it('provides navigation to the Gmail service', () => {
+  it('provides navigation to the Gmail service [FUNC-GMAIL-1] [FUNC-GMAIL-54] [NFR-PERF-10]', () => {
     render(<App />);
     const gmailLink = screen.getByRole('link', { name: /Data Ingestion/i });
     fireEvent.click(gmailLink);
@@ -2148,7 +2148,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    * [FUNC-GOLD-PAGE-1] / [FUNC-GOLD-PAGE-2] / [FUNC-GOLD-PAGE-3] / [FUNC-GOLD-PAGE-6] / [NFR-USAB-12]:
    * Verify navigation, high-density listing, and metrics aggregation on the Gold Transactions page.
    */
-  it('provides navigation to the Transactions page and displays ledger items with currency totals summary', async () => {
+  it('provides navigation to the Transactions page and displays ledger items with currency totals summary [FUNC-GOLD-PAGE-1] [FUNC-GOLD-PAGE-2] [FUNC-GOLD-PAGE-3] [FUNC-GOLD-PAGE-6] [FUNC-GOLD-PAGE-18] [NFR-USAB-12]', async () => {
     const mockGold = [
       { id: 'gold-1', silverTxId: 'silver-1', userId: 'user-1', sourceType: 'email', merchant: 'Supermarket A', amount: 50.00, currency: 'INR', transactionDate: '2026-06-10', category: 'Food', notes: 'Weekly groceries', paymentMethod: 'UPI' },
       { id: 'gold-2', silverTxId: null, userId: 'user-1', sourceType: 'manual', merchant: 'Taxi Ride', amount: 15.50, currency: 'USD', transactionDate: '2026-06-11', category: 'Transport', notes: 'Business trip', paymentMethod: 'Cash' }
@@ -2403,7 +2403,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    * Verify that rejecting a staging transaction updates its status to 'rejected',
    * excludes it from the pending count, displays it as rejected, and updates the dashboard.
    */
-  it('allows the user to reject a staging transaction from the detail view modal and updates counts', async () => {
+  it('allows the user to reject a staging transaction from the detail view modal and updates counts [FUNC-GMAIL-36] [BUG-007] [NFR-USAB-13]', async () => {
     const mockEmail = {
       id: 'raw-1',
       sender: 'test@sender.com',
@@ -5280,7 +5280,7 @@ describe('Requirement Traceability Matrix Verification', () => {
    * [NFR-USAB-36] Modal Edit Save Feedback & Closure Latency
    * [BUG-019] Transaction Edit Save Modal Persistence & Closing Behavior
    */
-  it('automatically closes modal on successful transaction update and presents error banner on failure [FUNC-GMAIL-36] [BUG-019]', async () => {
+  it('automatically closes modal on successful transaction update and presents error banner on failure [FUNC-GMAIL-58] [BUG-019]', async () => {
     let returnApiError = false;
 
     const mockSilverTx = {
@@ -5483,6 +5483,123 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
     (globalThis as any).__SERVER_HEALTHY__ = true;
+  });
+
+  /**
+   * [FUNC-DASH-PERF-1] [FUNC-PIPE-STATS-1] [NFR-PERF-11] [NFR-PERF-12]
+   * Fast Dashboard Render with summary-stats avoiding raw email payload transfer.
+   */
+  it('loads Dashboard metrics using lightweight summary-stats without fetching full raw email bodies [FUNC-DASH-PERF-1] [FUNC-COMP-PERF-1] [FUNC-PIPE-STATS-1] [NFR-PERF-11] [NFR-PERF-12]', async () => {
+    window.history.pushState({}, 'Dashboard', '/');
+    let rawInputsCalled = false;
+    let summaryStatsCalled = false;
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/pipeline/raw-inputs')) {
+        rawInputsCalled = true;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ emails: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/summary-stats')) {
+        summaryStatsCalled = true;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            stats: {
+              bronzeCount: 5,
+              bronzeProcessedCount: 3,
+              bronzeUnprocessedCount: 2,
+              bronzeRejectedCount: 0,
+              silverCount: 1,
+              silverRejectedCount: 0,
+              goldCount: 4,
+              goldTotalAmount: 1200,
+            }
+          }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-preferences')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ billingCycleStartDay: 17, expectedSalary: 100000 }),
+        });
+      }
+      if (url.includes('/api/pipeline/fixed-charges')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ fixedCharges: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-cycles')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            cycles: [{
+              id: 'curr_cycle',
+              cycleName: 'Current Cycle',
+              startDate: '2026-03-17',
+              endDate: '2026-04-16',
+              isCurrent: true,
+            }],
+            activeCycle: {
+              id: 'curr_cycle',
+              cycleName: 'Current Cycle',
+              startDate: '2026-03-17',
+              endDate: '2026-04-16',
+              isCurrent: true,
+            }
+          }),
+        });
+      }
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            transactions: [
+              {
+                id: 'gtx_1',
+                merchant: 'Grocery Store',
+                amount: 1200,
+                currency: 'INR',
+                transactionDate: '2026-03-20',
+                category: 'Groceries',
+                paymentMethod: 'UPI',
+                transactionType: 'expense',
+              }
+            ]
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+      });
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Verify summary stats populated the dashboard indicators
+    const bronzeCountEl = await screen.findByTestId('dashboard-bronze-count');
+    expect(bronzeCountEl).toHaveTextContent('5');
+    expect(screen.getByTestId('dashboard-bronze-processed')).toHaveTextContent('3 Processed');
+    expect(screen.getByTestId('dashboard-bronze-unprocessed')).toHaveTextContent('2 Unprocessed');
+
+    // Confirm lightweight summary-stats was invoked and raw-inputs payload was never requested
+    expect(summaryStatsCalled).toBe(true);
+    expect(rawInputsCalled).toBe(false);
+
+    vi.unstubAllGlobals();
   });
 });
 

@@ -4,7 +4,7 @@ import path from 'path';
 import { app } from '../src/app';
 import { logger } from '../src/utils/logger';
 
-describe('Logging Framework and API Integration', () => {
+describe('Logging Framework, API Integration, and Compression [FUNC-SYS-2] [FUNC-SYS-3] [FUNC-SYS-6] [NFR-PERF-5] [NFR-PERF-9]', () => {
   const logFilePath = process.env.LOG_FILE_PATH || 'logs/app.log';
 
   // Ensure log directory and file exists/is clean before tests
