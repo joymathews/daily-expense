@@ -5601,7 +5601,93 @@ describe('Requirement Traceability Matrix Verification', () => {
 
     vi.unstubAllGlobals();
   });
+
+  /**
+   * [FUNC-ANALYTICS-PERF-1] Date-Scoped Analytics Query Loading
+   * [NFR-PERF-13] Zero-All-Time Initial Query Constraint & Bounded Payload Policy
+   */
+  it('queries gold-transactions with explicit active-cycle date parameters on Analytics page [FUNC-ANALYTICS-PERF-1] [NFR-PERF-13]', async () => {
+    window.history.pushState({}, 'Analytics', '/analytics');
+    let capturedGoldQuery = '';
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/pipeline/gold-transactions')) {
+        capturedGoldQuery = url;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            transactions: [
+              {
+                id: 'gtx_1',
+                merchant: 'Supermarket',
+                amount: 500,
+                currency: 'INR',
+                transactionDate: '2026-03-20',
+                category: 'Groceries',
+                paymentMethod: 'UPI',
+                transactionType: 'expense',
+              }
+            ]
+          }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-preferences')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ billingCycleStartDay: 17, expectedSalary: 100000 }),
+        });
+      }
+      if (url.includes('/api/pipeline/fixed-charges')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ fixedCharges: [] }),
+        });
+      }
+      if (url.includes('/api/pipeline/user-cycles')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            cycles: [{
+              id: 'curr_cycle',
+              cycleName: 'Current Cycle',
+              startDate: '2026-03-17',
+              endDate: '2026-04-16',
+              isCurrent: true,
+            }],
+            activeCycle: {
+              id: 'curr_cycle',
+              cycleName: 'Current Cycle',
+              startDate: '2026-03-17',
+              endDate: '2026-04-16',
+              isCurrent: true,
+            }
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+      });
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<App />);
+
+    // Verify analytics page rendered and query had date parameters
+    expect(await screen.findByText(/Deferred Card Spend Goal/i)).toBeInTheDocument();
+    expect(capturedGoldQuery).toContain('startDate=');
+    expect(capturedGoldQuery).toContain('endDate=');
+
+    vi.unstubAllGlobals();
+  });
 });
+
 
 
 

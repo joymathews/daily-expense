@@ -36,10 +36,11 @@ const FinancialAnalytics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [calcExplanationType, setCalcExplanationType] = useState<'target' | 'actual' | null>(null);
 
-  // Load backend data
+  // Load backend data [FUNC-ANALYTICS-PERF-1] [NFR-PERF-13]
   useEffect(() => {
-    let authHeaders = {};
+    let isCancelled = false;
     const loadData = async () => {
+      let authHeaders = {};
       try {
         const session = await fetchAuthSession();
         const token = session.tokens?.idToken?.toString();
@@ -50,38 +51,57 @@ const FinancialAnalytics: React.FC = () => {
         console.warn('Failed to fetch auth session:', err);
       }
 
-      Promise.all([
-        fetch(getApiUrl('/api/pipeline/gold-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
-        fetch(getApiUrl('/api/pipeline/user-preferences'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
-        fetch(getApiUrl('/api/pipeline/fixed-charges'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
-      ])
-        .then(([gold, prefs, fc]) => {
-          const goldTxs = gold.transactions || [];
-          setTransactions(goldTxs);
-          setBillingCycleStartDay(prefs.billingCycleStartDay ?? 17);
-          setExpectedSalary(prefs.expectedSalary ?? 100000);
-          setFixedCharges(fc.fixedCharges || []);
+      try {
+        const [prefs, fc] = await Promise.all([
+          fetch(getApiUrl('/api/pipeline/user-preferences'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
+          fetch(getApiUrl('/api/pipeline/fixed-charges'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
+        ]);
 
-          if (goldTxs.length > 0) {
-            const counts: Record<string, number> = {};
-            goldTxs.forEach((tx: any) => {
-              if (tx.currency) counts[tx.currency] = (counts[tx.currency] || 0) + 1;
-            });
-            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-            if (sorted.length > 0) {
-              setPrimaryCurrency(sorted[0][0]);
-            }
+        if (isCancelled) return;
+        const cycleStartDay = prefs.billingCycleStartDay ?? 17;
+        setBillingCycleStartDay(cycleStartDay);
+        setExpectedSalary(prefs.expectedSalary ?? 100000);
+        setFixedCharges(fc.fixedCharges || []);
+
+        const todayObj = new Date();
+        const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+
+        const currentCycle = selectedCycle || activeCycle;
+        const expectedEnd = currentCycle ? getExpectedCycleEnd(currentCycle.startDate, cycleStartDay) : todayStr;
+        const cycleRange = currentCycle ? {
+          start: currentCycle.startDate,
+          end: currentCycle.endDate || expectedEnd
+        } : getActiveCycleRange(cycleStartDay);
+
+        const txUrl = `/api/pipeline/gold-transactions?startDate=${encodeURIComponent(cycleRange.start)}&endDate=${encodeURIComponent(cycleRange.end)}`;
+        const gold = await fetch(getApiUrl(txUrl), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] }));
+
+        if (isCancelled) return;
+        const goldTxs = gold.transactions || [];
+        setTransactions(goldTxs);
+
+        if (goldTxs.length > 0) {
+          const counts: Record<string, number> = {};
+          goldTxs.forEach((tx: any) => {
+            if (tx.currency) counts[tx.currency] = (counts[tx.currency] || 0) + 1;
+          });
+          const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+          if (sorted.length > 0) {
+            setPrimaryCurrency(sorted[0][0]);
           }
-          setIsLoading(false);
-        })
-        .catch(err => {
-          console.error('Error loading analytics data:', err);
-          setIsLoading(false);
-        });
+        }
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error loading analytics data:', err);
+        if (!isCancelled) setIsLoading(false);
+      }
     };
 
     loadData();
-  }, []);
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedCycle, activeCycle]);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
