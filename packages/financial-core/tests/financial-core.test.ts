@@ -9,8 +9,6 @@ import {
   calculateRunRateForecast,
   calculateDailyAllowance,
   calculateNetSavings,
-  calculateDayOfMonthPeaks,
-  calculateDayOfWeekPeaks,
   formatCurrency,
   formatCycleDisplayDate,
   FinancialTransaction,
@@ -28,10 +26,6 @@ import {
   calculateEffectiveBudgetLimit,
   calculateBudgetPercentConsumed,
   calculateAverageDailySpend,
-  calculatePeakAverages,
-  calculatePeakPercentDeviation,
-  getPeakPercentDeviationText,
-  orderDOMPeaksByBillingCycle,
 } from '../src';
 
 describe('Financial Core Engine Unit Tests', () => {
@@ -194,18 +188,7 @@ describe('Financial Core Engine Unit Tests', () => {
     });
   });
 
-  describe('[NFR-MOB-3] Periodicity, Patterns & Formatters', () => {
-    it('detects day of month and day of week peak aggregations', () => {
-      const txs: FinancialTransaction[] = [
-        { amount: 500, transactionDate: '2026-08-05', transactionType: 'expense' },
-        { amount: 300, transactionDate: '2026-08-05', transactionType: 'expense' },
-      ];
-      const domPeaks = calculateDayOfMonthPeaks(txs);
-      expect(domPeaks.find(p => p.day === 5)?.amount).toBe(800);
-
-      const dowPeaks = calculateDayOfWeekPeaks(txs);
-      expect(dowPeaks.length).toBe(7);
-    });
+  describe('[NFR-MOB-3] Formatters & Surplus Calculations', () => {
 
     it('formats currencies and dates correctly', () => {
       expect(formatCurrency(1500, 'INR')).toBe('₹1,500.00');
@@ -337,34 +320,6 @@ describe('Financial Core Engine Unit Tests', () => {
 
       expect(calculateAverageDailySpend(15000, 10)).toBe(1500);
       expect(calculateAverageDailySpend(15000, 0)).toBe(0);
-    });
-
-    it('calculates peak averages, percentage deviations, and cycle order', () => {
-      const domPeaks = [
-        { day: 5, amount: 3100, weekendAmount: 0 },
-        { day: 20, amount: 6200, weekendAmount: 0 },
-      ];
-      const dowPeaks = [
-        { dayName: 'Mon', amount: 700 },
-        { dayName: 'Sat', amount: 1400 },
-      ];
-
-      const avgs = calculatePeakAverages(domPeaks, dowPeaks);
-      expect(avgs.totalDOMAmount).toBe(9300);
-      expect(avgs.avgDOMAmount).toBe(300); // 9300 / 31
-      expect(avgs.totalDOWAmount).toBe(2100);
-      expect(avgs.avgDOWAmount).toBe(300); // 2100 / 7
-
-      expect(calculatePeakPercentDeviation(450, 300)).toBe(50); // +50%
-      expect(calculatePeakPercentDeviation(150, 300)).toBe(-50); // -50%
-
-      expect(getPeakPercentDeviationText(450, 300)).toBe(' (+50% vs Avg)');
-      expect(getPeakPercentDeviationText(150, 300)).toBe(' (-50% vs Avg)');
-      expect(getPeakPercentDeviationText(300, 300)).toBe(' (Avg)');
-
-      const ordered = orderDOMPeaksByBillingCycle(domPeaks, 17);
-      expect(ordered[0].day).toBe(20);
-      expect(ordered[1].day).toBe(5);
     });
   });
 });

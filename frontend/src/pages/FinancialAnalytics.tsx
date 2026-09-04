@@ -10,19 +10,12 @@ import {
   calculateDaySpend,
   calculateRunRateForecast,
   calculateNetSavings,
-  calculateDayOfMonthPeaks,
-  calculateDayOfWeekPeaks,
   getDaysDiff,
   calculateTotalFixedCharges,
-  calculatePeakAverages,
-  getPeakPercentDeviationText,
-  orderDOMPeaksByBillingCycle,
 } from '../utils/analytics-helper';
 
 import type {
   RunRateForecastResult,
-  DayPeakPoint,
-  DayOfWeekPeakPoint,
 } from '../utils/analytics-helper';
 
 const FinancialAnalytics: React.FC = () => {
@@ -42,13 +35,11 @@ const FinancialAnalytics: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [calcExplanationType, setCalcExplanationType] = useState<'target' | 'actual' | null>(null);
-  const [hoveredDOM, setHoveredDOM] = useState<DayPeakPoint | null>(null);
-  const [hoveredDOW, setHoveredDOW] = useState<DayOfWeekPeakPoint | null>(null);
 
   // Load backend data
   useEffect(() => {
+    let authHeaders = {};
     const loadData = async () => {
-      let authHeaders = {};
       try {
         const session = await fetchAuthSession();
         const token = session.tokens?.idToken?.toString();
@@ -93,9 +84,9 @@ const FinancialAnalytics: React.FC = () => {
   }, []);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value, 10);
-    setTargetBudgetPercent(value);
-    localStorage.setItem('analytics_target_budget_percent', String(value));
+    const val = parseInt(e.target.value, 10);
+    setTargetBudgetPercent(val);
+    localStorage.setItem('analytics_target_budget_percent', val.toString());
   };
 
   if (isLoading) {
@@ -111,7 +102,7 @@ const FinancialAnalytics: React.FC = () => {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  // Get active cycle range
+  // Derive active billing cycle boundaries
   const currentCycle = selectedCycle || activeCycle;
   const expectedEnd = currentCycle ? getExpectedCycleEnd(currentCycle.startDate, billingCycleStartDay) : todayStr;
   const cycleRange = currentCycle ? {
@@ -121,12 +112,11 @@ const FinancialAnalytics: React.FC = () => {
 
   const cycleFilteredTxs = currentCycle ? filterTransactionsByCycle(transactions, currentCycle) : transactions;
 
-  // Compute active fixed charges and net savings forecast
-  const totalFixedCharges = calculateTotalFixedCharges(fixedCharges, cycleRange);
-
-  // Computations
+  // Filter discretionary spending inside cycle
   const discretionarySpent = calculateDiscretionarySpend(cycleFilteredTxs, cycleRange.start, cycleRange.end);
   const spentToday = calculateDaySpend(cycleFilteredTxs, todayStr);
+  const totalFixedCharges = calculateTotalFixedCharges(fixedCharges, cycleRange);
+
   const forecast: RunRateForecastResult = calculateRunRateForecast(
     discretionarySpent,
     expectedSalary,
@@ -136,11 +126,6 @@ const FinancialAnalytics: React.FC = () => {
     totalFixedCharges,
     spentToday
   );
-
-  const dayOfMonthPeaks: DayPeakPoint[] = calculateDayOfMonthPeaks(transactions);
-  const dayOfWeekPeaks: DayOfWeekPeakPoint[] = calculateDayOfWeekPeaks(transactions);
-
-
 
   // Currency formatting helper
   const formatCurrency = (val: number) => {
@@ -155,27 +140,6 @@ const FinancialAnalytics: React.FC = () => {
     if (parts.length !== 3) return dateStr;
     const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  };
-
-  // Find max peak for DOM graph scaling
-  const maxDOMAmount = Math.max(...dayOfMonthPeaks.map(p => p.amount), 1);
-  const maxDOWAmount = Math.max(...dayOfWeekPeaks.map(p => p.amount), 1);
-
-  // Order Day of Month peaks chronologically by billing cycle
-  const cycleOrderedDOMPeaks = orderDOMPeaksByBillingCycle(dayOfMonthPeaks, billingCycleStartDay);
-
-  // Calculate average daily outflows
-  const { avgDOMAmount, avgDOWAmount } = calculatePeakAverages(dayOfMonthPeaks, dayOfWeekPeaks);
-
-  // Percentage variance calculation helper
-  const getPercentDiffText = (amount: number, avg: number) => getPeakPercentDeviationText(amount, avg);
-
-  // Weekend bias format helper
-  const getWeekendBiasText = (amount: number, weekendAmount: number) => {
-    if (amount <= 0 || weekendAmount <= 0) return '';
-    const biasPct = Math.min(100, Math.max(0, Math.round((weekendAmount / amount) * 100)));
-    if (biasPct <= 10) return '';
-    return ` • ${biasPct}% weekend spend`;
   };
 
   // Compute days difference between exhaustion and cycle end date
@@ -200,7 +164,7 @@ const FinancialAnalytics: React.FC = () => {
             Financial Analytics & Predictions
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Predictive forecasts, recurring bill patterns, and peak outflow analysis computed from your ledger history.
+            Predictive forecasts, burn-rate metrics, and card spending analysis computed from your ledger history.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -456,135 +420,6 @@ const FinancialAnalytics: React.FC = () => {
             </div>
           )
         )}
-      </div>
-
-      {/* Outflow Peaks (Periodicity) charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Day of Month Peaks */}
-        <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-base font-extrabold text-gray-900 Outfit">Outflow Peaks by Day of Month</h3>
-              <p className="text-2xs text-gray-400 mt-0.5 mb-6">
-                Aggregated historical spending across days 1–31 to identify monthly peaks.
-              </p>
-            </div>
-            {hoveredDOM ? (
-              <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-3xs font-extrabold px-2 py-1 rounded-lg Outfit animate-pulse" data-testid="dom-hover-badge">
-                Day {hoveredDOM.day}: {formatCurrency(hoveredDOM.amount)}{getPercentDiffText(hoveredDOM.amount, avgDOMAmount)}{getWeekendBiasText(hoveredDOM.amount, hoveredDOM.weekendAmount)}
-              </div>
-            ) : (
-              <div className="text-3xs text-gray-350 px-2 py-1 select-none">
-                Hover bars to inspect
-              </div>
-            )}
-          </div>
-
-          <div className="h-44 relative pt-4">
-            {/* Average Reference Line */}
-            {maxDOMAmount > 0 && avgDOMAmount > 0 && (
-              <div 
-                className="absolute left-0 right-0 border-t border-dashed border-indigo-400/40 pointer-events-none z-10 flex items-center justify-between font-sans"
-                style={{ bottom: `calc(1.5rem + ${(avgDOMAmount / maxDOMAmount) * 80}%)` }}
-                data-testid="dom-average-line"
-              >
-                <span className="bg-indigo-50/90 text-[8px] font-bold text-indigo-500 px-1 rounded-r border border-indigo-100/50 shadow-3xs Outfit uppercase">
-                  AVG: {formatCurrency(avgDOMAmount)}
-                </span>
-              </div>
-            )}
-
-            <div className="h-36 flex items-end justify-between space-x-0.5 sm:space-x-1 select-none overflow-x-auto pb-1 relative z-0">
-              {cycleOrderedDOMPeaks.map(p => {
-                const heightPct = maxDOMAmount > 0 ? (p.amount / maxDOMAmount) * 80 : 0;
-                const isWeekendSkewed = p.amount > 0 && (p.weekendAmount / p.amount) >= 0.7;
-                return (
-                  <div key={p.day} className="flex-1 flex flex-col justify-end items-center min-w-[8px] h-full">
-                    <div
-                      className="w-full bg-indigo-100 hover:bg-indigo-600 rounded-t transition-all duration-300 relative group cursor-pointer"
-                      style={{ height: `${Math.max(4, heightPct)}%` }}
-                      onMouseEnter={() => setHoveredDOM(p)}
-                      onMouseLeave={() => setHoveredDOM(null)}
-                      data-testid={`dom-bar-${p.day}`}
-                    >
-                      {isWeekendSkewed && (
-                        <div 
-                          className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-3xs" 
-                          title="Weekend-skewed spending date (>70% on Fri-Sun)" 
-                          data-testid={`weekend-marker-${p.day}`}
-                        />
-                      )}
-                    </div>
-                    <span className="text-[9px] text-gray-400 font-bold mt-1.5">{p.day}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex justify-between text-3xs text-gray-400 font-semibold mt-1 tracking-wider uppercase">
-            <span>Cycle Start (Day {billingCycleStartDay})</span>
-            <span>Cycle End (Day {billingCycleStartDay === 1 ? 31 : billingCycleStartDay - 1})</span>
-          </div>
-          <div className="text-[9px] text-gray-400 mt-2.5 pt-1.5 border-t border-gray-100/50 flex items-center space-x-1 Outfit select-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
-            <span>Indicates calendar dates where &gt;70% of historical spending occurred on weekends (Fri–Sun).</span>
-          </div>
-        </div>
-
-        {/* Day of Week Peaks */}
-        <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-base font-extrabold text-gray-900 Outfit">Weekly Spend Patterns</h3>
-              <p className="text-2xs text-gray-400 mt-0.5 mb-6">
-                Aggregated historical spending by day of week.
-              </p>
-            </div>
-            {hoveredDOW ? (
-              <div className="bg-purple-50 border border-purple-100 text-purple-700 text-3xs font-extrabold px-2 py-1 rounded-lg Outfit animate-pulse" data-testid="dow-hover-badge">
-                {hoveredDOW.dayName}: {formatCurrency(hoveredDOW.amount)}{getPercentDiffText(hoveredDOW.amount, avgDOWAmount)}
-              </div>
-            ) : (
-              <div className="text-3xs text-gray-350 px-2 py-1 select-none">
-                Hover bars to inspect
-              </div>
-            )}
-          </div>
-
-          <div className="h-44 relative pt-4">
-            {/* Average Reference Line */}
-            {maxDOWAmount > 0 && avgDOWAmount > 0 && (
-              <div 
-                className="absolute left-0 right-0 border-t border-dashed border-purple-400/40 pointer-events-none z-10 flex items-center justify-between font-sans"
-                style={{ bottom: `calc(1.5rem + ${(avgDOWAmount / maxDOWAmount) * 80}%)` }}
-                data-testid="dow-average-line"
-              >
-                <span className="bg-purple-50/90 text-[8px] font-bold text-purple-500 px-1 rounded-r border border-purple-100/50 shadow-3xs Outfit uppercase">
-                  AVG: {formatCurrency(avgDOWAmount)}
-                </span>
-              </div>
-            )}
-
-            <div className="h-36 flex items-end justify-around select-none pb-1 relative z-0">
-              {dayOfWeekPeaks.map(p => {
-                const heightPct = maxDOWAmount > 0 ? (p.amount / maxDOWAmount) * 80 : 0;
-                return (
-                  <div key={p.dayName} className="w-10 flex flex-col justify-end items-center h-full">
-                    <div
-                      className="w-6 bg-purple-100 hover:bg-purple-600 rounded-t transition-all duration-300 relative group cursor-pointer"
-                      style={{ height: `${Math.max(4, heightPct)}%` }}
-                      onMouseEnter={() => setHoveredDOW(p)}
-                      onMouseLeave={() => setHoveredDOW(null)}
-                      data-testid={`dow-bar-${p.dayName}`}
-                    />
-                    <span className="text-xs text-gray-500 font-bold mt-2 Outfit">{p.dayName}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       </div>
 
       {calcExplanationType && (

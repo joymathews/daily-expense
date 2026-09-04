@@ -89,11 +89,7 @@
 - [NFR-USAB-35] Cycle Comparison Trend Responsiveness: Filtering payment methods, toggling comparison series, or switching view modes (daily vs. cumulative) in the cycle comparison graph must recalculate data and redraw the SVG lines within 100ms, maintaining smooth UI rendering.
 - [NFR-USAB-36] Modal Edit Save Feedback & Closure Latency: Executing transaction update requests via 'Save Updates' or 'Save Corrections' buttons must update the backend, close the detail modal, and refresh the active transaction view within 150ms of a successful API response. On network or server failure, the system must maintain modal state, retain typed inputs, and display an inline error banner instantly (within 100ms).
 - [NFR-ANALYSIS-8] The budget slider interaction and projected forecasts must update the UI metrics instantly (within 50ms) to ensure interactive responsiveness.
-- [NFR-ANALYSIS-9] The Outflow Peaks periodicity charts and lists must load and render within 150ms of ledger data retrieval.
-- [NFR-ANALYSIS-10] Interactive Hover Response: The hover transition and badge render on the periodicity charts must display and update within 50ms of a mouse-over event, ensuring smooth, lag-free user interaction.
 - [NFR-ANALYSIS-11] Deficit Recalculation Efficiency: Recalculating the sustainable card spend cap and updating the deficit risk notifications based on slider or fixed charges changes must execute within 50ms.
-- [NFR-ANALYSIS-12] Chronological Layout Performance: Slicing and re-sorting transaction peaks by billing cycle day or standard weekdays must resolve instantly within 20ms during render compilation.
-- [NFR-ANALYSIS-13] Reference Line Render Latency: Drawing the average reference lines and computing variance percentages on hover must resolve instantly (within 10ms of state changes).
 
 ## Dynamic Cycle Performance & Usability [NFR-CYCLE]
 - [NFR-CYCLE-1] Cycle Engine API Resolution Performance: Fetching computed user cycles from the Cycle Engine API (GET /api/pipeline/user-cycles) must execute and return the formatted cycle list within 100ms.

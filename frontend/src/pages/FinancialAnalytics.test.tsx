@@ -6,8 +6,6 @@ import FinancialAnalytics from './FinancialAnalytics';
 import {
   calculateDiscretionarySpend,
   calculateRunRateForecast,
-  calculateDayOfMonthPeaks,
-  calculateDayOfWeekPeaks,
 } from '../utils/analytics-helper';
 
 // Mock Amplify Auth Session
@@ -203,42 +201,6 @@ describe('Financial Analytics Utility Computations', () => {
     // Recommended daily rate = 18000 / 18 days = 1000
     expect(result.recommendedDailyRate).toBe(1000);
   });
-
-  /**
-   * [FUNC-ANALYSIS-17] / [NFR-ANALYSIS-12]: Verify Day of the Month peaks calculations.
-   */
-  it('correctly groups expenditures by day of the month [FUNC-ANALYSIS-17] [NFR-ANALYSIS-12] [FUNC-ANALYSIS-13]', () => {
-    const peaks = calculateDayOfMonthPeaks(mockTransactions);
-    // tx-2 is on 20th: amount = 500
-    expect(peaks.find(p => p.day === 20)?.amount).toBe(500);
-    // tx-3 is on 22nd (1500) and tx-7 is refund on 23rd (-300)
-    expect(peaks.find(p => p.day === 22)?.amount).toBe(1500);
-    expect(peaks.find(p => p.day === 23)?.amount).toBe(-300);
-    // Non-discretionary are ignored (tx-1 on 18th is Investment)
-  });
-
-  it('correctly calculates weekend spend amount for day of month peaks [FUNC-ANALYSIS-19] [NFR-ANALYSIS-13]', () => {
-    const peaks = calculateDayOfMonthPeaks(mockTransactions);
-    const p20 = peaks.find(p => p.day === 20);
-    expect(p20?.amount).toBe(500);
-    expect(p20?.weekendAmount).toBe(500); // 2026-06-20 is a Saturday
-    
-    const p22 = peaks.find(p => p.day === 22);
-    expect(p22?.amount).toBe(1500);
-    expect(p22?.weekendAmount).toBe(0); // Monday is not a weekend
-  });
-
-  /**
-   * [FUNC-ANALYSIS-18] / [NFR-ANALYSIS-12]: Verify Day of the Week peaks calculations.
-   */
-  it('correctly groups expenditures by day of the week [FUNC-ANALYSIS-18] [NFR-ANALYSIS-12] [FUNC-ANALYSIS-13]', () => {
-    const peaks = calculateDayOfWeekPeaks(mockTransactions);
-    // 2026-06-20 is Saturday. tx-2 (500) + tx-5 (900) = 1400
-    const sat = peaks.find(p => p.dayName === 'Sat');
-    expect(sat?.amount).toBe(1400);
-    expect(peaks[0].dayName).toBe('Mon');
-    expect(peaks[6].dayName).toBe('Sun');
-  });
 });
 
 describe('Financial Analytics Page Integration and UI Rendering', () => {
@@ -412,40 +374,5 @@ describe('Financial Analytics Page Integration and UI Rendering', () => {
     const closeBtn = screen.getByTestId('close-modal-button');
     fireEvent.click(closeBtn);
     expect(screen.queryByTestId('calc-explanation-modal')).not.toBeInTheDocument();
-  });
-
-  it('displays horizontal average reference lines for both periodicity charts [FUNC-ANALYSIS-19] [NFR-ANALYSIS-13]', async () => {
-    render(
-      <BrowserRouter>
-        <FinancialAnalytics />
-      </BrowserRouter>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Financial Analytics & Predictions')).toBeInTheDocument();
-    });
-
-    expect(screen.getByTestId('dom-average-line')).toBeInTheDocument();
-    expect(screen.getByTestId('dow-average-line')).toBeInTheDocument();
-  });
-
-  it('updates interactive hover state header values on chart bar mouse-enter [FUNC-ANALYSIS-15] [NFR-ANALYSIS-10]', async () => {
-    render(
-      <BrowserRouter>
-        <FinancialAnalytics />
-      </BrowserRouter>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Financial Analytics & Predictions')).toBeInTheDocument();
-    });
-
-    // Find a day bar and mouse-enter it
-    const bar = screen.getByTestId('dom-bar-20');
-    fireEvent.mouseEnter(bar);
-
-    // Verify hover badge displays details
-    expect(screen.getByTestId('dom-hover-badge')).toBeInTheDocument();
-    expect(screen.getByTestId('dom-hover-badge')).toHaveTextContent(/Day 20/);
   });
 });

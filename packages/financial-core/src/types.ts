@@ -79,20 +79,6 @@ export interface DailyBurnAllowanceResult {
   overspentTodayAmount: number;
 }
 
-export interface DayPeakPoint {
-  day: number;
-  amount: number;
-  count?: number;
-  weekendAmount: number;
-}
-
-export interface DayOfWeekPeakPoint {
-  dayName: string;
-  dayIndex?: number;
-  amount: number;
-  count?: number;
-}
-
 export interface DailyTrendPoint {
   date: string;
   amount: number;
@@ -120,11 +106,4 @@ export interface CategorySpendItem {
 export interface DailySpendSeriesResult {
   spends: Array<{ date: string; amount: number | null }>;
   total: number;
-}
-
-export interface PeakAveragesResult {
-  totalDOMAmount: number;
-  avgDOMAmount: number;
-  totalDOWAmount: number;
-  avgDOWAmount: number;
 }
