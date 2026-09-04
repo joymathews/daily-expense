@@ -12,11 +12,8 @@ import {
   calculateNetSavings,
   calculateDayOfMonthPeaks,
   calculateDayOfWeekPeaks,
-  detectRecurringBills,
   getDaysDiff,
   calculateTotalFixedCharges,
-  calculateRecurringMonthlyBurden,
-  calculateBurdenSalaryPercentage,
   calculatePeakAverages,
   getPeakPercentDeviationText,
   orderDOMPeaksByBillingCycle,
@@ -26,38 +23,7 @@ import type {
   RunRateForecastResult,
   DayPeakPoint,
   DayOfWeekPeakPoint,
-  RecurringBillPrediction,
-  DetectionFrequency,
 } from '../utils/analytics-helper';
-
-// Helpers for recurring bills formatting
-const getRelativeDueText = (predictedNextDate: string, todayStr: string) => {
-  const today = new Date(todayStr);
-  const next = new Date(predictedNextDate);
-  const diffTime = next.getTime() - today.getTime();
-  const diff = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diff < 0) {
-    return { text: `Overdue by ${Math.abs(diff)}d`, status: 'overdue' };
-  } else if (diff === 0) {
-    return { text: 'Due Today', status: 'today' };
-  } else if (diff <= 5) {
-    return { text: `Due in ${diff}d`, status: 'soon' };
-  } else {
-    return { text: `Due in ${diff}d`, status: 'upcoming' };
-  }
-};
-
-const getBillingProgress = (lastDateStr: string, predictedNextDate: string, todayStr: string) => {
-  const last = new Date(lastDateStr).getTime();
-  const next = new Date(predictedNextDate).getTime();
-  const current = new Date(todayStr).getTime();
-  if (next <= last) return 0;
-  const total = next - last;
-  const elapsed = current - last;
-  const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
-  return Math.round(pct);
-};
 
 const FinancialAnalytics: React.FC = () => {
   const { cycles, activeCycle, selectedCycle, setSelectedCycle } = useUserCycles();
@@ -76,8 +42,6 @@ const FinancialAnalytics: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [calcExplanationType, setCalcExplanationType] = useState<'target' | 'actual' | null>(null);
-  const [selectedBillForExplanation, setSelectedBillForExplanation] = useState<RecurringBillPrediction | null>(null);
-  const [detectionFrequency, setDetectionFrequency] = useState<DetectionFrequency>('monthly');
   const [hoveredDOM, setHoveredDOM] = useState<DayPeakPoint | null>(null);
   const [hoveredDOW, setHoveredDOW] = useState<DayOfWeekPeakPoint | null>(null);
 
@@ -177,11 +141,6 @@ const FinancialAnalytics: React.FC = () => {
   const dayOfWeekPeaks: DayOfWeekPeakPoint[] = calculateDayOfWeekPeaks(transactions);
 
 
-  const recurringBills: RecurringBillPrediction[] = detectRecurringBills(transactions, todayStr, detectionFrequency);
-
-  // Calculate monthly burden total (normalizing weekly/quarterly charges to a monthly rate)
-  const monthlyBurdenTotal = calculateRecurringMonthlyBurden(recurringBills);
-  const monthlyBurdenPercent = calculateBurdenSalaryPercentage(monthlyBurdenTotal, expectedSalary);
 
   // Currency formatting helper
   const formatCurrency = (val: number) => {
@@ -628,143 +587,6 @@ const FinancialAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {/* Smart Savings Recommendations */}
-      {/* Predicted Recurring Outflows */}
-      <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <div className="space-y-1">
-            <h3 className="text-base font-extrabold text-gray-900 Outfit">Predicted Recurring Bills & Subscriptions</h3>
-            <p className="text-2xs text-gray-400">
-              {detectionFrequency === 'weekly' && 'Weekly outflows (6–8 days intervals) automatically identified from transaction logs.'}
-              {detectionFrequency === 'biweekly' && 'Bi-weekly outflows (13–15 days intervals) automatically identified from transaction logs.'}
-              {detectionFrequency === 'monthly' && 'Monthly outflows (25–35 days intervals) automatically identified from transaction logs.'}
-              {detectionFrequency === 'quarterly' && 'Quarterly outflows (85–95 days intervals) automatically identified from transaction logs.'}
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="bg-gray-100 p-0.5 rounded-lg flex space-x-0.5 border border-gray-200/50 text-2xs font-bold Outfit" data-testid="frequency-filter-group">
-              {(['weekly', 'biweekly', 'monthly', 'quarterly'] as DetectionFrequency[]).map(freq => (
-                <button
-                  key={freq}
-                  onClick={() => setDetectionFrequency(freq)}
-                  className={`px-3 py-1.5 rounded-md transition-all ${
-                    detectionFrequency === freq
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-gray-500 hover:text-gray-800 hover:bg-white/40'
-                  }`}
-                  data-testid={`filter-${freq}`}
-                >
-                  {freq === 'weekly' && 'Weekly'}
-                  {freq === 'biweekly' && 'Bi-Weekly'}
-                  {freq === 'monthly' && 'Monthly'}
-                  {freq === 'quarterly' && 'Quarterly'}
-                </button>
-              ))}
-            </div>
-
-            {recurringBills.length > 0 && (
-              <div className="flex items-center space-x-4 bg-indigo-50/50 border border-indigo-100/50 rounded-xl px-4 py-2">
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">Monthly Commitment</span>
-                  <span className="text-sm font-black text-indigo-950 Outfit mt-0.5">
-                    {formatCurrency(monthlyBurdenTotal)}/mo
-                  </span>
-                </div>
-                <div className="h-6 w-px bg-indigo-200/50"></div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">Salary Share</span>
-                  <span className="text-sm font-black text-indigo-950 Outfit mt-0.5">
-                    {monthlyBurdenPercent.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {recurringBills.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-xs border border-dashed border-gray-150 rounded-xl bg-gray-50/20">
-            No recurring {detectionFrequency} payment patterns identified yet. Try changing the frequency filter above or ingest more transactions.
-          </div>
-        ) : (
-          <div className="overflow-hidden border border-gray-100/80 rounded-xl shadow-xs">
-            <table className="w-full text-left border-collapse bg-white">
-              <thead>
-                <tr className="bg-gray-50/50 border-b border-gray-100 text-3xs font-extrabold uppercase tracking-widest text-gray-400">
-                  <th className="px-6 py-3.5">Merchant</th>
-                  <th className="px-6 py-3.5">Est. Billing Amount</th>
-                  <th className="px-6 py-3.5">Billing Period Progress</th>
-                  <th className="px-6 py-3.5">Frequency</th>
-                  <th className="px-6 py-3.5 text-right">Status & Next Occurrence</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 text-xs">
-                {recurringBills.map(bill => {
-                  const relative = getRelativeDueText(bill.predictedNextDate, todayStr);
-                  const progress = getBillingProgress(bill.lastDate, bill.predictedNextDate, todayStr);
-                  
-                  return (
-                    <tr key={bill.merchant} className="hover:bg-gray-50/40 transition-colors" data-testid="recurring-bill-row">
-                      <td className="px-6 py-4 flex items-center space-x-2">
-                        <button
-                          onClick={() => setSelectedBillForExplanation(bill)}
-                          className="font-extrabold text-gray-900 Outfit hover:text-indigo-650 underline decoration-dotted hover:decoration-solid transition-colors text-left"
-                          title="Click to see why this was detected"
-                          data-testid="explain-merchant-button"
-                        >
-                          {bill.merchant}
-                        </button>
-                        <span className="bg-indigo-50 text-indigo-750 text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border border-indigo-100/60 shadow-2xs">
-                          {detectionFrequency === 'weekly' && 'Weekly'}
-                          {detectionFrequency === 'biweekly' && 'Bi-Weekly'}
-                          {detectionFrequency === 'monthly' && 'Monthly'}
-                          {detectionFrequency === 'quarterly' && 'Quarterly'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-gray-650 Outfit">
-                        {formatCurrency(bill.averageAmount)}
-                      </td>
-                      <td className="px-6 py-4 min-w-[140px] max-w-[200px]">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex-grow w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div 
-                              className={`h-1.5 rounded-full transition-all duration-300 ${
-                                relative.status === 'overdue' ? 'bg-rose-500' :
-                                relative.status === 'today' ? 'bg-amber-500' :
-                                relative.status === 'soon' ? 'bg-amber-400' : 'bg-indigo-500'
-                              }`}
-                              style={{ width: `${progress}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-[10px] font-extrabold text-gray-400 min-w-[28px] text-right Outfit">{progress}%</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">
-                        Every {bill.frequencyDays} days
-                      </td>
-                      <td className="px-6 py-4 text-right flex flex-col items-end space-y-1">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider border shadow-2xs ${
-                          relative.status === 'overdue' ? 'bg-rose-50 border-rose-200 text-rose-700' :
-                          relative.status === 'today' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                          relative.status === 'soon' ? 'bg-amber-50/50 border-amber-250 text-amber-850' :
-                          'bg-indigo-50 border-indigo-200 text-indigo-700'
-                        }`}>
-                          {relative.text}
-                        </span>
-                        <span className="text-2xs text-gray-400 font-medium font-mono" data-testid="predicted-next-date">
-                          {formatDate(bill.predictedNextDate)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       {calcExplanationType && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4" data-testid="calc-modal-backdrop">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-150 max-w-md w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-200" data-testid="calc-explanation-modal">
@@ -839,86 +661,6 @@ const FinancialAnalytics: React.FC = () => {
                 className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs"
               >
                 Close breakdown
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedBillForExplanation && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4" data-testid="recurrence-modal-backdrop">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-150 max-w-md w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-200" data-testid="recurrence-explanation-modal">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">Recurrence Detection Logic</span>
-                <h3 className="text-lg font-black text-gray-900 Outfit" data-testid="recurrence-modal-title">
-                  Why is "{selectedBillForExplanation.merchant}" flagged?
-                </h3>
-              </div>
-              <button 
-                onClick={() => setSelectedBillForExplanation(null)}
-                className="text-gray-400 hover:text-gray-600 font-extrabold text-sm"
-                data-testid="close-recurrence-modal-button"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="space-y-4 text-xs text-gray-600 leading-relaxed font-sans">
-              <div>
-                <p className="font-semibold text-gray-800">1. Historical Transaction Dates detected:</p>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 mt-1.5 flex flex-wrap gap-1.5 font-mono text-[10px]">
-                  {selectedBillForExplanation.allDates.map(date => (
-                    <span key={date} className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-700 shadow-2xs">
-                      {formatDate(date)}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-3xs text-gray-400 mt-1">
-                  We found {selectedBillForExplanation.historyCount} payments in total.
-                </p>
-              </div>
-
-              <div>
-                <p className="font-semibold text-gray-800">2. Recurring Cycle Calculation:</p>
-                <p className="mt-1">
-                  The interval spacing between these consecutive payments is:
-                </p>
-                <div className="flex items-center space-x-2 mt-1.5">
-                  <span className="bg-indigo-50 text-indigo-700 font-mono text-[10px] font-bold border border-indigo-100 rounded px-2 py-1">
-                    {selectedBillForExplanation.allIntervals.join(' days, ') + ' days'}
-                  </span>
-                </div>
-                <p className="mt-1.5">
-                  This averages to a consistent spacing interval of <span className="font-bold text-indigo-650">{selectedBillForExplanation.frequencyDays} days</span>. This matches our system subscription target profile (**25 to 35 days**).
-                </p>
-              </div>
-
-              <div className="border-t border-gray-50 pt-3">
-                <p className="font-semibold text-gray-800">3. Next Billing Prediction:</p>
-                <div className="bg-indigo-50/50 border border-indigo-100/50 rounded-xl p-3 mt-2 space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Last Payment Date:</span>
-                    <span className="font-bold font-mono text-gray-800">{formatDate(selectedBillForExplanation.lastDate)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Predicted Interval:</span>
-                    <span className="font-bold font-mono text-gray-800">+ {selectedBillForExplanation.frequencyDays} days</span>
-                  </div>
-                  <div className="flex justify-between border-t border-indigo-100/50 pt-1 mt-1 font-bold text-indigo-950">
-                    <span>Predicted Next Date:</span>
-                    <span className="font-mono">{formatDate(selectedBillForExplanation.predictedNextDate)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setSelectedBillForExplanation(null)}
-                className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs"
-              >
-                Got it, close
               </button>
             </div>
           </div>

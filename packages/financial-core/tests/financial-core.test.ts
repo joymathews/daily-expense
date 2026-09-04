@@ -11,7 +11,6 @@ import {
   calculateNetSavings,
   calculateDayOfMonthPeaks,
   calculateDayOfWeekPeaks,
-  detectRecurringBills,
   formatCurrency,
   formatCycleDisplayDate,
   FinancialTransaction,
@@ -29,13 +28,10 @@ import {
   calculateEffectiveBudgetLimit,
   calculateBudgetPercentConsumed,
   calculateAverageDailySpend,
-  calculateRecurringMonthlyBurden,
-  calculateBurdenSalaryPercentage,
   calculatePeakAverages,
   calculatePeakPercentDeviation,
   getPeakPercentDeviationText,
   orderDOMPeaksByBillingCycle,
-  calculateTotalPotentialSavings,
 } from '../src';
 
 describe('Financial Core Engine Unit Tests', () => {
@@ -211,18 +207,6 @@ describe('Financial Core Engine Unit Tests', () => {
       expect(dowPeaks.length).toBe(7);
     });
 
-    it('detects recurring bill patterns', () => {
-      const txs: FinancialTransaction[] = [
-        { amount: 500, transactionDate: '2026-06-05', merchant: 'Netflix', transactionType: 'expense' },
-        { amount: 500, transactionDate: '2026-07-05', merchant: 'Netflix', transactionType: 'expense' },
-        { amount: 500, transactionDate: '2026-08-05', merchant: 'Netflix', transactionType: 'expense' },
-      ];
-      const recurring = detectRecurringBills(txs, '2026-08-30');
-      expect(recurring.length).toBe(1);
-      expect(recurring[0].merchant).toBe('Netflix');
-      expect(recurring[0].averageAmount).toBe(500);
-    });
-
     it('formats currencies and dates correctly', () => {
       expect(formatCurrency(1500, 'INR')).toBe('₹1,500.00');
       expect(formatCurrency(25.5, 'USD')).toBe('USD 25.50');
@@ -355,20 +339,6 @@ describe('Financial Core Engine Unit Tests', () => {
       expect(calculateAverageDailySpend(15000, 0)).toBe(0);
     });
 
-    it('calculates recurring monthly burden and burden percentage of salary', () => {
-      const bills: RecurringBillPrediction[] = [
-        { merchant: 'Netflix', averageAmount: 649, frequencyDays: 30, lastDate: '2026-08-01', predictedNextDate: '2026-09-01', allIntervals: [], allDates: [] },
-        { merchant: 'Milk Basket', averageAmount: 700, frequencyDays: 7, lastDate: '2026-08-01', predictedNextDate: '2026-08-08', allIntervals: [], allDates: [] },
-      ];
-
-      // 649 * (30/30) + 700 * (30/7) = 649 + 3000 = 3649
-      const burden = calculateRecurringMonthlyBurden(bills);
-      expect(burden).toBe(3649);
-
-      const burdenPct = calculateBurdenSalaryPercentage(burden, 100000);
-      expect(burdenPct).toBeCloseTo(3.649, 2);
-    });
-
     it('calculates peak averages, percentage deviations, and cycle order', () => {
       const domPeaks = [
         { day: 5, amount: 3100, weekendAmount: 0 },
@@ -395,16 +365,6 @@ describe('Financial Core Engine Unit Tests', () => {
       const ordered = orderDOMPeaksByBillingCycle(domPeaks, 17);
       expect(ordered[0].day).toBe(20);
       expect(ordered[1].day).toBe(5);
-    });
-
-    it('calculates total potential savings across recommendations', () => {
-      const recs: any[] = [
-        { id: '1', potentialSavings: 1500 },
-        { id: '2', potentialSavings: 3000 },
-        { id: '3', potentialSavings: 0 },
-      ];
-      expect(calculateTotalPotentialSavings(recs)).toBe(4500);
-      expect(calculateTotalPotentialSavings([])).toBe(0);
     });
   });
 });
