@@ -10,54 +10,13 @@ import {
   calculateDaySpend,
   calculateRunRateForecast,
   calculateNetSavings,
-  calculateDayOfMonthPeaks,
-  calculateDayOfWeekPeaks,
-  detectRecurringBills,
   getDaysDiff,
   calculateTotalFixedCharges,
-  calculateRecurringMonthlyBurden,
-  calculateBurdenSalaryPercentage,
-  calculatePeakAverages,
-  getPeakPercentDeviationText,
-  orderDOMPeaksByBillingCycle,
 } from '../utils/analytics-helper';
 
 import type {
   RunRateForecastResult,
-  DayPeakPoint,
-  DayOfWeekPeakPoint,
-  RecurringBillPrediction,
-  DetectionFrequency,
 } from '../utils/analytics-helper';
-
-// Helpers for recurring bills formatting
-const getRelativeDueText = (predictedNextDate: string, todayStr: string) => {
-  const today = new Date(todayStr);
-  const next = new Date(predictedNextDate);
-  const diffTime = next.getTime() - today.getTime();
-  const diff = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diff < 0) {
-    return { text: `Overdue by ${Math.abs(diff)}d`, status: 'overdue' };
-  } else if (diff === 0) {
-    return { text: 'Due Today', status: 'today' };
-  } else if (diff <= 5) {
-    return { text: `Due in ${diff}d`, status: 'soon' };
-  } else {
-    return { text: `Due in ${diff}d`, status: 'upcoming' };
-  }
-};
-
-const getBillingProgress = (lastDateStr: string, predictedNextDate: string, todayStr: string) => {
-  const last = new Date(lastDateStr).getTime();
-  const next = new Date(predictedNextDate).getTime();
-  const current = new Date(todayStr).getTime();
-  if (next <= last) return 0;
-  const total = next - last;
-  const elapsed = current - last;
-  const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
-  return Math.round(pct);
-};
 
 const FinancialAnalytics: React.FC = () => {
   const { cycles, activeCycle, selectedCycle, setSelectedCycle } = useUserCycles();
@@ -76,15 +35,11 @@ const FinancialAnalytics: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [calcExplanationType, setCalcExplanationType] = useState<'target' | 'actual' | null>(null);
-  const [selectedBillForExplanation, setSelectedBillForExplanation] = useState<RecurringBillPrediction | null>(null);
-  const [detectionFrequency, setDetectionFrequency] = useState<DetectionFrequency>('monthly');
-  const [hoveredDOM, setHoveredDOM] = useState<DayPeakPoint | null>(null);
-  const [hoveredDOW, setHoveredDOW] = useState<DayOfWeekPeakPoint | null>(null);
 
   // Load backend data
   useEffect(() => {
+    let authHeaders = {};
     const loadData = async () => {
-      let authHeaders = {};
       try {
         const session = await fetchAuthSession();
         const token = session.tokens?.idToken?.toString();
@@ -129,9 +84,9 @@ const FinancialAnalytics: React.FC = () => {
   }, []);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value, 10);
-    setTargetBudgetPercent(value);
-    localStorage.setItem('analytics_target_budget_percent', String(value));
+    const val = parseInt(e.target.value, 10);
+    setTargetBudgetPercent(val);
+    localStorage.setItem('analytics_target_budget_percent', val.toString());
   };
 
   if (isLoading) {
@@ -147,7 +102,7 @@ const FinancialAnalytics: React.FC = () => {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  // Get active cycle range
+  // Derive active billing cycle boundaries
   const currentCycle = selectedCycle || activeCycle;
   const expectedEnd = currentCycle ? getExpectedCycleEnd(currentCycle.startDate, billingCycleStartDay) : todayStr;
   const cycleRange = currentCycle ? {
@@ -157,12 +112,11 @@ const FinancialAnalytics: React.FC = () => {
 
   const cycleFilteredTxs = currentCycle ? filterTransactionsByCycle(transactions, currentCycle) : transactions;
 
-  // Compute active fixed charges and net savings forecast
-  const totalFixedCharges = calculateTotalFixedCharges(fixedCharges, cycleRange);
-
-  // Computations
+  // Filter discretionary spending inside cycle
   const discretionarySpent = calculateDiscretionarySpend(cycleFilteredTxs, cycleRange.start, cycleRange.end);
   const spentToday = calculateDaySpend(cycleFilteredTxs, todayStr);
+  const totalFixedCharges = calculateTotalFixedCharges(fixedCharges, cycleRange);
+
   const forecast: RunRateForecastResult = calculateRunRateForecast(
     discretionarySpent,
     expectedSalary,
@@ -172,16 +126,6 @@ const FinancialAnalytics: React.FC = () => {
     totalFixedCharges,
     spentToday
   );
-
-  const dayOfMonthPeaks: DayPeakPoint[] = calculateDayOfMonthPeaks(transactions);
-  const dayOfWeekPeaks: DayOfWeekPeakPoint[] = calculateDayOfWeekPeaks(transactions);
-
-
-  const recurringBills: RecurringBillPrediction[] = detectRecurringBills(transactions, todayStr, detectionFrequency);
-
-  // Calculate monthly burden total (normalizing weekly/quarterly charges to a monthly rate)
-  const monthlyBurdenTotal = calculateRecurringMonthlyBurden(recurringBills);
-  const monthlyBurdenPercent = calculateBurdenSalaryPercentage(monthlyBurdenTotal, expectedSalary);
 
   // Currency formatting helper
   const formatCurrency = (val: number) => {
@@ -196,27 +140,6 @@ const FinancialAnalytics: React.FC = () => {
     if (parts.length !== 3) return dateStr;
     const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  };
-
-  // Find max peak for DOM graph scaling
-  const maxDOMAmount = Math.max(...dayOfMonthPeaks.map(p => p.amount), 1);
-  const maxDOWAmount = Math.max(...dayOfWeekPeaks.map(p => p.amount), 1);
-
-  // Order Day of Month peaks chronologically by billing cycle
-  const cycleOrderedDOMPeaks = orderDOMPeaksByBillingCycle(dayOfMonthPeaks, billingCycleStartDay);
-
-  // Calculate average daily outflows
-  const { avgDOMAmount, avgDOWAmount } = calculatePeakAverages(dayOfMonthPeaks, dayOfWeekPeaks);
-
-  // Percentage variance calculation helper
-  const getPercentDiffText = (amount: number, avg: number) => getPeakPercentDeviationText(amount, avg);
-
-  // Weekend bias format helper
-  const getWeekendBiasText = (amount: number, weekendAmount: number) => {
-    if (amount <= 0 || weekendAmount <= 0) return '';
-    const biasPct = Math.min(100, Math.max(0, Math.round((weekendAmount / amount) * 100)));
-    if (biasPct <= 10) return '';
-    return ` • ${biasPct}% weekend spend`;
   };
 
   // Compute days difference between exhaustion and cycle end date
@@ -241,7 +164,7 @@ const FinancialAnalytics: React.FC = () => {
             Financial Analytics & Predictions
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Predictive forecasts, recurring bill patterns, and peak outflow analysis computed from your ledger history.
+            Predictive forecasts, burn-rate metrics, and card spending analysis computed from your ledger history.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -499,272 +422,6 @@ const FinancialAnalytics: React.FC = () => {
         )}
       </div>
 
-      {/* Outflow Peaks (Periodicity) charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Day of Month Peaks */}
-        <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-base font-extrabold text-gray-900 Outfit">Outflow Peaks by Day of Month</h3>
-              <p className="text-2xs text-gray-400 mt-0.5 mb-6">
-                Aggregated historical spending across days 1–31 to identify monthly peaks.
-              </p>
-            </div>
-            {hoveredDOM ? (
-              <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-3xs font-extrabold px-2 py-1 rounded-lg Outfit animate-pulse" data-testid="dom-hover-badge">
-                Day {hoveredDOM.day}: {formatCurrency(hoveredDOM.amount)}{getPercentDiffText(hoveredDOM.amount, avgDOMAmount)}{getWeekendBiasText(hoveredDOM.amount, hoveredDOM.weekendAmount)}
-              </div>
-            ) : (
-              <div className="text-3xs text-gray-350 px-2 py-1 select-none">
-                Hover bars to inspect
-              </div>
-            )}
-          </div>
-
-          <div className="h-44 relative pt-4">
-            {/* Average Reference Line */}
-            {maxDOMAmount > 0 && avgDOMAmount > 0 && (
-              <div 
-                className="absolute left-0 right-0 border-t border-dashed border-indigo-400/40 pointer-events-none z-10 flex items-center justify-between font-sans"
-                style={{ bottom: `calc(1.5rem + ${(avgDOMAmount / maxDOMAmount) * 80}%)` }}
-                data-testid="dom-average-line"
-              >
-                <span className="bg-indigo-50/90 text-[8px] font-bold text-indigo-500 px-1 rounded-r border border-indigo-100/50 shadow-3xs Outfit uppercase">
-                  AVG: {formatCurrency(avgDOMAmount)}
-                </span>
-              </div>
-            )}
-
-            <div className="h-36 flex items-end justify-between space-x-0.5 sm:space-x-1 select-none overflow-x-auto pb-1 relative z-0">
-              {cycleOrderedDOMPeaks.map(p => {
-                const heightPct = maxDOMAmount > 0 ? (p.amount / maxDOMAmount) * 80 : 0;
-                const isWeekendSkewed = p.amount > 0 && (p.weekendAmount / p.amount) >= 0.7;
-                return (
-                  <div key={p.day} className="flex-1 flex flex-col justify-end items-center min-w-[8px] h-full">
-                    <div
-                      className="w-full bg-indigo-100 hover:bg-indigo-600 rounded-t transition-all duration-300 relative group cursor-pointer"
-                      style={{ height: `${Math.max(4, heightPct)}%` }}
-                      onMouseEnter={() => setHoveredDOM(p)}
-                      onMouseLeave={() => setHoveredDOM(null)}
-                      data-testid={`dom-bar-${p.day}`}
-                    >
-                      {isWeekendSkewed && (
-                        <div 
-                          className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-3xs" 
-                          title="Weekend-skewed spending date (>70% on Fri-Sun)" 
-                          data-testid={`weekend-marker-${p.day}`}
-                        />
-                      )}
-                    </div>
-                    <span className="text-[9px] text-gray-400 font-bold mt-1.5">{p.day}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex justify-between text-3xs text-gray-400 font-semibold mt-1 tracking-wider uppercase">
-            <span>Cycle Start (Day {billingCycleStartDay})</span>
-            <span>Cycle End (Day {billingCycleStartDay === 1 ? 31 : billingCycleStartDay - 1})</span>
-          </div>
-          <div className="text-[9px] text-gray-400 mt-2.5 pt-1.5 border-t border-gray-100/50 flex items-center space-x-1 Outfit select-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
-            <span>Indicates calendar dates where &gt;70% of historical spending occurred on weekends (Fri–Sun).</span>
-          </div>
-        </div>
-
-        {/* Day of Week Peaks */}
-        <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-base font-extrabold text-gray-900 Outfit">Weekly Spend Patterns</h3>
-              <p className="text-2xs text-gray-400 mt-0.5 mb-6">
-                Aggregated historical spending by day of week.
-              </p>
-            </div>
-            {hoveredDOW ? (
-              <div className="bg-purple-50 border border-purple-100 text-purple-700 text-3xs font-extrabold px-2 py-1 rounded-lg Outfit animate-pulse" data-testid="dow-hover-badge">
-                {hoveredDOW.dayName}: {formatCurrency(hoveredDOW.amount)}{getPercentDiffText(hoveredDOW.amount, avgDOWAmount)}
-              </div>
-            ) : (
-              <div className="text-3xs text-gray-350 px-2 py-1 select-none">
-                Hover bars to inspect
-              </div>
-            )}
-          </div>
-
-          <div className="h-44 relative pt-4">
-            {/* Average Reference Line */}
-            {maxDOWAmount > 0 && avgDOWAmount > 0 && (
-              <div 
-                className="absolute left-0 right-0 border-t border-dashed border-purple-400/40 pointer-events-none z-10 flex items-center justify-between font-sans"
-                style={{ bottom: `calc(1.5rem + ${(avgDOWAmount / maxDOWAmount) * 80}%)` }}
-                data-testid="dow-average-line"
-              >
-                <span className="bg-purple-50/90 text-[8px] font-bold text-purple-500 px-1 rounded-r border border-purple-100/50 shadow-3xs Outfit uppercase">
-                  AVG: {formatCurrency(avgDOWAmount)}
-                </span>
-              </div>
-            )}
-
-            <div className="h-36 flex items-end justify-around select-none pb-1 relative z-0">
-              {dayOfWeekPeaks.map(p => {
-                const heightPct = maxDOWAmount > 0 ? (p.amount / maxDOWAmount) * 80 : 0;
-                return (
-                  <div key={p.dayName} className="w-10 flex flex-col justify-end items-center h-full">
-                    <div
-                      className="w-6 bg-purple-100 hover:bg-purple-600 rounded-t transition-all duration-300 relative group cursor-pointer"
-                      style={{ height: `${Math.max(4, heightPct)}%` }}
-                      onMouseEnter={() => setHoveredDOW(p)}
-                      onMouseLeave={() => setHoveredDOW(null)}
-                      data-testid={`dow-bar-${p.dayName}`}
-                    />
-                    <span className="text-xs text-gray-500 font-bold mt-2 Outfit">{p.dayName}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Smart Savings Recommendations */}
-      {/* Predicted Recurring Outflows */}
-      <div className="bg-white/75 backdrop-blur-md border border-gray-100 shadow-sm rounded-2xl p-6 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <div className="space-y-1">
-            <h3 className="text-base font-extrabold text-gray-900 Outfit">Predicted Recurring Bills & Subscriptions</h3>
-            <p className="text-2xs text-gray-400">
-              {detectionFrequency === 'weekly' && 'Weekly outflows (6–8 days intervals) automatically identified from transaction logs.'}
-              {detectionFrequency === 'biweekly' && 'Bi-weekly outflows (13–15 days intervals) automatically identified from transaction logs.'}
-              {detectionFrequency === 'monthly' && 'Monthly outflows (25–35 days intervals) automatically identified from transaction logs.'}
-              {detectionFrequency === 'quarterly' && 'Quarterly outflows (85–95 days intervals) automatically identified from transaction logs.'}
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="bg-gray-100 p-0.5 rounded-lg flex space-x-0.5 border border-gray-200/50 text-2xs font-bold Outfit" data-testid="frequency-filter-group">
-              {(['weekly', 'biweekly', 'monthly', 'quarterly'] as DetectionFrequency[]).map(freq => (
-                <button
-                  key={freq}
-                  onClick={() => setDetectionFrequency(freq)}
-                  className={`px-3 py-1.5 rounded-md transition-all ${
-                    detectionFrequency === freq
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-gray-500 hover:text-gray-800 hover:bg-white/40'
-                  }`}
-                  data-testid={`filter-${freq}`}
-                >
-                  {freq === 'weekly' && 'Weekly'}
-                  {freq === 'biweekly' && 'Bi-Weekly'}
-                  {freq === 'monthly' && 'Monthly'}
-                  {freq === 'quarterly' && 'Quarterly'}
-                </button>
-              ))}
-            </div>
-
-            {recurringBills.length > 0 && (
-              <div className="flex items-center space-x-4 bg-indigo-50/50 border border-indigo-100/50 rounded-xl px-4 py-2">
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">Monthly Commitment</span>
-                  <span className="text-sm font-black text-indigo-950 Outfit mt-0.5">
-                    {formatCurrency(monthlyBurdenTotal)}/mo
-                  </span>
-                </div>
-                <div className="h-6 w-px bg-indigo-200/50"></div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">Salary Share</span>
-                  <span className="text-sm font-black text-indigo-950 Outfit mt-0.5">
-                    {monthlyBurdenPercent.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {recurringBills.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-xs border border-dashed border-gray-150 rounded-xl bg-gray-50/20">
-            No recurring {detectionFrequency} payment patterns identified yet. Try changing the frequency filter above or ingest more transactions.
-          </div>
-        ) : (
-          <div className="overflow-hidden border border-gray-100/80 rounded-xl shadow-xs">
-            <table className="w-full text-left border-collapse bg-white">
-              <thead>
-                <tr className="bg-gray-50/50 border-b border-gray-100 text-3xs font-extrabold uppercase tracking-widest text-gray-400">
-                  <th className="px-6 py-3.5">Merchant</th>
-                  <th className="px-6 py-3.5">Est. Billing Amount</th>
-                  <th className="px-6 py-3.5">Billing Period Progress</th>
-                  <th className="px-6 py-3.5">Frequency</th>
-                  <th className="px-6 py-3.5 text-right">Status & Next Occurrence</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 text-xs">
-                {recurringBills.map(bill => {
-                  const relative = getRelativeDueText(bill.predictedNextDate, todayStr);
-                  const progress = getBillingProgress(bill.lastDate, bill.predictedNextDate, todayStr);
-                  
-                  return (
-                    <tr key={bill.merchant} className="hover:bg-gray-50/40 transition-colors" data-testid="recurring-bill-row">
-                      <td className="px-6 py-4 flex items-center space-x-2">
-                        <button
-                          onClick={() => setSelectedBillForExplanation(bill)}
-                          className="font-extrabold text-gray-900 Outfit hover:text-indigo-650 underline decoration-dotted hover:decoration-solid transition-colors text-left"
-                          title="Click to see why this was detected"
-                          data-testid="explain-merchant-button"
-                        >
-                          {bill.merchant}
-                        </button>
-                        <span className="bg-indigo-50 text-indigo-750 text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border border-indigo-100/60 shadow-2xs">
-                          {detectionFrequency === 'weekly' && 'Weekly'}
-                          {detectionFrequency === 'biweekly' && 'Bi-Weekly'}
-                          {detectionFrequency === 'monthly' && 'Monthly'}
-                          {detectionFrequency === 'quarterly' && 'Quarterly'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-gray-650 Outfit">
-                        {formatCurrency(bill.averageAmount)}
-                      </td>
-                      <td className="px-6 py-4 min-w-[140px] max-w-[200px]">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex-grow w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div 
-                              className={`h-1.5 rounded-full transition-all duration-300 ${
-                                relative.status === 'overdue' ? 'bg-rose-500' :
-                                relative.status === 'today' ? 'bg-amber-500' :
-                                relative.status === 'soon' ? 'bg-amber-400' : 'bg-indigo-500'
-                              }`}
-                              style={{ width: `${progress}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-[10px] font-extrabold text-gray-400 min-w-[28px] text-right Outfit">{progress}%</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">
-                        Every {bill.frequencyDays} days
-                      </td>
-                      <td className="px-6 py-4 text-right flex flex-col items-end space-y-1">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider border shadow-2xs ${
-                          relative.status === 'overdue' ? 'bg-rose-50 border-rose-200 text-rose-700' :
-                          relative.status === 'today' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                          relative.status === 'soon' ? 'bg-amber-50/50 border-amber-250 text-amber-850' :
-                          'bg-indigo-50 border-indigo-200 text-indigo-700'
-                        }`}>
-                          {relative.text}
-                        </span>
-                        <span className="text-2xs text-gray-400 font-medium font-mono" data-testid="predicted-next-date">
-                          {formatDate(bill.predictedNextDate)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       {calcExplanationType && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4" data-testid="calc-modal-backdrop">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-150 max-w-md w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-200" data-testid="calc-explanation-modal">
@@ -839,86 +496,6 @@ const FinancialAnalytics: React.FC = () => {
                 className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs"
               >
                 Close breakdown
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedBillForExplanation && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4" data-testid="recurrence-modal-backdrop">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-150 max-w-md w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-200" data-testid="recurrence-explanation-modal">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">Recurrence Detection Logic</span>
-                <h3 className="text-lg font-black text-gray-900 Outfit" data-testid="recurrence-modal-title">
-                  Why is "{selectedBillForExplanation.merchant}" flagged?
-                </h3>
-              </div>
-              <button 
-                onClick={() => setSelectedBillForExplanation(null)}
-                className="text-gray-400 hover:text-gray-600 font-extrabold text-sm"
-                data-testid="close-recurrence-modal-button"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="space-y-4 text-xs text-gray-600 leading-relaxed font-sans">
-              <div>
-                <p className="font-semibold text-gray-800">1. Historical Transaction Dates detected:</p>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 mt-1.5 flex flex-wrap gap-1.5 font-mono text-[10px]">
-                  {selectedBillForExplanation.allDates.map(date => (
-                    <span key={date} className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-700 shadow-2xs">
-                      {formatDate(date)}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-3xs text-gray-400 mt-1">
-                  We found {selectedBillForExplanation.historyCount} payments in total.
-                </p>
-              </div>
-
-              <div>
-                <p className="font-semibold text-gray-800">2. Recurring Cycle Calculation:</p>
-                <p className="mt-1">
-                  The interval spacing between these consecutive payments is:
-                </p>
-                <div className="flex items-center space-x-2 mt-1.5">
-                  <span className="bg-indigo-50 text-indigo-700 font-mono text-[10px] font-bold border border-indigo-100 rounded px-2 py-1">
-                    {selectedBillForExplanation.allIntervals.join(' days, ') + ' days'}
-                  </span>
-                </div>
-                <p className="mt-1.5">
-                  This averages to a consistent spacing interval of <span className="font-bold text-indigo-650">{selectedBillForExplanation.frequencyDays} days</span>. This matches our system subscription target profile (**25 to 35 days**).
-                </p>
-              </div>
-
-              <div className="border-t border-gray-50 pt-3">
-                <p className="font-semibold text-gray-800">3. Next Billing Prediction:</p>
-                <div className="bg-indigo-50/50 border border-indigo-100/50 rounded-xl p-3 mt-2 space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Last Payment Date:</span>
-                    <span className="font-bold font-mono text-gray-800">{formatDate(selectedBillForExplanation.lastDate)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Predicted Interval:</span>
-                    <span className="font-bold font-mono text-gray-800">+ {selectedBillForExplanation.frequencyDays} days</span>
-                  </div>
-                  <div className="flex justify-between border-t border-indigo-100/50 pt-1 mt-1 font-bold text-indigo-950">
-                    <span>Predicted Next Date:</span>
-                    <span className="font-mono">{formatDate(selectedBillForExplanation.predictedNextDate)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setSelectedBillForExplanation(null)}
-                className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs"
-              >
-                Got it, close
               </button>
             </div>
           </div>

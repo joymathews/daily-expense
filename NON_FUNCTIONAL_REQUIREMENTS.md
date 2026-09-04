@@ -20,6 +20,8 @@
 - [NFR-PERF-8] Single WAN Round-Trip Batching & Query Projection: Database repository layers must execute batch approvals/rejections in 1 single network round-trip and project raw input fields (`raw_body`, `raw_payload`) to support full email detail modal presentation and data lineage tracing.
 - [NFR-PERF-9] HTTP Payload Compression: The Express API server must compress JSON response payloads using Gzip/Brotli to reduce network transfer sizes by at least 70%.
 - [NFR-PERF-10] Glitch-Free Client SWR Caching: The frontend architecture must use a React 18 synchronized external store (`useSyncExternalStore`) to provide instant (0ms) tab navigation while revalidating data in the background and invalidating cache on mutations.
+- [NFR-PERF-11] Active-Cycle Query Scoping & Lazy Comparison Caching: The frontend initial render across Dashboard, Analytics, and Mobile PWA must query only active cycle date ranges by default, reducing initial JSON transfer size by at least 80% and initial render latency to under 300ms.
+- [NFR-PERF-12] Lightweight Pipeline Summary Aggregation: Pipeline count statistics on the Dashboard must be retrieved via a dedicated aggregation query returning scalar counts in under 50ms without loading or transmitting raw message bodies or unindexed JSON blobs.
 
 ## Availability [NFR-AVAIL]
 - [NFR-AVAIL-1] The system should target 99.9% availability for the core platform and third-party integration pipelines.
@@ -89,20 +91,13 @@
 - [NFR-USAB-35] Cycle Comparison Trend Responsiveness: Filtering payment methods, toggling comparison series, or switching view modes (daily vs. cumulative) in the cycle comparison graph must recalculate data and redraw the SVG lines within 100ms, maintaining smooth UI rendering.
 - [NFR-USAB-36] Modal Edit Save Feedback & Closure Latency: Executing transaction update requests via 'Save Updates' or 'Save Corrections' buttons must update the backend, close the detail modal, and refresh the active transaction view within 150ms of a successful API response. On network or server failure, the system must maintain modal state, retain typed inputs, and display an inline error banner instantly (within 100ms).
 - [NFR-ANALYSIS-8] The budget slider interaction and projected forecasts must update the UI metrics instantly (within 50ms) to ensure interactive responsiveness.
-- [NFR-ANALYSIS-9] The Outflow Peaks periodicity charts and lists must load and render within 150ms of ledger data retrieval.
-- [NFR-ANALYSIS-10] Interactive Hover Response: The hover transition and badge render on the periodicity charts must display and update within 50ms of a mouse-over event, ensuring smooth, lag-free user interaction.
 - [NFR-ANALYSIS-11] Deficit Recalculation Efficiency: Recalculating the sustainable card spend cap and updating the deficit risk notifications based on slider or fixed charges changes must execute within 50ms.
-- [NFR-ANALYSIS-12] Chronological Layout Performance: Slicing and re-sorting transaction peaks by billing cycle day or standard weekdays must resolve instantly within 20ms during render compilation.
-- [NFR-ANALYSIS-13] Reference Line Render Latency: Drawing the average reference lines and computing variance percentages on hover must resolve instantly (within 10ms of state changes).
-- [NFR-ANALYSIS-14] Savings Recommendations Performance: The compilation and matching of savings recommendations must complete within 20ms of state changes, and live recalibration on slider threshold updates must render instantly within 30ms to maintain fluid user interactivity.
 
 ## Dynamic Cycle Performance & Usability [NFR-CYCLE]
 - [NFR-CYCLE-1] Cycle Engine API Resolution Performance: Fetching computed user cycles from the Cycle Engine API (GET /api/pipeline/user-cycles) must execute and return the formatted cycle list within 100ms.
 - [NFR-CYCLE-2] Intra-Day Boundary Evaluation Latency: Evaluating transactions against cycle start/end timestamps and filtering transactions for rendering must resolve within 20ms during UI render compilation.
 - [NFR-CYCLE-3] Cycle Override Persistence & Recalculation Performance: Saving or deleting a cycle start override (POST/DELETE /api/pipeline/user-cycles/override) must persist the override and return updated dynamic cycle data within 150ms at the API layer.
 
-## Database Raw Table Viewer [NFR-DB-VIEWER]
-- [NFR-DB-VIEWER-1] Raw Table Query Latency & Data Isolation: The paginated database viewer API must execute raw table queries and return formatted cell payloads in under 200ms for page sizes up to 100 rows. All table queries must strictly enforce authentication (`checkJwt`) and user isolation by `user_id` context.
 
 ## Mobile PWA Architecture & Usability [NFR-MOB]
 - [NFR-MOB-1] Mobile Form Factor & Touch Optimization: The mobile web application must be strictly designed for mobile viewports, prioritizing portrait orientation with fluid landscape adaptation, enforcing minimum 44px x 44px tap targets, thumb-accessible bottom controls, and iOS/Android safe area padding (`env(safe-area-inset-*)`).

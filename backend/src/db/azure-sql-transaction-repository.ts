@@ -8,7 +8,8 @@ import {
   PaymentMethod,
   PaymentMappingRule,
   CycleOverrideData,
-  FixedCharge
+  FixedCharge,
+  PipelineSummaryStats
 } from './transaction-repository';
 import {
   IFeedbackRepository,
@@ -1485,111 +1486,6 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
       .query('DELETE FROM fixed_charges WHERE id = @id AND user_id = @userId');
   }
 
-  // Database Raw Table Viewer Methods
-  private static readonly ALLOWED_DB_VIEWER_TABLES = [
-    'gold_transactions',
-    'silver_extracted_transactions',
-    'bronze_raw_inputs',
-    'user_cycles',
-    'fixed_charges',
-    'user_preferences',
-    'payment_methods',
-    'payment_mapping_rules',
-    'llm_extraction_logs',
-    'llm_feedback_settings',
-    'llm_correction_examples',
-    'fetcher_emails'
-  ];
-
-  async getInspectableTables(): Promise<Array<{ name: string; columns: string[] }>> {
-    const pool = await this.getPool();
-    const inspectable: Array<{ name: string; columns: string[] }> = [];
-
-    for (const tableName of AzureSqlTransactionRepository.ALLOWED_DB_VIEWER_TABLES) {
-      try {
-        const result = await pool.request()
-          .input('tableName', sql.NVarChar(255), tableName)
-          .query(`
-            SELECT COLUMN_NAME 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_NAME = @tableName 
-            ORDER BY ORDINAL_POSITION
-          `);
-        const columns = result.recordset.map(r => r.COLUMN_NAME);
-        if (columns.length > 0) {
-          inspectable.push({ name: tableName, columns });
-        }
-      } catch (err) {
-        // Table may not exist yet
-      }
-    }
-    return inspectable;
-  }
-
-  async getTableRows(
-    tableName: string,
-    userId: string,
-    limit: number,
-    offset: number,
-    search?: string
-  ): Promise<{ rows: any[]; totalCount: number; columns: string[] }> {
-    const page = Math.floor(offset / limit) + 1;
-    return this.queryRawTableData(tableName, userId, { page, limit, search });
-  }
-
-  async queryRawTableData(
-    tableName: string,
-    userId: string,
-    options: { page: number; limit: number; search?: string }
-  ): Promise<{ rows: any[]; totalCount: number; columns: string[] }> {
-    if (!AzureSqlTransactionRepository.ALLOWED_DB_VIEWER_TABLES.includes(tableName)) {
-      throw new Error(`Unauthorized table access: ${tableName}`);
-    }
-
-    const pool = await this.getPool();
-
-    // Get column names
-    const colResult = await pool.request()
-      .input('tableName', sql.NVarChar(255), tableName)
-      .query(`
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = @tableName 
-        ORDER BY ORDINAL_POSITION
-      `);
-    const columns = colResult.recordset.map(r => r.COLUMN_NAME);
-
-    const page = Math.max(1, options.page);
-    const limit = Math.min(100, Math.max(1, options.limit));
-    const offset = (page - 1) * limit;
-
-    const countReq = pool.request().input('userId', sql.NVarChar(255), userId);
-    let countQuery = `SELECT COUNT(*) as count FROM ${tableName} WHERE user_id = @userId`;
-
-    if (options.search && columns.length > 0) {
-      const searchConditions = columns.map(c => `CAST(${c} AS NVARCHAR(MAX)) LIKE @search`).join(' OR ');
-      countQuery += ` AND (${searchConditions})`;
-      countReq.input('search', sql.NVarChar(sql.MAX), `%${options.search}%`);
-    }
-
-    const countRes = await countReq.query(countQuery);
-    const totalCount = countRes.recordset[0]?.count || 0;
-
-    const dataReq = pool.request().input('userId', sql.NVarChar(255), userId);
-    let dataQuery = `SELECT * FROM ${tableName} WHERE user_id = @userId`;
-
-    if (options.search && columns.length > 0) {
-      const searchConditions = columns.map(c => `CAST(${c} AS NVARCHAR(MAX)) LIKE @search`).join(' OR ');
-      dataQuery += ` AND (${searchConditions})`;
-      dataReq.input('search', sql.NVarChar(sql.MAX), `%${options.search}%`);
-    }
-
-    dataQuery += ` ORDER BY 1 OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
-
-    const dataRes = await dataReq.query(dataQuery);
-    return { rows: dataRes.recordset, totalCount, columns };
-  }
-
   // ---------------------------------------------------------------------------
   // IFeedbackRepository implementation
   // ---------------------------------------------------------------------------
@@ -1946,6 +1842,63 @@ export class AzureSqlTransactionRepository implements ITransactionRepository, IF
       emailSnippet: row.email_snippet ?? null,
       embedding: row.embedding ?? null,
       createdAt: row.created_at,
+    };
+  }
+
+  async getPipelineSummaryStats(userId: string): Promise<PipelineSummaryStats> {
+    const pool = await this.getPool();
+
+    const bronzeRes = await pool.request()
+      .input('user_id', sql.NVarChar(255), userId)
+      .query(`
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN status = 'processed' THEN 1 ELSE 0 END) AS processed,
+          SUM(CASE WHEN status = 'unprocessed' THEN 1 ELSE 0 END) AS unprocessed,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+        FROM bronze_raw_inputs
+        WHERE user_id = @user_id AND deleted_at IS NULL
+      `);
+
+    const silverRes = await pool.request()
+      .input('user_id', sql.NVarChar(255), userId)
+      .query(`
+        SELECT
+          SUM(CASE WHEN status = 'pending' OR status = 'error' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+        FROM silver_extracted_transactions
+        WHERE user_id = @user_id AND deleted_at IS NULL
+      `);
+
+    const goldRes = await pool.request()
+      .input('user_id', sql.NVarChar(255), userId)
+      .query(`
+        SELECT
+          COUNT(*) AS totalCount,
+          SUM(
+            CASE
+              WHEN transaction_type = 'transfer' OR transaction_type = 'fixed' THEN 0
+              WHEN transaction_type = 'refund' THEN -ABS(amount)
+              ELSE amount
+            END
+          ) AS totalAmount
+        FROM gold_transactions
+        WHERE user_id = @user_id AND deleted_at IS NULL
+      `);
+
+    const bronzeRow = bronzeRes.recordset[0];
+    const silverRow = silverRes.recordset[0];
+    const goldRow = goldRes.recordset[0];
+
+    return {
+      bronzeCount: bronzeRow?.total || 0,
+      bronzeProcessedCount: bronzeRow?.processed || 0,
+      bronzeUnprocessedCount: bronzeRow?.unprocessed || 0,
+      bronzeRejectedCount: bronzeRow?.rejected || 0,
+      silverCount: silverRow?.pending || 0,
+      silverRejectedCount: silverRow?.rejected || 0,
+      goldCount: goldRow?.totalCount || 0,
+      goldTotalAmount: Number(goldRow?.totalAmount || 0),
     };
   }
 }

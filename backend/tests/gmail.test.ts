@@ -1138,7 +1138,7 @@ describe('Gmail API Integration [BUG-010]', () => {
   /**
    * [BUG-007] / [FUNC-GMAIL-36] Staging Rejection: Verify that updates with status 'rejected' are persisted.
    */
-  it('should support updating a pending transaction to rejected status and persisting it', async () => {
+  it('should support updating a pending transaction to rejected status and persisting it [FUNC-GMAIL-36] [BUG-007]', async () => {
     const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();

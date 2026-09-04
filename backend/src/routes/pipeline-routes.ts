@@ -34,6 +34,25 @@ router.get(['/raw-inputs', '/raw-emails'], async (req, res) => {
 });
 
 /**
+ * [FUNC-PIPE-STATS-1], [NFR-PERF-12] GET /api/pipeline/summary-stats
+ * Retrieves aggregated pipeline status counts without transmitting large message payloads.
+ */
+router.get('/summary-stats', async (req, res) => {
+  const userId = (req as any).auth?.sub;
+  try {
+    const repository = getRepository();
+    await repository.initializeSchema();
+
+    const stats = await repository.getPipelineSummaryStats(userId);
+
+    await repository.close();
+    res.status(200).json({ stats });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch pipeline summary stats' });
+  }
+});
+
+/**
  * [FUNC-GMAIL-8], [FUNC-GMAIL-10] PUT /api/pipeline/raw-inputs/:id
  * Updates raw input (Bronze) transactional classification status.
  */
@@ -971,61 +990,6 @@ router.delete('/fixed-charges/:id', async (req, res) => {
       res.status(404).json({ error: error.message });
     } else {
       res.status(500).json({ error: error.message || 'Failed to delete fixed charge' });
-    }
-  }
-});
-
-/**
- * [FUNC-DB-VIEWER-2] GET /api/pipeline/db/tables
- * Retrieves list of inspectable database tables and column schema metadata.
- */
-router.get('/db/tables', async (req, res) => {
-  const userId = (req as any).auth?.sub;
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized: Missing user authentication token' });
-  }
-
-  try {
-    const repository = getRepository();
-    await repository.initializeSchema();
-
-    const tables = await repository.getInspectableTables();
-    await repository.close();
-
-    res.status(200).json({ tables });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch database tables' });
-  }
-});
-
-/**
- * [FUNC-DB-VIEWER-3] GET /api/pipeline/db/tables/:tableName
- * Retrieves paginated raw table rows filtered by user ID and optional search string.
- */
-router.get('/db/tables/:tableName', async (req, res) => {
-  const { tableName } = req.params;
-  const userId = (req as any).auth?.sub;
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized: Missing user authentication token' });
-  }
-
-  const limit = parseInt(req.query.limit as string, 10) || 50;
-  const offset = parseInt(req.query.offset as string, 10) || 0;
-  const search = (req.query.search as string) || '';
-
-  try {
-    const repository = getRepository();
-    await repository.initializeSchema();
-
-    const result = await repository.getTableRows(tableName, userId, limit, offset, search);
-    await repository.close();
-
-    res.status(200).json(result);
-  } catch (error: any) {
-    if (error.message === 'Invalid or unauthorized table name') {
-      res.status(400).json({ error: error.message });
-    } else {
-      res.status(500).json({ error: error.message || 'Failed to fetch raw table records' });
     }
   }
 });

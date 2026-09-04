@@ -319,7 +319,7 @@ describe('Mobile PWA Application Test Suite', () => {
       });
     });
 
-    it('accepts Bronze email, immediately displays editable Silver card, and promotes to Gold', async () => {
+    it('accepts Bronze email, immediately displays editable Silver card, and promotes to Gold [BUG-023]', async () => {
       render(
         <BrowserRouter>
           <IngestionTriage />

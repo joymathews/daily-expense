@@ -26,7 +26,7 @@ class MockTransactionExtractor implements ITransactionExtractor {
   }
 }
 
-describe('Transaction Processing Pipeline Integration', () => {
+describe('Transaction Processing Pipeline Integration [FUNC-GMAIL-55] [NFR-PERF-8]', () => {
   let repository: SQLiteTransactionRepository;
   let extractor: MockTransactionExtractor;
   let service: TransactionIngestionService;
@@ -267,8 +267,16 @@ describe('Transaction Processing Pipeline Integration', () => {
       approvePendingTransactionsBatch: jest.fn().mockResolvedValue([]),
       updatePendingTransactionsBatch: jest.fn().mockResolvedValue(undefined),
       updateGoldTransactionsBatch: jest.fn().mockResolvedValue(undefined),
-      getInspectableTables: jest.fn().mockResolvedValue([]),
-      getTableRows: jest.fn().mockResolvedValue({ rows: [], totalCount: 0, columns: [] }),
+      getPipelineSummaryStats: jest.fn().mockResolvedValue({
+        bronzeCount: 0,
+        bronzeProcessedCount: 0,
+        bronzeUnprocessedCount: 0,
+        bronzeRejectedCount: 0,
+        silverCount: 0,
+        silverRejectedCount: 0,
+        goldCount: 0,
+        goldTotalAmount: 0,
+      }),
     };
 
     const ingestion = new TransactionIngestionService(mockRepo, extractor);

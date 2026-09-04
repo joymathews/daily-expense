@@ -79,65 +79,6 @@ export interface DailyBurnAllowanceResult {
   overspentTodayAmount: number;
 }
 
-export interface DayPeakPoint {
-  day: number;
-  amount: number;
-  count?: number;
-  weekendAmount: number;
-}
-
-export interface DayOfWeekPeakPoint {
-  dayName: string;
-  dayIndex?: number;
-  amount: number;
-  count?: number;
-}
-
-export type DetectionFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly';
-
-export interface RecurringBillPrediction {
-  merchant: string;
-  averageAmount: number;
-  frequencyDays: number;
-  lastDate: string;
-  predictedNextDate: string;
-  historyCount?: number;
-  allIntervals: number[];
-  allDates: string[];
-  confidence?: number;
-  occurrences?: number;
-}
-
-export interface SavingsRecommendation {
-  id: string;
-  type:
-    | 'weekend'
-    | 'recurring'
-    | 'weekday'
-    | 'date_trap'
-    | 'run_rate_margin'
-    | 'category_cap'
-    | 'budget_split'
-    | 'budget_drift'
-    | 'subscription_creep'
-    | 'merchant_frequency'
-    | 'investment'
-    | 'fixed_burden'
-    | 'large_expense';
-  title: string;
-  description: string;
-  potentialSavings: number;
-  impact: 'high' | 'medium' | 'low' | 'critical';
-}
-
-export interface InsightsConfig {
-  weekendPctThreshold: number;
-  categoryPctThreshold: number;
-  merchantVisitsThreshold: number;
-  largeExpensePctThreshold: number;
-  fixedBurdenPctThreshold: number;
-}
-
 export interface DailyTrendPoint {
   date: string;
   amount: number;
@@ -165,11 +106,4 @@ export interface CategorySpendItem {
 export interface DailySpendSeriesResult {
   spends: Array<{ date: string; amount: number | null }>;
   total: number;
-}
-
-export interface PeakAveragesResult {
-  totalDOMAmount: number;
-  avgDOMAmount: number;
-  totalDOWAmount: number;
-  avgDOWAmount: number;
 }

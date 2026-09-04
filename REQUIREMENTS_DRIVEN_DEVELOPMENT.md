@@ -26,7 +26,7 @@ All code modifications in this repository follow a test-first workflow:
 ### 1. New Features (Greenfield)
 Before writing feature code:
 - **Define the Requirement**: Add functional (`[FUNC-XXXX]`) and non-functional (`[NFR-XXXX]`) requirements to [`FUNCTIONAL_DOCUMENTATION.md`](FUNCTIONAL_DOCUMENTATION.md) and [`NON_FUNCTIONAL_REQUIREMENTS.md`](NON_FUNCTIONAL_REQUIREMENTS.md).
-- **Write the Test First**: Create automated tests in Jest (`backend/tests/`) or Vitest (`frontend/src/`) annotated with the target ID (e.g., `[FUNC-DB-VIEWER-2]`).
+- **Write the Test First**: Create automated tests in Jest (`backend/tests/`) or Vitest (`frontend/src/`) annotated with the target ID (e.g., `[FUNC-GMAIL-37]`).
 - **Implement the Code**: Write production code solely to satisfy those pre-written test assertions.
 
 ### 2. Bug Fixes & Edge Cases (Legacy Remediation)
@@ -75,26 +75,22 @@ Before modifying files, **Plan Mode** outputs an execution plan showing:
 ### 1. Requirement Definition ([`FUNCTIONAL_DOCUMENTATION.md`](FUNCTIONAL_DOCUMENTATION.md))
 
 ```markdown
-## [FUNC-DB-VIEWER-2] Table Selection & Schema Inspection
-The user must be able to inspect allowed database table schemas (gold_transactions, silver_extracted_transactions, bronze_raw_inputs, llm_extraction_audit_log) and view column metadata.
+## [FUNC-GMAIL-37] Bronze Pipeline Statuses: processed, unprocessed, rejected
+The user must see status indicators on raw receipt items reflecting their ingestion state and be able to reject items cleanly.
 ```
 
-### 2. Test Annotation ([`backend/tests/db-viewer.test.ts`](backend/tests/db-viewer.test.ts))
+### 2. Test Annotation ([`backend/tests/transaction-pipeline.test.ts`](backend/tests/transaction-pipeline.test.ts))
 
 ```typescript
-describe('Database Viewer Repository Integration', () => {
+describe('Transaction Pipeline Service Integration', () => {
   /**
-   * [FUNC-DB-VIEWER-2] Table Selection & Schema Inspection
-   * Verify that the database viewer listing returns all allowed application tables and schema column information.
+   * [FUNC-GMAIL-37] Bronze Pipeline Statuses
+   * Verify that raw input items can be marked with rejected status.
    */
-  it('should return allowed database tables with metadata', async () => {
-    const tables = await repository.getInspectableTables();
-    expect(tables).toBeDefined();
-    expect(Array.isArray(tables)).toBe(true);
-    
-    const tableNames = tables.map(t => t.name);
-    expect(tableNames).toContain('gold_transactions');
-    expect(tableNames).toContain('bronze_raw_inputs');
+  it('should mark raw input as rejected in the repository', async () => {
+    await repository.rejectRawInput('mock_id', 'test_user');
+    const input = await repository.getRawInputById('mock_id', 'test_user');
+    expect(input?.status).toBe('rejected');
   });
 });
 ```

@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge } from './transaction-repository';
+import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge, PipelineSummaryStats } from './transaction-repository';
 import { IFeedbackRepository, FeedbackSettings, CorrectionExample, CorrectionFieldName, FeedbackEffectiveness } from './feedback-repository';
 import { normalizeCategory } from '../utils/category-helper';
 import { PaymentStandardizationService } from '../services/payment-standardization-service';
@@ -2175,97 +2175,62 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Database Raw Table Viewer Methods [FUNC-DB-VIEWER]
-  // ---------------------------------------------------------------------------
+  async getPipelineSummaryStats(userId: string): Promise<PipelineSummaryStats> {
+    const bronzeRow = await this.get<{
+      total: number;
+      processed: number;
+      unprocessed: number;
+      rejected: number;
+    }>(
+      `SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'processed' THEN 1 ELSE 0 END) AS processed,
+        SUM(CASE WHEN status = 'unprocessed' THEN 1 ELSE 0 END) AS unprocessed,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+      FROM bronze_raw_inputs
+      WHERE user_id = ? AND deleted_at IS NULL`,
+      [userId]
+    );
 
-  private static readonly ALLOWED_DB_VIEWER_TABLES = [
-    'gold_transactions',
-    'silver_extracted_transactions',
-    'bronze_raw_inputs',
-    'user_cycles',
-    'fixed_charges',
-    'user_preferences',
-    'payment_methods',
-    'payment_mapping_rules',
-    'llm_extraction_logs',
-    'llm_feedback_settings',
-    'llm_correction_examples',
-    'fetcher_emails'
-  ];
+    const silverRow = await this.get<{
+      pending: number;
+      rejected: number;
+    }>(
+      `SELECT
+        SUM(CASE WHEN status = 'pending' OR status = 'error' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+      FROM silver_extracted_transactions
+      WHERE user_id = ? AND deleted_at IS NULL`,
+      [userId]
+    );
 
-  async getInspectableTables(): Promise<Array<{ name: string; columns: string[] }>> {
-    const inspectable: Array<{ name: string; columns: string[] }> = [];
-    for (const tableName of SQLiteTransactionRepository.ALLOWED_DB_VIEWER_TABLES) {
-      try {
-        const pragmaRows: any[] = await this.all(`PRAGMA table_info(${tableName})`);
-        const columns = pragmaRows.map(r => r.name);
-        inspectable.push({ name: tableName, columns });
-      } catch (err) {
-        // Table might not exist in early schema versions
-      }
-    }
-    return inspectable;
-  }
-
-  async getTableRows(
-    tableName: string,
-    userId: string,
-    limit: number = 50,
-    offset: number = 0,
-    search?: string
-  ): Promise<{
-    tableName: string;
-    columns: string[];
-    totalCount: number;
-    limit: number;
-    offset: number;
-    rows: any[];
-  }> {
-    if (!SQLiteTransactionRepository.ALLOWED_DB_VIEWER_TABLES.includes(tableName)) {
-      throw new Error('Invalid or unauthorized table name');
-    }
-
-    const pragmaRows: any[] = await this.all(`PRAGMA table_info(${tableName})`);
-    const columns = pragmaRows.map(r => r.name);
-    const hasUserId = columns.includes('user_id');
-
-    const params: any[] = [];
-    let whereClauses: string[] = [];
-
-    if (hasUserId) {
-      whereClauses.push('user_id = ?');
-      params.push(userId);
-    }
-
-    if (search && search.trim() !== '') {
-      const searchPattern = `%${search.trim()}%`;
-      const searchSubClauses: string[] = [];
-      columns.forEach(col => {
-        searchSubClauses.push(`CAST(${col} AS TEXT) LIKE ?`);
-        params.push(searchPattern);
-      });
-      whereClauses.push(`(${searchSubClauses.join(' OR ')})`);
-    }
-
-    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
-    const countRow: any = await this.get(`SELECT COUNT(*) as count FROM ${tableName} ${whereSql}`, params);
-    const totalCount = countRow ? countRow.count : 0;
-
-    const dataParams = [...params, limit, offset];
-    const rows: any[] = await this.all(
-      `SELECT * FROM ${tableName} ${whereSql} LIMIT ? OFFSET ?`,
-      dataParams
+    const goldRow = await this.get<{
+      totalCount: number;
+      totalAmount: number;
+    }>(
+      `SELECT
+        COUNT(*) AS totalCount,
+        COALESCE(SUM(
+          CASE
+            WHEN transaction_type = 'transfer' OR transaction_type = 'fixed' THEN 0
+            WHEN transaction_type = 'refund' THEN -ABS(amount_cents)
+            ELSE amount_cents
+          END
+        ), 0) / 100.0 AS totalAmount
+      FROM gold_transactions
+      WHERE user_id = ? AND deleted_at IS NULL`,
+      [userId]
     );
 
     return {
-      tableName,
-      columns,
-      totalCount,
-      limit,
-      offset,
-      rows
+      bronzeCount: bronzeRow?.total || 0,
+      bronzeProcessedCount: bronzeRow?.processed || 0,
+      bronzeUnprocessedCount: bronzeRow?.unprocessed || 0,
+      bronzeRejectedCount: bronzeRow?.rejected || 0,
+      silverCount: silverRow?.pending || 0,
+      silverRejectedCount: silverRow?.rejected || 0,
+      goldCount: goldRow?.totalCount || 0,
+      goldTotalAmount: Number(goldRow?.totalAmount || 0),
     };
   }
 

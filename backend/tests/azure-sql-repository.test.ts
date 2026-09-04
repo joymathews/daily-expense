@@ -2,7 +2,7 @@ import { AzureSqlTransactionRepository } from '../src/db/azure-sql-transaction-r
 import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
 import { getRepository } from '../src/db/transaction-repository-factory';
 
-describe('AzureSqlTransactionRepository and Factory Tests [FUNC-SYS-7, NFR-DB-1]', () => {
+describe('AzureSqlTransactionRepository and Factory Tests [FUNC-SYS-7] [NFR-DB-1]', () => {
   const originalProvider = process.env.DB_PROVIDER;
   const originalForce = process.env.FORCE_AZURE_SQL_TEST;
 
