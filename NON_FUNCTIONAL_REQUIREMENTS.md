@@ -22,6 +22,7 @@
 - [NFR-PERF-10] Glitch-Free Client SWR Caching: The frontend architecture must use a React 18 synchronized external store (`useSyncExternalStore`) to provide instant (0ms) tab navigation while revalidating data in the background and invalidating cache on mutations.
 - [NFR-PERF-11] Active-Cycle Query Scoping & Lazy Comparison Caching: The frontend initial render across Dashboard, Analytics, and Mobile PWA must query only active cycle date ranges by default, reducing initial JSON transfer size by at least 80% and initial render latency to under 300ms.
 - [NFR-PERF-12] Lightweight Pipeline Summary Aggregation: Pipeline count statistics on the Dashboard must be retrieved via a dedicated aggregation query returning scalar counts in under 50ms without loading or transmitting raw message bodies or unindexed JSON blobs.
+- [NFR-PERF-13] Zero-All-Time Initial Query Constraint & Bounded Payload Policy: All UI routes, overview cards, and metrics components must strictly bound initial queries using explicit date range parameters (active billing cycle or single calendar month), capping initial JSON response sizes to under 10KB and initial API execution times to under 20ms regardless of lifetime database record count.
 
 ## Availability [NFR-AVAIL]
 - [NFR-AVAIL-1] The system should target 99.9% availability for the core platform and third-party integration pipelines.

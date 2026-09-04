@@ -39,6 +39,8 @@ For ALL future changes, feature implementations, and code modifications, you mus
 
 * **Dependency Security Standard**: Zero Critical and High vulnerabilities permitted across backend and frontend dependencies. Routine `npm audit` checks must be performed to maintain package health.
 
+* **Active-Cycle & Date-Bounded Query Standard**: All UI components, overview panels, charts, tables, and analytics modules MUST query backend transaction endpoints with explicit date boundaries (`startDate` and `endDate`) matching the active billing cycle or the active viewing window. Unbounded queries across all-time historical data (`GET /api/pipeline/gold-transactions` without date parameters) are strictly prohibited on initial page renders. Any historical cycle comparison or multi-month calendar navigation MUST use on-demand lazy querying with local in-memory caching to guarantee constant O(1) initial render speeds regardless of total lifetime records in the database.
+
 
 
 ## 4. Coding & Naming Conventions

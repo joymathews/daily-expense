@@ -73,6 +73,45 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
   const [todayDateString, setTodayDateString] = useState('');
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
+  // [FUNC-DASH-CAL-PERF-1] On-demand lazy fetching and local caching for calendar months
+  const [monthSpendCache, setMonthSpendCache] = useState<Record<string, any[]>>({});
+
+  const handleCalendarMonthChange = async (year: number, month: number) => {
+    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+    if (monthSpendCache[monthKey]) return; // Already cached locally
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthStart = `${monthKey}-01`;
+    const monthEnd = `${monthKey}-${String(daysInMonth).padStart(2, '0')}`;
+
+    let authHeaders = {};
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+      if (token) authHeaders = { 'Authorization': `Bearer ${token}` };
+    } catch (err) {
+      console.warn('Failed to fetch auth session:', err);
+    }
+
+    try {
+      const url = `/api/pipeline/gold-transactions?startDate=${encodeURIComponent(monthStart)}&endDate=${encodeURIComponent(monthEnd)}`;
+      const res = await fetch(getApiUrl(url), { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        const txs = data.transactions || [];
+        setMonthSpendCache(prev => ({ ...prev, [monthKey]: txs }));
+
+        const newDailySpend = buildDailySpendMap(txs);
+        setDailySpendMap(prev => ({ ...prev, ...newDailySpend }));
+
+        const newTxMap = buildDailyTransactionsMap(txs);
+        setDailyTransactionsMap(prev => ({ ...prev, ...newTxMap }));
+      }
+    } catch (e) {
+      console.warn('Failed to fetch calendar month transactions:', e);
+    }
+  };
+
   const [rawLedgerData, setRawLedgerData] = useState<{ goldTxs: any[]; prefs: any; fixedChargesList: any[] } | null>(null);
 
   useEffect(() => {
@@ -128,14 +167,22 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
         console.warn('Failed to fetch auth session (normal in tests):', err);
       }
 
-      // [FUNC-DASH-PERF-1], [FUNC-PIPE-STATS-1], [NFR-PERF-11], [NFR-PERF-12]
-      // Fetch user preferences, fixed charges, summary stats, LLM accuracy stats, and gold transactions in parallel
+      // [FUNC-DASH-PERF-1], [FUNC-PIPE-STATS-1], [FUNC-DASH-CAL-PERF-1], [NFR-PERF-11], [NFR-PERF-12], [NFR-PERF-13]
+      // Fetch user preferences, fixed charges, summary stats, LLM accuracy stats, and active-cycle gold transactions in parallel
+      const currCycle = selectedCycle || activeCycle;
+      const initialRange = currCycle ? {
+        start: currCycle.startDate,
+        end: currCycle.endDate || getActiveCycleRange(17).end
+      } : getActiveCycleRange(17);
+
+      const scopedGoldUrl = `/api/pipeline/gold-transactions?startDate=${encodeURIComponent(initialRange.start)}&endDate=${encodeURIComponent(initialRange.end)}`;
+
       Promise.all([
         fetch(getApiUrl('/api/pipeline/user-preferences'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ billingCycleStartDay: 17, expectedSalary: 100000 })),
         fetch(getApiUrl('/api/pipeline/fixed-charges'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ fixedCharges: [] })),
         fetch(getApiUrl('/api/pipeline/summary-stats'), { headers: authHeaders }).then(res => res.json()).catch(() => null),
         fetch(getApiUrl('/api/pipeline/llm-accuracy-stats'), { headers: authHeaders }).then(res => res.json()).catch(() => null),
-        fetch(getApiUrl('/api/pipeline/gold-transactions'), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
+        fetch(getApiUrl(scopedGoldUrl), { headers: authHeaders }).then(res => res.json()).catch(() => ({ transactions: [] })),
       ])
         .then(([prefs, fcData, statsData, llmData, gold]) => {
           const goldTxs = gold.transactions || [];
@@ -682,6 +729,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
               dailySpendMap={dailySpendMap}
               today={todayDateString}
               onDayClick={setSelectedCalendarDate}
+              onMonthChange={handleCalendarMonthChange}
             />
           </div>
         )}

@@ -81,4 +81,25 @@ describe('SpendCalendar Component [FUNC-DASH-CAL-1]', () => {
     expect(todayCell).toBeInTheDocument();
     expect(todayCell?.textContent).toContain('5');
   });
+
+  /**
+   * [FUNC-DASH-CAL-PERF-1] On-Demand Lazy Calendar Month Querying
+   */
+  it('triggers onMonthChange callback with next year and month indices on navigation [FUNC-DASH-CAL-PERF-1]', () => {
+    const handleMonthChange = vi.fn();
+    render(
+      <SpendCalendar
+        dailySpendMap={mockSpendMap}
+        today="2026-07-05"
+        onMonthChange={handleMonthChange}
+      />
+    );
+
+    const prevBtn = screen.getByRole('button', { name: /previous month/i });
+    fireEvent.click(prevBtn);
+
+    // June 2026 (year: 2026, month: 5 (0-indexed))
+    expect(handleMonthChange).toHaveBeenCalledWith(2026, 5);
+  });
 });
+

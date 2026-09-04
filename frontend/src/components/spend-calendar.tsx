@@ -7,6 +7,8 @@ interface SpendCalendarProps {
   today: string;
   /** Called when the user clicks a day cell; receives the date string "YYYY-MM-DD" */
   onDayClick?: (dateKey: string) => void;
+  /** Called when the visible month changes; receives year and 0-indexed month */
+  onMonthChange?: (year: number, month: number) => void;
 }
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -46,27 +48,37 @@ function buildCalendarGrid(year: number, month: number): (number | null)[] {
   return grid;
 }
 
-const SpendCalendar: React.FC<SpendCalendarProps> = ({ dailySpendMap, today, onDayClick }) => {
+const SpendCalendar: React.FC<SpendCalendarProps> = ({ dailySpendMap, today, onDayClick, onMonthChange }) => {
   const todayParts = today.split('-').map(Number);
   const [calYear, setCalYear] = useState(todayParts[0]);
   const [calMonth, setCalMonth] = useState(todayParts[1] - 1); // 0-indexed
 
   const navigateToPreviousMonth = () => {
+    let nextY = calYear;
+    let nextM = calMonth;
     if (calMonth === 0) {
-      setCalYear(y => y - 1);
-      setCalMonth(11);
+      nextY = calYear - 1;
+      nextM = 11;
     } else {
-      setCalMonth(m => m - 1);
+      nextM = calMonth - 1;
     }
+    setCalYear(nextY);
+    setCalMonth(nextM);
+    onMonthChange?.(nextY, nextM);
   };
 
   const navigateToNextMonth = () => {
+    let nextY = calYear;
+    let nextM = calMonth;
     if (calMonth === 11) {
-      setCalYear(y => y + 1);
-      setCalMonth(0);
+      nextY = calYear + 1;
+      nextM = 0;
     } else {
-      setCalMonth(m => m + 1);
+      nextM = calMonth + 1;
     }
+    setCalYear(nextY);
+    setCalMonth(nextM);
+    onMonthChange?.(nextY, nextM);
   };
 
   const grid = buildCalendarGrid(calYear, calMonth);
