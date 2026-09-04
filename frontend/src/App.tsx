@@ -12,7 +12,6 @@ import DataIngestion from './pages/DataIngestion';
 import TransactionPipeline from './pages/TransactionPipeline';
 import GoldTransactions from './pages/GoldTransactions';
 import FinancialAnalytics from './pages/FinancialAnalytics';
-import DatabaseViewer from './pages/DatabaseViewer';
 
 Amplify.configure(authConfig);
 
@@ -29,7 +28,6 @@ function App() {
           <Route path="/pipeline" element={<TransactionPipeline />} />
           <Route path="/transactions" element={<GoldTransactions />} />
           <Route path="/analytics" element={<FinancialAnalytics />} />
-          <Route path="/database" element={<DatabaseViewer />} />
           <Route path="/gmail" element={<Navigate to="/ingestion" replace />} />
         </Routes>
       </main>

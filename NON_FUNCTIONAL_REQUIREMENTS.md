@@ -100,8 +100,6 @@
 - [NFR-CYCLE-2] Intra-Day Boundary Evaluation Latency: Evaluating transactions against cycle start/end timestamps and filtering transactions for rendering must resolve within 20ms during UI render compilation.
 - [NFR-CYCLE-3] Cycle Override Persistence & Recalculation Performance: Saving or deleting a cycle start override (POST/DELETE /api/pipeline/user-cycles/override) must persist the override and return updated dynamic cycle data within 150ms at the API layer.
 
-## Database Raw Table Viewer [NFR-DB-VIEWER]
-- [NFR-DB-VIEWER-1] Raw Table Query Latency & Data Isolation: The paginated database viewer API must execute raw table queries and return formatted cell payloads in under 200ms for page sizes up to 100 rows. All table queries must strictly enforce authentication (`checkJwt`) and user isolation by `user_id` context.
 
 ## Mobile PWA Architecture & Usability [NFR-MOB]
 - [NFR-MOB-1] Mobile Form Factor & Touch Optimization: The mobile web application must be strictly designed for mobile viewports, prioritizing portrait orientation with fluid landscape adaptation, enforcing minimum 44px x 44px tap targets, thumb-accessible bottom controls, and iOS/Android safe area padding (`env(safe-area-inset-*)`).
