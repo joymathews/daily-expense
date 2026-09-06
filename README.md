@@ -297,8 +297,3 @@ daily_expense/
 - **Generate RTM Report**: `npm run rtm`
 - **Clear Database**: `npm run clear-db`
 
----
-
-## License
-
-[ISC](LICENSE)
