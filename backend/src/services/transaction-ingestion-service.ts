@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { ITransactionRepository } from '../db/transaction-repository';
+import { ITransactionRepository } from '@daily-expense/db-contracts';
 import { ITransactionExtractor } from './transaction-extractor';
 
 export class TransactionIngestionService {

@@ -1,5 +1,5 @@
-import { AzureSqlTransactionRepository } from '../src/db/azure-sql-transaction-repository';
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { AzureSqlTransactionRepository } from '@daily-expense/db-mssql';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 import { getRepository } from '../src/db/transaction-repository-factory';
 
 describe('AzureSqlTransactionRepository and Factory Tests [FUNC-SYS-7] [NFR-DB-1]', () => {

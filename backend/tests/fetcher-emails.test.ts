@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { app } from '../src/app';
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 import path from 'path';
 import fs from 'fs';
 import { google } from 'googleapis';

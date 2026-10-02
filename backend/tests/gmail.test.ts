@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { app } from '../src/app';
 import { google } from 'googleapis';
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 import path from 'path';
 import fs from 'fs';
 
@@ -68,7 +68,7 @@ describe('Gmail API Integration [BUG-010]', () => {
     }
     process.env.DATABASE_URL = testDbPath;
 
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository(testDbPath);
     await repository.initializeSchema();
     await (repository as any).run("DELETE FROM gold_transactions WHERE silver_tx_id IN ('del_silver_1', 'validation_test_silver_1', 'approve_test_silver_1', 'approve_test_silver_2') OR id IN ('del_gold_1', 'validation_test_gold_1', 'approve_test_gold_1')");
@@ -361,7 +361,7 @@ describe('Gmail API Integration [BUG-010]', () => {
    * [BUG-003] ISO Date Normalization: Verify receivedAt ISO string normalization inside saveRawInput.
    */
   it('should return raw emails with hasTransaction derived correctly from payload/subject', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -414,7 +414,7 @@ describe('Gmail API Integration [BUG-010]', () => {
    * Test verifies getRawInputs projects rawBody and rawPayload columns.
    */
   it('should return raw inputs with complete rawBody and rawPayload in getRawInputs [BUG-020]', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -444,7 +444,7 @@ describe('Gmail API Integration [BUG-010]', () => {
    * [BUG-002] Ingestion Status Persistence: Verify PUT raw-emails endpoint updates hasTransaction correctly.
    */
   it('should update raw email transactional classification status successfully', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -484,7 +484,7 @@ describe('Gmail API Integration [BUG-010]', () => {
    * [FUNC-GMAIL-31] Pipeline Reversion & Raw Email Deletion: Verify revert-to-silver, revert-to-bronze, delete/restore Bronze.
    */
   it('should support reverting Gold to Silver, reverting Silver to Bronze, and soft deleting/restoring Bronze emails', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -602,7 +602,7 @@ describe('Gmail API Integration [BUG-010]', () => {
    * Verify missing required fields results in 'error' status upon extraction, and updating correct fields changes it to 'pending'.
    */
   it('should save pending transaction with status error if fields are missing, and transition status on updates', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -675,7 +675,7 @@ describe('Gmail API Integration [BUG-010]', () => {
    * Verify category is optional in /api/gmail/approve route.
    */
   it('should approve transaction successfully if category is missing (defaulting to Other), but fail if paymentMethod is missing', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -789,7 +789,7 @@ describe('Gmail API Integration [BUG-010]', () => {
     expect(addRes.body.status).toBe('added');
 
     // Fetch gold transactions to find the ID of the created manual entry
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repo = new SQLiteTransactionRepository();
     await repo.initializeSchema();
     const activeGold = await repo.getGoldTransactions('user-123');
@@ -1139,7 +1139,7 @@ describe('Gmail API Integration [BUG-010]', () => {
    * [BUG-007] / [FUNC-GMAIL-36] Staging Rejection: Verify that updates with status 'rejected' are persisted.
    */
   it('should support updating a pending transaction to rejected status and persisting it [FUNC-GMAIL-36] [BUG-007]', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -1197,7 +1197,7 @@ describe('[FUNC-GMAIL-48] Reject Implies Non-Transactional Classification', () =
    * atomically set status='rejected' AND hasTransaction=false.
    */
   it('should atomically set status=rejected and hasTransaction=false when the user rejects a single Bronze input', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 
@@ -1245,7 +1245,7 @@ describe('[FUNC-GMAIL-48] Reject Implies Non-Transactional Classification', () =
    * must atomically set status='rejected' AND hasTransaction=false for all targeted records.
    */
   it('should atomically set status=rejected and hasTransaction=false for all inputs when the user batch-rejects Bronze records', async () => {
-    const { SQLiteTransactionRepository } = require('../src/db/sqlite-transaction-repository');
+    const { SQLiteTransactionRepository } = require('@daily-expense/db-sqlite');
     const repository = new SQLiteTransactionRepository();
     await repository.initializeSchema();
 

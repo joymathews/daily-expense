@@ -2,7 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 import pipelineRoutes from '../src/routes/pipeline-routes';
 
 describe('Pipeline Summary Stats Endpoint [FUNC-PIPE-STATS-1] [NFR-PERF-12]', () => {

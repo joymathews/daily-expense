@@ -8,17 +8,30 @@
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:mobile": "npm --prefix mobile-pwa run dev",
-    "build": "npm --prefix packages/financial-core run build && npm --prefix frontend run build && npm --prefix mobile-pwa run build",
+    "build": "npm run build:packages && npm --prefix packages/financial-core run build && npm --prefix frontend run build && npm --prefix mobile-pwa run build",
+    "build:packages": "npm --prefix packages/db-contracts run build && npm --prefix packages/db-sqlite run build && npm --prefix packages/db-mssql run build && npm --prefix packages/db-postgres run build",
     "build:core": "npm --prefix packages/financial-core run build",
     "build:frontend": "npm --prefix packages/financial-core run build && npm --prefix frontend run build",
     "build:mobile": "npm --prefix packages/financial-core run build && npm --prefix mobile-pwa run build",
     "rtm": "node tools/rtm/generate-rtm.js",
     "clear-db": "node tools/clear-db.js",
     "migrate-transfer": "node tools/migrate-transfer-constraint.js",
+    "db:migrate": "npm --prefix packages/db-postgres run migrate:latest",
+    "db:rollback": "npm --prefix packages/db-postgres run migrate:rollback",
+    "db:migrate:status": "npm --prefix packages/db-postgres run migrate:status",
+    "db:migrate:make": "npm --prefix packages/db-postgres run migrate:make --",
+    "db:export": "node tools/export-azure-sql.js",
+    "db:import": "node tools/import-postgres.js",
+    "sql": "node services/postgres/sql-query.js",
+    "sql:pg": "node services/postgres/sql-query.js",
+    "sql:mssql": "node services/mssql/sql-query.js",
     "dev:extraction": "cd services/extraction-service && npm run dev",
     "test:extraction": "cd services/extraction-service && npm test",
-    "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down"
+    "docker:pg:build": "docker build -t local-postgres ./services/postgres",
+    "docker:pg": "docker run -d --name local-pg-db -p 5432:5432 --env-file ./services/postgres/.env -v pg-data:/var/lib/postgresql/data postgres:16-alpine",
+    "docker:pg:stop": "docker stop local-pg-db && docker rm local-pg-db",
+    "docker:mssql:build": "docker build -t local-mssql ./services/mssql",
+    "docker:mssql": "docker run --name local-mssql-db -p 1433:1433 --env-file ./services/mssql/.env -v mssql-data:/var/opt/mssql --rm local-mssql"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +40,7 @@
   "workspaces": [
     "packages/*",
     "frontend",
-    "mobile-pwa"
+    "mobile-pwa",
+    "backend"
   ]
 }

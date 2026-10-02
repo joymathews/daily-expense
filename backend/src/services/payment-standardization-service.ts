@@ -1,4 +1,4 @@
-import { PaymentMappingRule, PaymentMethod } from '../db/transaction-repository';
+import { PaymentMappingRule, PaymentMethod } from '@daily-expense/db-contracts';
 
 /**
  * Domain Service responsible for matching raw payment method strings against

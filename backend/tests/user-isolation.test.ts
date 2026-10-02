@@ -1,4 +1,4 @@
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 import crypto from 'crypto';
 
 describe('Transaction User Isolation Integration', () => {

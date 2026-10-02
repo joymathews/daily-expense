@@ -1,0 +1,20 @@
+{
+  "name": "@daily-expense/db-mssql",
+  "version": "1.0.0",
+  "description": "Azure SQL / MSSQL database repository adapter for Daily Expense",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@daily-expense/db-contracts": "^1.0.0",
+    "mssql": "^11.0.1"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.0.5",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.4.0"
+  }
+}

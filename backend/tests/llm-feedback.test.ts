@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 import { CorrectionLearningService } from '../src/services/correction-learning-service';
 
 /**

@@ -1,7 +1,7 @@
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 import { TransactionIngestionService } from '../src/services/transaction-ingestion-service';
 import { ITransactionExtractor, ExtractedTransaction, TransactionExtractorFactory } from '../src/services/transaction-extractor';
-import { ITransactionRepository } from '../src/db/transaction-repository';
+import { ITransactionRepository } from '@daily-expense/db-contracts';
 import { RemoteHttpExtractor } from '../src/services/remote-extractor';
 import crypto from 'crypto';
 

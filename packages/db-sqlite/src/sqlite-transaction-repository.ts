@@ -2,11 +2,33 @@ import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { ITransactionRepository, RawInput, PendingTransaction, Transaction, FixedCharge, PipelineSummaryStats } from './transaction-repository';
-import { IFeedbackRepository, FeedbackSettings, CorrectionExample, CorrectionFieldName, FeedbackEffectiveness } from './feedback-repository';
-import { normalizeCategory } from '../utils/category-helper';
-import { PaymentStandardizationService } from '../services/payment-standardization-service';
-import { logger } from '../utils/logger';
+import {
+  ITransactionRepository,
+  IFeedbackRepository,
+  RawInput,
+  PendingTransaction,
+  Transaction,
+  FixedCharge,
+  PipelineSummaryStats,
+  FeedbackSettings,
+  CorrectionExample,
+  CorrectionFieldName,
+  FeedbackEffectiveness,
+  PaymentMethod,
+  PaymentMappingRule,
+  CycleOverrideData,
+  normalizeCategory,
+  PaymentStandardizationService,
+  EmailClassifier
+} from '@daily-expense/db-contracts';
+
+const logger = {
+  info: (...args: any[]) => {},
+  debug: (...args: any[]) => {},
+  trace: (...args: any[]) => {},
+  error: (...args: any[]) => console.error(...args),
+  fatal: (...args: any[]) => console.error(...args),
+};
 
 export class SQLiteTransactionRepository implements ITransactionRepository, IFeedbackRepository {
   private db: sqlite3.Database;
@@ -496,12 +518,7 @@ export class SQLiteTransactionRepository implements ITransactionRepository, IFee
     if (input.hasTransaction !== undefined) {
       hasTx = input.hasTransaction ? 1 : 0;
     } else if (!input.sourceType || input.sourceType === 'email') {
-      try {
-        const { EmailClassifier } = require('../services/email-classifier');
-        hasTx = EmailClassifier.isTransaction(input.title) ? 1 : 0;
-      } catch (e) {
-        hasTx = 1;
-      }
+      hasTx = EmailClassifier.isTransaction(input.title) ? 1 : 0;
     }
 
     await this.run(

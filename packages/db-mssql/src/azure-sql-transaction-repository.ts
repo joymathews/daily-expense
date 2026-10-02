@@ -2,6 +2,7 @@ import sql from 'mssql';
 import crypto from 'crypto';
 import {
   ITransactionRepository,
+  IFeedbackRepository,
   RawInput,
   PendingTransaction,
   Transaction,
@@ -9,18 +10,22 @@ import {
   PaymentMappingRule,
   CycleOverrideData,
   FixedCharge,
-  PipelineSummaryStats
-} from './transaction-repository';
-import {
-  IFeedbackRepository,
+  PipelineSummaryStats,
   FeedbackSettings,
   CorrectionExample,
   CorrectionFieldName,
-  FeedbackEffectiveness
-} from './feedback-repository';
-import { normalizeCategory } from '../utils/category-helper';
-import { PaymentStandardizationService } from '../services/payment-standardization-service';
-import { logger } from '../utils/logger';
+  FeedbackEffectiveness,
+  normalizeCategory,
+  PaymentStandardizationService
+} from '@daily-expense/db-contracts';
+
+const logger = {
+  info: (...args: any[]) => {},
+  debug: (...args: any[]) => {},
+  trace: (...args: any[]) => {},
+  error: (...args: any[]) => console.error(...args),
+  fatal: (...args: any[]) => console.error(...args),
+};
 
 export class AzureSqlTransactionRepository implements ITransactionRepository, IFeedbackRepository {
   private static instance: AzureSqlTransactionRepository | null = null;

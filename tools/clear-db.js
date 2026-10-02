@@ -1,9 +1,16 @@
 const path = require('path');
 const fs = require('fs');
 
-// Resolve the sqlite3 dependency from the backend directory to avoid root module conflicts
-const sqlite3Path = path.resolve(__dirname, '../backend/node_modules/sqlite3');
-const sqlite3 = require(sqlite3Path).verbose();
+let sqlite3;
+try {
+  sqlite3 = require('sqlite3').verbose();
+} catch (e) {
+  try {
+    sqlite3 = require(path.resolve(__dirname, '../packages/db-sqlite/node_modules/sqlite3')).verbose();
+  } catch (err) {
+    sqlite3 = require(path.resolve(__dirname, '../node_modules/sqlite3')).verbose();
+  }
+}
 
 // Path to the SQLite DB file
 const dbPath = process.env.DATABASE_URL

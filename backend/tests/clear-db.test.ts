@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import sqlite3 from 'sqlite3';
-import { SQLiteTransactionRepository } from '../src/db/sqlite-transaction-repository';
+import { SQLiteTransactionRepository } from '@daily-expense/db-sqlite';
 
 describe('clear-db CLI utility regression tests', () => {
   const testDbPath = path.resolve(__dirname, '../data/test_clear_db.db');

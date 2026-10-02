@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { IFeedbackRepository, CorrectionExample, CorrectionFieldName } from '../db/feedback-repository';
+import { IFeedbackRepository, CorrectionExample, CorrectionFieldName } from '@daily-expense/db-contracts';
 import { logger } from '../utils/logger';
 
 const CORRECTABLE_FIELDS: CorrectionFieldName[] = ['merchant', 'category', 'paymentMethod', 'transactionType'];

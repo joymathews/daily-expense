@@ -17,10 +17,15 @@ yarn-error.log*
 
 # Environment variables
 .env
+**/.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.example
+*.env.example
+**/.env.example
+
 
 # Editor/System folders
 .DS_Store
@@ -37,17 +42,13 @@ Thumbs.db
 
 # RTM Report
 rtm_report.html
-backend/.env.example
-.gitignore
-frontend/.env.example
 
 # Databases
 *.db
 *.sqlite
 *.sqlite3
 backend/data/
+data/
 
 # Personal Learnings
 learnings/
-.gitignore
-mobile-pwa/.env.example

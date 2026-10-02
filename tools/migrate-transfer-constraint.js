@@ -5,8 +5,17 @@
  *
  * Run: node tools/migrate-transfer-constraint.js
  */
-const sqlite3 = require(require('path').join(__dirname, '../backend/node_modules/sqlite3')).verbose();
 const path = require('path');
+let sqlite3;
+try {
+  sqlite3 = require('sqlite3').verbose();
+} catch (e) {
+  try {
+    sqlite3 = require(path.resolve(__dirname, '../packages/db-sqlite/node_modules/sqlite3')).verbose();
+  } catch (err) {
+    sqlite3 = require(path.resolve(__dirname, '../node_modules/sqlite3')).verbose();
+  }
+}
 
 const DB_PATH = path.join(__dirname, '../backend/data/daily_expense.db');
 
